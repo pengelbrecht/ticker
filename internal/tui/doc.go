@@ -1,1 +1,2 @@
-// Package tui will contain the rebuilt TUI - see epic 4pq
+// Package tui provides the terminal user interface for ticker.
+package tui
