@@ -553,6 +553,149 @@ project/
 4. **Complete**: On COMPLETE signal, merge back to main
 5. **Cleanup**: Remove worktree and branch after successful merge
 
+### Gitignore Configuration
+
+Worktrees inside the repo require careful .gitignore setup to avoid tracking worktree contents while preserving ticker state.
+
+**Required .gitignore entries** (auto-added by `ticker init`):
+
+```gitignore
+# Ticker worktrees - never commit these
+.ticker-worktrees/
+
+# Ticker runtime state (keep config, ignore runtime)
+.ticker/checkpoints/
+.ticker/audit.jsonl
+.ticker/scratchpad.md
+
+# Keep these tracked:
+# .ticker/config.json (project settings)
+# .ticker/issues/ (if using embedded ticks)
+```
+
+**Why this matters:**
+
+| Path | Tracked? | Rationale |
+|------|----------|-----------|
+| `.ticker-worktrees/` | No | Contains full repo clones, would duplicate everything |
+| `.ticker/config.json` | Yes | Shared project configuration |
+| `.ticker/checkpoints/` | No | Runtime state, can be large, resumable locally |
+| `.ticker/scratchpad.md` | No | Per-session agent memory, not shareable |
+| `.ticker/audit.jsonl` | No | Local audit trail, grows unbounded |
+
+### Worktree Complications
+
+**Shared git objects**: All worktrees share the same `.git` directory (in main worktree). This means:
+- Commits made in any worktree are immediately visible to all
+- Branch operations affect all worktrees
+- `git gc` and maintenance affects all worktrees
+
+**File conflicts**: If two epics modify the same file:
+- Each worktree has its own working copy (isolated)
+- Conflict only surfaces at merge time
+- Ticker detects this and pauses for manual resolution
+
+**Nested .ticker directories**: Each worktree gets its own `.ticker/` for isolation:
+
+```
+project/                          # Main worktree
+├── .git/                         # Shared git database
+├── .gitignore                    # Contains .ticker-worktrees/
+├── .ticker/
+│   ├── config.json               # Tracked - shared config
+│   ├── checkpoints/              # Ignored - main worktree checkpoints
+│   └── scratchpad.md             # Ignored - main worktree scratchpad
+├── .ticker-worktrees/
+│   ├── h8d/                      # Worktree for epic h8d
+│   │   ├── .git                  # File pointing to main .git
+│   │   ├── .ticker/
+│   │   │   ├── config.json       # Same as main (tracked)
+│   │   │   ├── checkpoints/      # h8d-specific checkpoints
+│   │   │   └── scratchpad.md     # h8d-specific scratchpad
+│   │   └── src/...               # Working copy
+│   └── fbv/                      # Worktree for epic fbv
+│       └── ...
+└── src/...                       # Main working copy
+```
+
+**Initialization sequence**:
+
+```go
+func (m *WorktreeManager) Create(epicID string) error {
+    wtPath := filepath.Join(".ticker-worktrees", epicID)
+    branch := fmt.Sprintf("ticker/%s", epicID)
+
+    // 1. Ensure .ticker-worktrees/ is in .gitignore
+    if err := m.ensureGitignore(); err != nil {
+        return err
+    }
+
+    // 2. Create worktree with new branch from current HEAD
+    cmd := exec.Command("git", "worktree", "add", "-b", branch, wtPath)
+    if err := cmd.Run(); err != nil {
+        return fmt.Errorf("git worktree add: %w", err)
+    }
+
+    // 3. Initialize .ticker/ in worktree (inherits config, fresh runtime state)
+    wtTickerDir := filepath.Join(wtPath, ".ticker")
+    if err := os.MkdirAll(filepath.Join(wtTickerDir, "checkpoints"), 0755); err != nil {
+        return err
+    }
+
+    // 4. Copy config.json to worktree (will be same via git, but ensure exists)
+    // Scratchpad starts fresh for this epic
+
+    return nil
+}
+
+func (m *WorktreeManager) ensureGitignore() error {
+    const ignoreEntry = ".ticker-worktrees/"
+
+    content, err := os.ReadFile(".gitignore")
+    if err != nil && !os.IsNotExist(err) {
+        return err
+    }
+
+    if strings.Contains(string(content), ignoreEntry) {
+        return nil // Already present
+    }
+
+    f, err := os.OpenFile(".gitignore", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+
+    _, err = f.WriteString("\n# Ticker worktrees\n" + ignoreEntry + "\n")
+    return err
+}
+```
+
+**Cleanup sequence**:
+
+```go
+func (m *WorktreeManager) Remove(epicID string) error {
+    wtPath := filepath.Join(".ticker-worktrees", epicID)
+    branch := fmt.Sprintf("ticker/%s", epicID)
+
+    // 1. Remove worktree
+    cmd := exec.Command("git", "worktree", "remove", wtPath)
+    if err := cmd.Run(); err != nil {
+        // Force remove if dirty
+        cmd = exec.Command("git", "worktree", "remove", "--force", wtPath)
+        cmd.Run()
+    }
+
+    // 2. Delete branch (optional, only if merged)
+    exec.Command("git", "branch", "-d", branch).Run()
+
+    // 3. Prune worktree metadata
+    exec.Command("git", "worktree", "prune").Run()
+
+    return nil
+}
+```
+
 ### Parallel Manager
 
 ```go
