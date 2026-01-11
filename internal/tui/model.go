@@ -381,9 +381,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // Layout constants
 const (
-	taskPaneWidth = 35 // Fixed width for task list pane
-	statusBarRows = 2  // Title + progress line
-	footerRows    = 1  // Help hints
+	taskPaneWidth    = 35 // Fixed width for task list pane
+	statusBarMinRows = 3  // Header + progress + border separator (4 with progress bar)
+	footerRows       = 1  // Help hints
 )
 
 // View renders the current model state.
@@ -407,7 +407,12 @@ func (m Model) View() string {
 	footer := m.renderFooter()
 
 	// Calculate remaining height for panes
-	contentHeight := m.height - statusBarRows - footerRows - 2 // -2 for borders
+	// Status bar height is dynamic: 3 lines base + 1 if progress bar shown
+	statusBarHeight := statusBarMinRows
+	if len(m.tasks) > 0 {
+		statusBarHeight++ // Add progress bar row
+	}
+	contentHeight := m.height - statusBarHeight - footerRows - 2 // -2 for borders
 
 	// Render task and output panes
 	taskPane := m.renderTaskPane(contentHeight)
@@ -420,56 +425,124 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, panes, footer)
 }
 
-// renderStatusBar renders the top status bar (2 lines: title + progress).
+// renderStatusBar renders the top status bar with header, progress, and optional progress bar.
+// Line 1: '⚡ ticker: [epic-id] Epic Title          ● STATUS'
+// Line 2: 'Iter: 5 │ Tasks: 3/8 │ Time: 2:34 │ Cost: $1.23/$20.00'
+// Line 3 (optional): Progress bar
 func (m Model) renderStatusBar() string {
-	// Animation spinner frames
-	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	spinner := spinners[m.animFrame%len(spinners)]
+	// --- Line 1: Header ---
+	// Left side: branding + epic info
+	leftContent := headerStyle.Render("⚡ ticker")
+	if m.epicID != "" {
+		leftContent += ": " + dimStyle.Render("["+m.epicID+"]")
+		if m.epicTitle != "" {
+			leftContent += " " + m.epicTitle
+		}
+	} else if m.epicTitle != "" {
+		leftContent += ": " + m.epicTitle
+	}
 
-	// Title line
-	var titleLine string
-	if m.running {
-		status := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinner + " Running")
-		titleLine = headerStyle.Render("ticker") + " " + status
+	// Right side: status indicator
+	var statusIndicator string
+	if m.running && !m.paused {
+		statusIndicator = lipgloss.NewStyle().Foreground(colorGreen).Render("● RUNNING")
 	} else if m.paused {
-		status := lipgloss.NewStyle().Foreground(colorPeach).Render("⏸ Paused")
-		titleLine = headerStyle.Render("ticker") + " " + status
+		statusIndicator = lipgloss.NewStyle().Foreground(colorPeach).Render("⏸ PAUSED")
 	} else {
-		titleLine = headerStyle.Render("ticker")
+		statusIndicator = lipgloss.NewStyle().Foreground(colorGray).Render("■ STOPPED")
 	}
 
-	// Add epic title if available
-	if m.epicTitle != "" {
-		titleLine += " — " + dimStyle.Render(m.epicTitle)
+	// Calculate padding for right-aligned status
+	leftLen := lipgloss.Width(leftContent)
+	rightLen := lipgloss.Width(statusIndicator)
+	padding := m.width - leftLen - rightLen
+	if padding < 1 {
+		padding = 1
 	}
 
-	// Progress line
-	var progressLine string
-	if m.taskID != "" {
-		taskInfo := lipgloss.NewStyle().Foreground(colorLavender).Render("[" + m.taskID + "]")
-		progressLine = fmt.Sprintf("Iteration %d: %s %s", m.iteration, taskInfo, m.taskTitle)
-	} else if m.iteration > 0 {
-		progressLine = fmt.Sprintf("Iteration %d", m.iteration)
-	}
+	headerLine := leftContent + strings.Repeat(" ", padding) + statusIndicator
 
-	// Cost info
-	if m.cost > 0 || m.maxCost > 0 {
-		costStr := fmt.Sprintf("$%.2f", m.cost)
-		if m.maxCost > 0 {
-			costStr += fmt.Sprintf(" / $%.2f", m.maxCost)
+	// --- Line 2: Progress ---
+	var progressParts []string
+
+	// Iteration count
+	iterLabel := dimStyle.Render("Iter:")
+	iterValue := fmt.Sprintf(" %d", m.iteration)
+	progressParts = append(progressParts, iterLabel+iterValue)
+
+	// Tasks completed/total
+	completedTasks := 0
+	totalTasks := len(m.tasks)
+	for _, t := range m.tasks {
+		if t.Status == TaskStatusClosed {
+			completedTasks++
 		}
-		if progressLine != "" {
-			progressLine += " | " + dimStyle.Render(costStr)
-		} else {
-			progressLine = dimStyle.Render(costStr)
+	}
+	tasksLabel := dimStyle.Render("Tasks:")
+	tasksValue := fmt.Sprintf(" %d/%d", completedTasks, totalTasks)
+	progressParts = append(progressParts, tasksLabel+tasksValue)
+
+	// Elapsed time (MM:SS or HH:MM:SS if > 1 hour)
+	elapsed := time.Since(m.startTime)
+	if m.startTime.IsZero() {
+		elapsed = 0
+	}
+	var timeStr string
+	hours := int(elapsed.Hours())
+	minutes := int(elapsed.Minutes()) % 60
+	seconds := int(elapsed.Seconds()) % 60
+	if hours > 0 {
+		timeStr = fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
+	} else {
+		timeStr = fmt.Sprintf("%d:%02d", minutes, seconds)
+	}
+	timeLabel := dimStyle.Render("Time:")
+	timeValue := " " + timeStr
+	progressParts = append(progressParts, timeLabel+timeValue)
+
+	// Cost tracking (current/max)
+	costLabel := dimStyle.Render("Cost:")
+	var costValue string
+	if m.maxCost > 0 {
+		costValue = fmt.Sprintf(" $%.2f/$%.2f", m.cost, m.maxCost)
+	} else {
+		costValue = fmt.Sprintf(" $%.2f", m.cost)
+	}
+	progressParts = append(progressParts, costLabel+costValue)
+
+	progressLine := strings.Join(progressParts, " │ ")
+
+	// --- Line 3: Progress Bar (optional, shown when there are tasks) ---
+	var progressBar string
+	if totalTasks > 0 {
+		barWidth := m.width - 6 // -6 for " XXX%" suffix and spacing
+		if barWidth < 10 {
+			barWidth = 10
 		}
+		percent := float64(completedTasks) / float64(totalTasks)
+		filled := int(float64(barWidth) * percent)
+		if filled > barWidth {
+			filled = barWidth
+		}
+
+		filledPart := lipgloss.NewStyle().Foreground(colorGreen).Render(strings.Repeat("█", filled))
+		emptyPart := lipgloss.NewStyle().Foreground(colorGray).Render(strings.Repeat("░", barWidth-filled))
+		percentStr := fmt.Sprintf(" %3d%%", int(percent*100))
+
+		progressBar = filledPart + emptyPart + percentStr
 	}
 
-	// Pad to full width
-	titleLine = lipgloss.NewStyle().Width(m.width).Render(titleLine)
-	progressLine = lipgloss.NewStyle().Width(m.width).Render(progressLine)
+	// --- Combine lines ---
+	lines := []string{headerLine, progressLine}
+	if progressBar != "" {
+		lines = append(lines, progressBar)
+	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, titleLine, progressLine)
+	// Add bottom border separator
+	border := lipgloss.NewStyle().Foreground(colorGray).Render(strings.Repeat("─", m.width))
+	lines = append(lines, border)
+
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
 // renderTaskPane renders the left task list pane.
