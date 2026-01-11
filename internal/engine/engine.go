@@ -218,10 +218,21 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			return nil, fmt.Errorf("getting next task: %w", err)
 		}
 
-		// No more tasks - epic complete
+		// No ready tasks - check if epic is truly complete or just blocked
 		if task == nil {
+			// Check if there are still open/in_progress tasks (blocked)
+			hasOpen, err := e.ticks.HasOpenTasks(config.EpicID)
+			if err != nil {
+				return nil, fmt.Errorf("checking open tasks: %w", err)
+			}
+
+			if hasOpen {
+				// There are tasks but they're all blocked - don't close epic
+				return state.toResult("no ready tasks (remaining tasks are blocked)"), nil
+			}
+
+			// All tasks are closed - epic complete
 			state.signal = SignalComplete
-			// Close the epic
 			reason := "all tasks completed"
 			if state.iteration == 0 {
 				reason = "no tasks found"

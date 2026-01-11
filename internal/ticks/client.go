@@ -143,6 +143,20 @@ func (c *Client) ListReadyEpics() ([]Epic, error) {
 	return epics, nil
 }
 
+// HasOpenTasks returns true if the epic has any non-closed tasks (open or in_progress).
+func (c *Client) HasOpenTasks(epicID string) (bool, error) {
+	tasks, err := c.ListTasks(epicID)
+	if err != nil {
+		return false, err
+	}
+	for _, t := range tasks {
+		if t.Status != "closed" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // CloseTask closes a task with the given reason.
 func (c *Client) CloseTask(taskID, reason string) error {
 	_, err := c.run("close", taskID, "--reason", reason)

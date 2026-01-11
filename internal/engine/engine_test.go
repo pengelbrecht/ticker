@@ -92,6 +92,15 @@ func (m *mockTicksClient) CloseTask(taskID, reason string) error {
 	return nil
 }
 
+func (m *mockTicksClient) SetStatus(issueID, status string) error {
+	return nil
+}
+
+func (m *mockTicksClient) HasOpenTasks(epicID string) (bool, error) {
+	// Return true if there are tasks remaining
+	return m.taskIndex < len(m.tasks), nil
+}
+
 func TestNewEngine(t *testing.T) {
 	a := &mockAgent{name: "test", available: true}
 	tc := ticks.NewClient()
