@@ -2,7 +2,7 @@
   "id": "w67",
   "title": "Budget and progress display",
   "description": "Show iteration progress and budget usage.\n\ninternal/tui/status.go:\n- Iteration: N of max\n- Cost: $X.XX of $Y.YY\n- Tokens: input/output\n- Duration: elapsed time\n- Progress bar\n\nWire engine callbacks to update display.\n\nVerify: Stats update after each iteration",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,6 @@
   "parent": "e8g",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T13:04:06.412623863Z",
-  "updated_at": "2026-01-11T13:04:06.412623863Z"
+  "updated_at": "2026-01-11T14:13:56.427263221Z",
+  "closed_at": "2026-01-11T14:13:56.427263221Z"
 }

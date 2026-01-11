@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -122,16 +123,17 @@ func (m Model) renderHeader() string {
 	)
 }
 
-// renderStatusBar renders the status bar with iteration, cost, and tokens.
+// renderStatusBar renders the status bar with iteration, cost, tokens, and progress.
 func (m Model) renderStatusBar() string {
+	// First line: stats
 	iteration := fmt.Sprintf("%s %s",
-		statusLabelStyle.Render("Iteration:"),
+		statusLabelStyle.Render("Iter:"),
 		statusItemStyle.Render(fmt.Sprintf("%d/%d", m.iteration, m.maxIter)),
 	)
 
 	task := fmt.Sprintf("%s %s",
 		statusLabelStyle.Render("Task:"),
-		statusItemStyle.Render(fmt.Sprintf("[%s] %s", m.taskID, truncate(m.taskTitle, 30))),
+		statusItemStyle.Render(fmt.Sprintf("[%s] %s", m.taskID, truncate(m.taskTitle, 20))),
 	)
 
 	cost := fmt.Sprintf("%s %s",
@@ -144,17 +146,46 @@ func (m Model) renderStatusBar() string {
 		statusItemStyle.Render(fmt.Sprintf("%d", m.tokens)),
 	)
 
-	return statusBarStyle.Width(m.width).Render(
-		lipgloss.JoinHorizontal(lipgloss.Center,
-			iteration, "  │  ", task, "  │  ", cost, "  │  ", tokens,
-		),
+	duration := fmt.Sprintf("%s %s",
+		statusLabelStyle.Render("Time:"),
+		statusItemStyle.Render(formatDuration(time.Since(m.startTime))),
 	)
+
+	statsLine := lipgloss.JoinHorizontal(lipgloss.Center,
+		iteration, " │ ", task, " │ ", cost, " │ ", tokens, " │ ", duration,
+	)
+
+	// Second line: progress bar
+	var progressLine string
+	if m.maxIter > 0 {
+		percent := float64(m.iteration) / float64(m.maxIter)
+		progressLine = m.progress.ViewAs(percent)
+	}
+
+	return statusBarStyle.Width(m.width).Render(
+		lipgloss.JoinVertical(lipgloss.Left, statsLine, progressLine),
+	)
+}
+
+// formatDuration formats a duration as MM:SS or HH:MM:SS.
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+	}
+	return fmt.Sprintf("%d:%02d", m, s)
 }
 
 // renderMainContent renders the main two-panel layout.
 func (m Model) renderMainContent() string {
 	// Calculate dimensions
-	availableHeight := m.height - 6 // Header + status + footer + borders
+	availableHeight := m.height - 7 // Header + status (2 lines) + footer + borders
 	if availableHeight < minHeight {
 		availableHeight = minHeight
 	}

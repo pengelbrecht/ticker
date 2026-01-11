@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
@@ -30,6 +31,7 @@ type Model struct {
 	tokens     int
 	iterations int
 	maxIter    int
+	startTime  time.Time
 
 	// Embedded bubbles components
 	viewport viewport.Model
@@ -86,6 +88,7 @@ func New(cfg Config) Model {
 		tasks:     taskList,
 		progress:  prog,
 		running:   true,
+		startTime: time.Now(),
 	}
 }
 
@@ -150,7 +153,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Calculate component dimensions
-		availableHeight := msg.Height - 6 // Header + status + footer
+		availableHeight := msg.Height - 7 // Header + status (2 lines) + footer
 		if availableHeight < minHeight {
 			availableHeight = minHeight
 		}
