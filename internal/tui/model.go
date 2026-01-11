@@ -30,7 +30,7 @@ type TaskStatus string
 
 const (
 	TaskStatusOpen       TaskStatus = "open"
-	TaskStatusInProgress TaskStatus = "in-progress"
+	TaskStatusInProgress TaskStatus = "in_progress"
 	TaskStatusClosed     TaskStatus = "closed"
 )
 
@@ -40,6 +40,51 @@ type TaskInfo struct {
 	Title     string
 	Status    TaskStatus
 	BlockedBy []string
+	IsCurrent bool // currently executing task
+}
+
+// IsBlocked returns true if the task is blocked by other tasks.
+func (t TaskInfo) IsBlocked() bool {
+	return len(t.BlockedBy) > 0
+}
+
+// StatusIcon returns a styled icon representing the task status.
+// Icon mapping:
+//   - Open: ○ (gray)
+//   - InProgress: ● (blue)
+//   - Closed: ✓ (green)
+//   - Blocked: ⊘ (red) - overrides open status
+func (t TaskInfo) StatusIcon() string {
+	// Blocked status overrides open
+	if t.Status == TaskStatusOpen && t.IsBlocked() {
+		return lipgloss.NewStyle().Foreground(colorRed).Render("⊘")
+	}
+
+	switch t.Status {
+	case TaskStatusOpen:
+		return lipgloss.NewStyle().Foreground(colorGray).Render("○")
+	case TaskStatusInProgress:
+		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("●")
+	case TaskStatusClosed:
+		return lipgloss.NewStyle().Foreground(colorGreen).Render("✓")
+	default:
+		return lipgloss.NewStyle().Foreground(colorGray).Render("○")
+	}
+}
+
+// RenderTask formats a task line with icon, ID, and title.
+func (t TaskInfo) RenderTask(selected bool) string {
+	icon := t.StatusIcon()
+	id := lipgloss.NewStyle().Foreground(colorLavender).Render("[" + t.ID + "]")
+	title := t.Title
+
+	if selected {
+		title = selectedStyle.Render(title)
+	} else if t.Status == TaskStatusClosed {
+		title = dimStyle.Render(title)
+	}
+
+	return icon + " " + id + " " + title
 }
 
 // keyMap defines all keybindings for the TUI.

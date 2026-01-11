@@ -2,7 +2,7 @@
   "id": "uq6",
   "title": "Define keyMap struct and default keybindings",
   "description": "Add keyMap struct and defaultKeyMap() function. Include bindings:\n\nNavigation:\n- Up: k, up arrow\n- Down: j, down arrow\n- ScrollUp: ctrl+u (viewport)\n- ScrollDown: ctrl+d (viewport)\n- Top: g\n- Bottom: G\n- PageUp: pgup\n- PageDown: pgdn\n\nActions:\n- Quit: q, ctrl+c\n- Help: ?\n- Pause: p (toggle pause/resume)\n- SwitchPane: tab (cycle focus between panes)\n\nEach binding needs:\n- key.Binding with WithKeys() and WithHelp()\n- Implement ShortHelp() returning footer hints\n- Implement FullHelp() returning grouped bindings for help modal\n\nMatch ticks keybinding patterns exactly.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "4pq",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:09:45.898346Z",
-  "updated_at": "2026-01-11T20:09:45.898346Z"
+  "updated_at": "2026-01-11T20:22:50.348866Z",
+  "closed_at": "2026-01-11T20:22:50.348866Z",
+  "closed_reason": "Added keyMap struct with all required bindings (Up, Down, ScrollUp, ScrollDn, Top, Bottom, PageUp, PageDown for navigation; Quit, Help, Pause, SwitchPane for actions). Implemented ShortHelp() returning footer hints and FullHelp() returning 3 grouped columns. All bindings use key.WithKeys() and key.WithHelp() matching ticks patterns exactly."
 }
