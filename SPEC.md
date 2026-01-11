@@ -4,7 +4,7 @@
 
 ## Overview
 
-Ticker is a Go implementation of the Ralph Wiggum technique - running AI agents in continuous loops until tasks are complete. It wraps the [Ticks](https://github.com/pengelbrecht/ticks) issue tracker and orchestrates AI agents (Claude, Gemini, Ollama) to autonomously complete epics.
+Ticker is a Go implementation of the Ralph Wiggum technique - running AI agents in continuous loops until tasks are complete. It wraps the [Ticks](https://github.com/pengelbrecht/ticks) issue tracker and orchestrates coding agents (Claude Code, Codex, Gemini CLI, Amp, OpenCode) to autonomously complete epics.
 
 ### Core Philosophy
 
@@ -29,10 +29,19 @@ ticker/
 │   │
 │   ├── agent/
 │   │   ├── agent.go         # Interface: Run(prompt) -> (output, tokens, error)
-│   │   ├── claude.go        # Claude CLI backend
+│   │   ├── claude.go        # Claude Code backend
+│   │   ├── codex.go         # OpenAI Codex backend
 │   │   ├── gemini.go        # Gemini CLI backend
-│   │   ├── ollama.go        # Local models via Ollama
-│   │   └── registry.go      # Auto-detect available agents
+│   │   ├── amp.go           # Sourcegraph Amp backend
+│   │   ├── opencode.go      # OpenCode backend
+│   │   ├── registry.go      # Auto-detect available agents
+│   │   └── permissions.go   # Permission mode abstraction
+│   │
+│   ├── permissions/
+│   │   ├── modes.go         # Permission mode definitions
+│   │   ├── policy.go        # Allow/deny rule engine
+│   │   ├── sandbox.go       # Sandbox configuration per agent
+│   │   └── audit.go         # Permission decision logging
 │   │
 │   ├── ticks/
 │   │   ├── client.go        # Wrap `tk` CLI calls
@@ -266,13 +275,255 @@ type Result struct {
 
 ### Supported Agents
 
-| Agent | Backend | Detection |
-|-------|---------|-----------|
-| Claude | `claude` CLI | `which claude` |
-| Gemini | `gemini` CLI | `which gemini` |
-| Ollama | HTTP API | `curl localhost:11434` |
+| Agent | CLI Command | Detection | Native Permissions |
+|-------|-------------|-----------|-------------------|
+| Claude Code | `claude` | `which claude` | normal, auto-accept, plan, yolo |
+| Codex | `codex` | `which codex` | read-only, auto, full-access, yolo |
+| Gemini CLI | `gemini` | `which gemini` | permissive-open, strict, yolo |
+| Amp | `amp` | `which amp` | (uses Claude permissions) |
+| OpenCode | `opencode` | `which opencode` | (provider-dependent) |
 
 Agent registry auto-detects available agents and allows selection via flag or TUI.
+
+### Agent Details
+
+**Claude Code** (Anthropic)
+- Primary agent, most mature Ralph support
+- Modes: `--dangerously-skip-permissions` for full autonomy
+- Streaming output, MCP support, subagents
+
+**Codex** (OpenAI)
+- Powered by GPT-5.2-Codex (o3 variant optimized for coding)
+- Sandbox: Seatbelt (macOS), Landlock+seccomp (Linux)
+- `--full-auto` for low-friction mode, `--yolo` for no restrictions
+
+**Gemini CLI** (Google)
+- ReAct loop with built-in tools
+- Sandbox profiles: permissive-open (default), strict, custom
+- `--yolo` mode for trusted workspaces
+
+**Amp** (Sourcegraph)
+- Built on Claude Opus 4.5, up to 200k context
+- Thread persistence across sessions
+- Subagent spawning for parallel subtasks
+
+**OpenCode** (Open Source)
+- Provider-agnostic (Claude, OpenAI, Google, local models)
+- Built-in Plan and Build agents
+- 650k+ monthly active developers
+
+## Permission Management
+
+Unlike the original ralph-ticker bash script which uses `--dangerously-skip-permissions` exclusively, Ticker provides granular permission control across all supported agents.
+
+### Permission Modes
+
+Ticker abstracts each agent's native permission system into a unified model:
+
+```go
+type PermissionMode int
+
+const (
+    // PermissionInteractive - prompt for every potentially dangerous operation
+    // Maps to: Claude normal, Codex read-only, Gemini strict
+    PermissionInteractive PermissionMode = iota
+
+    // PermissionAutoEdit - auto-approve file edits, prompt for shell/network
+    // Maps to: Claude auto-accept, Codex auto, Gemini permissive-open
+    PermissionAutoEdit
+
+    // PermissionAutoAll - auto-approve edits and shell within workspace
+    // Maps to: Codex full-access (workspace-scoped)
+    PermissionAutoAll
+
+    // PermissionYOLO - no restrictions, full autonomy
+    // Maps to: Claude --dangerously-skip-permissions, Codex --yolo, Gemini --yolo
+    PermissionYOLO
+)
+```
+
+### Agent Permission Mapping
+
+| Ticker Mode | Claude Code | Codex | Gemini CLI |
+|-------------|-------------|-------|------------|
+| `interactive` | normal | read-only | strict |
+| `auto-edit` | auto-accept edits | auto | permissive-open |
+| `auto-all` | (not native) | full-access | permissive-open |
+| `yolo` | --dangerously-skip-permissions | --yolo | --yolo |
+
+### Permission Policies
+
+Fine-grained control via allow/deny rules:
+
+```go
+type PermissionPolicy struct {
+    // Explicit denials (checked first)
+    Deny []PermissionRule `json:"deny"`
+
+    // Explicit allows (checked second)
+    Allow []PermissionRule `json:"allow"`
+
+    // Default for unmatched operations
+    Default PermissionDecision `json:"default"` // "ask", "allow", "deny"
+}
+
+type PermissionRule struct {
+    // What operation type
+    Operation string `json:"operation"` // "file_write", "file_read", "shell", "network"
+
+    // Path patterns (glob)
+    Paths []string `json:"paths,omitempty"` // ["src/**", "!src/secrets/**"]
+
+    // Command patterns (for shell)
+    Commands []string `json:"commands,omitempty"` // ["go *", "npm *", "!rm -rf *"]
+
+    // Network patterns
+    Hosts []string `json:"hosts,omitempty"` // ["github.com", "*.googleapis.com"]
+}
+```
+
+### Sandbox Configuration
+
+Per-agent sandbox settings:
+
+```go
+type SandboxConfig struct {
+    // Filesystem restrictions
+    WorkspaceOnly   bool     `json:"workspace_only"`   // Restrict writes to workspace
+    AllowedPaths    []string `json:"allowed_paths"`    // Additional write paths
+    DeniedPaths     []string `json:"denied_paths"`     // Explicit denials
+
+    // Network restrictions
+    NetworkEnabled  bool     `json:"network_enabled"`
+    AllowedHosts    []string `json:"allowed_hosts"`    // Whitelist
+    DeniedHosts     []string `json:"denied_hosts"`     // Blacklist
+
+    // Process restrictions
+    AllowedCommands []string `json:"allowed_commands"` // Command whitelist
+    DeniedCommands  []string `json:"denied_commands"`  // Command blacklist
+    MaxProcessTime  Duration `json:"max_process_time"` // Per-command timeout
+}
+```
+
+### CLI Permission Flags
+
+```bash
+# Permission modes
+ticker run h8d --permission interactive  # Prompt for everything
+ticker run h8d --permission auto-edit    # Auto-approve edits only
+ticker run h8d --permission auto-all     # Auto-approve edits + workspace shell
+ticker run h8d --permission yolo         # Full autonomy (use with caution)
+
+# Fine-grained overrides
+ticker run h8d --allow-network           # Enable network access
+ticker run h8d --allow-paths "/tmp,/var/cache"
+ticker run h8d --deny-commands "rm -rf,sudo"
+
+# Sandbox presets
+ticker run h8d --sandbox strict          # Maximum restrictions
+ticker run h8d --sandbox permissive      # Reasonable defaults
+ticker run h8d --sandbox none            # No sandbox (yolo mode)
+```
+
+### Configuration File
+
+```json
+{
+  "permissions": {
+    "default_mode": "auto-edit",
+    "policy": {
+      "deny": [
+        {"operation": "file_write", "paths": ["**/.env", "**/secrets/**"]},
+        {"operation": "shell", "commands": ["rm -rf /*", "sudo *"]},
+        {"operation": "network", "hosts": ["*.malware.com"]}
+      ],
+      "allow": [
+        {"operation": "file_write", "paths": ["src/**", "test/**", "docs/**"]},
+        {"operation": "shell", "commands": ["go *", "npm *", "git *", "tk *"]},
+        {"operation": "network", "hosts": ["github.com", "pkg.go.dev"]}
+      ],
+      "default": "ask"
+    },
+    "sandbox": {
+      "workspace_only": true,
+      "network_enabled": false,
+      "max_process_time": "5m"
+    }
+  },
+  "agents": {
+    "claude": {
+      "permission_flags": []
+    },
+    "codex": {
+      "sandbox_mode": "workspace-write",
+      "approval_mode": "on-request"
+    },
+    "gemini": {
+      "sandbox_profile": "permissive-open"
+    }
+  }
+}
+```
+
+### Permission Audit Log
+
+All permission decisions are logged for review:
+
+```go
+type PermissionEvent struct {
+    Timestamp   time.Time         `json:"timestamp"`
+    Iteration   int               `json:"iteration"`
+    EpicID      string            `json:"epic_id"`
+    Agent       string            `json:"agent"`
+    Operation   string            `json:"operation"`
+    Target      string            `json:"target"`      // file path, command, URL
+    Decision    PermissionDecision `json:"decision"`   // allowed, denied, asked
+    Reason      string            `json:"reason"`      // which rule matched
+    UserAction  string            `json:"user_action"` // if asked: approved/rejected
+}
+```
+
+Log stored at `.ticker/audit.jsonl`:
+
+```jsonl
+{"timestamp":"2025-01-11T10:23:45Z","iteration":3,"epic_id":"h8d","agent":"claude","operation":"file_write","target":"src/worker/pool.go","decision":"allowed","reason":"matches allow rule: src/**"}
+{"timestamp":"2025-01-11T10:24:12Z","iteration":3,"epic_id":"h8d","agent":"claude","operation":"shell","target":"go test ./...","decision":"allowed","reason":"matches allow rule: go *"}
+{"timestamp":"2025-01-11T10:25:03Z","iteration":3,"epic_id":"h8d","agent":"claude","operation":"network","target":"api.github.com","decision":"asked","reason":"no matching rule","user_action":"approved"}
+```
+
+### TUI Permission View (`a` key)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ PERMISSIONS                                          Mode: auto-edit │
+├─────────────────────────────────────────────────────────────────┤
+│ RECENT DECISIONS (last 10)                                      │
+│ ───────────────────────────                                     │
+│ ✓ file_write  src/worker/pool.go           allowed (rule)       │
+│ ✓ shell       go test ./...                allowed (rule)       │
+│ ? network     api.github.com               asked → approved     │
+│ ✓ file_write  src/worker/queue.go          allowed (rule)       │
+│ ✗ file_write  .env.local                   denied (rule)        │
+│ ✓ shell       git commit -m "..."          allowed (rule)       │
+│                                                                 │
+│ PENDING APPROVAL                                                │
+│ ────────────────                                                │
+│ (none)                                                          │
+│                                                                 │
+│ STATS: 47 allowed | 2 denied | 3 asked                          │
+└─────────────────────────────────────────────────────────────────┘
+ m change mode  p edit policy  e export audit  esc back
+```
+
+### Safety Recommendations
+
+| Context | Recommended Mode | Rationale |
+|---------|------------------|-----------|
+| Trusted personal project | `auto-all` | Fast iteration, low risk |
+| Team codebase | `auto-edit` | Protect shell access |
+| Open source contribution | `interactive` | Maximum oversight |
+| CI/CD pipeline | `yolo` + container | Isolated environment |
+| Production-adjacent | `interactive` | Safety first |
 
 ## Parallel Worktree Execution
 
@@ -375,13 +626,24 @@ type Limits struct {
 
 ### Pricing Table
 
+Agents have different pricing models. Ticker tracks token usage and estimates costs where possible:
+
+| Agent | Pricing Model | Cost Tracking |
+|-------|---------------|---------------|
+| Claude Code | API usage or Max subscription | Per-token estimates |
+| Codex | ChatGPT Plus/Pro subscription | Per-token estimates |
+| Gemini CLI | Free tier / API usage | Per-token estimates |
+| Amp | Pay-as-you-go or $10/day | Per-token estimates |
+| OpenCode | Provider-dependent | Provider-dependent |
+
+**Underlying Model Costs (for estimation):**
+
 | Model | Input (per 1M) | Output (per 1M) |
 |-------|----------------|-----------------|
 | claude-sonnet-4 | $3.00 | $15.00 |
-| claude-opus-4 | $15.00 | $75.00 |
-| gemini-2.0-flash | $0.10 | $0.40 |
+| claude-opus-4.5 | $15.00 | $75.00 |
+| gpt-5.2-codex | ~$5.00 | ~$20.00 |
 | gemini-2.5-pro | $1.25 | $10.00 |
-| ollama/* | $0.00 | $0.00 |
 
 ### Budget Callbacks
 
@@ -396,6 +658,9 @@ type BudgetCallbacks struct {
 ## CLI Interface
 
 ```bash
+# Interactive TUI mode - browse and select epics to run
+ticker
+
 # Run single epic
 ticker run h8d --max-iterations 50 --max-cost 10.00
 
@@ -421,8 +686,37 @@ ticker status
 ticker run h8d --headless --json-output
 
 # Agent selection
+ticker run h8d --agent codex
 ticker run h8d --agent gemini
-ticker run h8d --agent ollama:llama3.2
+ticker run h8d --agent amp
+ticker run h8d --agent opencode
+```
+
+### Interactive Mode (`ticker` with no args)
+
+Launches full TUI for epic selection and management:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ TICKER                                         Agent: claude    │
+├─────────────────────────────────────────────────────────────────┤
+│ SELECT EPICS TO RUN                                             │
+│ ───────────────────                                             │
+│                                                                 │
+│   [ ] h8d  Parallel test execution       P2  5 tasks  ready    │
+│   [x] fbv  Bug Fixes & Documentation     P1  3 tasks  ready    │
+│   [ ] 5b8  Benchmark Suite               P2  8 tasks  blocked  │
+│   [ ] hhm  Homebrew distribution         P2  2 tasks  ready    │
+│                                                                 │
+│ SETTINGS                                                        │
+│ ────────                                                        │
+│   Max iterations: 50        Permission: auto-edit               │
+│   Max cost: $20.00          Parallel: 3                         │
+│   Worktrees: enabled        Agent: claude                       │
+│                                                                 │
+│ READY: 1 epic selected (fbv)                                    │
+└─────────────────────────────────────────────────────────────────┘
+ space toggle  a select all  enter start  s settings  q quit
 ```
 
 ## Configuration
@@ -448,9 +742,18 @@ ticker run h8d --agent ollama:llama3.2
     "claude": {
       "flags": ["--dangerously-skip-permissions"]
     },
-    "ollama": {
-      "model": "llama3.2",
-      "endpoint": "http://localhost:11434"
+    "codex": {
+      "sandbox_mode": "workspace-write",
+      "approval_mode": "on-request"
+    },
+    "gemini": {
+      "sandbox_profile": "permissive-open"
+    },
+    "amp": {
+      "model": "claude-opus-4-5"
+    },
+    "opencode": {
+      "provider": "anthropic"
     }
   }
 }
@@ -517,19 +820,40 @@ const (
 19. **CI integration**: GitHub Actions workflow template? Exit codes?
 20. **Telemetry**: Anonymous usage stats? Opt-in/out?
 
+### Permissions
+
+21. **Permission mode switching**: Allow changing mode mid-run via TUI?
+22. **Cross-agent consistency**: How to handle when agent doesn't support a permission feature?
+23. **Rule inheritance**: Should project rules inherit from user-level rules?
+24. **Approval timeout**: How long to wait for user approval before skipping/aborting?
+25. **Batch approvals**: Allow approving patterns ("always allow go test")?
+
 ### Security
 
-21. **Secrets in scratchpad**: Warn if API keys detected in scratchpad?
-22. **Sandbox mode**: Run agent with restricted permissions option?
-23. **Audit log**: Track all agent actions for review?
+26. **Secrets in scratchpad**: Warn if API keys detected in scratchpad?
+27. **Sandbox enforcement**: Can Ticker enforce sandbox when agent doesn't support it?
+28. **Audit log retention**: How long to keep audit logs? Auto-rotate?
+29. **Container mode**: Built-in Docker/container isolation option?
 
 ## References
 
+### Core
 - [Ticks](https://github.com/pengelbrecht/ticks) - Git-backed issue tracker
 - [ralph-ticker](https://github.com/user/ralph-patterns) - Original bash implementation
 - [Ralph Wiggum Technique](https://ghuntley.com/ralph/) - Origin of the pattern
+
+### Ralph Implementations
 - [ralph-orchestrator](https://github.com/mikeyobrien/ralph-orchestrator) - Python implementation
 - [vercel ralph-loop-agent](https://github.com/vercel-labs/ralph-loop-agent) - AI SDK implementation
+
+### Coding Agents
+- [Claude Code](https://claude.ai/code) - Anthropic's coding agent
+- [Codex CLI](https://github.com/openai/codex) - OpenAI's coding agent
+- [Gemini CLI](https://developers.google.com/gemini-code-assist/docs/gemini-cli) - Google's coding agent
+- [Amp](https://ampcode.com/) - Sourcegraph's coding agent
+- [OpenCode](https://github.com/opencode-ai/opencode) - Open source coding agent
+
+### TUI
 - [Bubbletea](https://github.com/charmbracelet/bubbletea) - Go TUI framework
 - [Lipgloss](https://github.com/charmbracelet/lipgloss) - TUI styling
 
