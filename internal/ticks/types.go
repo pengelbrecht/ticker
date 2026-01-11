@@ -55,3 +55,14 @@ func (e *Epic) IsOpen() bool {
 func (e *Epic) IsClosed() bool {
 	return e.Status == "closed"
 }
+
+// listOutput wraps the JSON output from tk list command.
+// tk list --json now returns {"ticks": [...]} instead of just [...].
+type listOutput struct {
+	Ticks []Task `json:"ticks"`
+}
+
+// epicListOutput wraps the JSON output for epic lists.
+type epicListOutput struct {
+	Ticks []Epic `json:"ticks"`
+}

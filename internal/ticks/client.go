@@ -88,11 +88,12 @@ func (c *Client) ListTasks(epicID string) ([]Task, error) {
 		return nil, nil
 	}
 
-	var tasks []Task
-	if err := json.Unmarshal(out, &tasks); err != nil {
+	// tk list --json returns {"ticks": [...]}
+	var wrapper listOutput
+	if err := json.Unmarshal(out, &wrapper); err != nil {
 		return nil, fmt.Errorf("parse tasks JSON: %w", err)
 	}
-	return tasks, nil
+	return wrapper.Ticks, nil
 }
 
 // NextReadyEpic returns the next ready (unblocked) epic.
@@ -136,11 +137,12 @@ func (c *Client) ListReadyEpics() ([]Epic, error) {
 		return nil, nil
 	}
 
-	var epics []Epic
-	if err := json.Unmarshal(out, &epics); err != nil {
+	// tk list --json returns {"ticks": [...]}
+	var wrapper epicListOutput
+	if err := json.Unmarshal(out, &wrapper); err != nil {
 		return nil, fmt.Errorf("parse epics JSON: %w", err)
 	}
-	return epics, nil
+	return wrapper.Ticks, nil
 }
 
 // HasOpenTasks returns true if the epic has any non-closed tasks (open or in_progress).
