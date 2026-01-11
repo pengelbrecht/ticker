@@ -106,7 +106,9 @@ func (m Model) renderHeader() string {
 
 	// Status indicator
 	var status string
-	if m.running {
+	if m.paused {
+		status = pausedStyle.Render("⏸ PAUSED")
+	} else if m.running {
 		status = runningStyle.Render("● RUNNING")
 	} else {
 		status = stoppedStyle.Render("■ STOPPED")

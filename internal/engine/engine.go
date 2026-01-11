@@ -48,6 +48,10 @@ type RunConfig struct {
 
 	// AgentTimeout is the per-iteration timeout for the agent (0 = 5 minutes default).
 	AgentTimeout time.Duration
+
+	// PauseChan is a channel that signals pause/resume. When true, engine pauses.
+	// Nil means no pause support.
+	PauseChan <-chan bool
 }
 
 // Defaults for RunConfig.
@@ -187,6 +191,25 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Check budget limits before starting iteration
 		if shouldStop, reason := e.budget.ShouldStop(); shouldStop {
 			return state.toResult(reason), nil
+		}
+
+		// Check for pause signal
+		if config.PauseChan != nil {
+			select {
+			case paused := <-config.PauseChan:
+				if paused {
+					// Wait for unpause
+					for paused {
+						select {
+						case <-ctx.Done():
+							return state.toResult("context cancelled while paused"), ctx.Err()
+						case paused = <-config.PauseChan:
+						}
+					}
+				}
+			default:
+				// Not paused, continue
+			}
 		}
 
 		// Get next task

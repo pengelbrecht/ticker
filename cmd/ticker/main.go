@@ -173,12 +173,16 @@ func runRun(cmd *cobra.Command, args []string) {
 }
 
 func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval int) {
+	// Create pause channel for TUI <-> engine communication
+	pauseChan := make(chan bool, 1)
+
 	// Create TUI model
 	m := tui.New(tui.Config{
 		EpicID:       epicID,
 		EpicTitle:    epicTitle,
 		MaxCost:      maxCost,
 		MaxIteration: maxIterations,
+		PauseChan:    pauseChan,
 	})
 
 	// Create program
@@ -260,6 +264,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 			MaxIterations:   maxIterations,
 			MaxCost:         maxCost,
 			CheckpointEvery: checkpointInterval,
+			PauseChan:       pauseChan,
 		}
 
 		result, err := eng.Run(ctx, config)

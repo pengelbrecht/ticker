@@ -59,6 +59,9 @@ type Model struct {
 	// Dimensions
 	width  int
 	height int
+
+	// Pause channel for engine control
+	pauseChan chan<- bool
 }
 
 // Config holds TUI configuration.
@@ -67,6 +70,7 @@ type Config struct {
 	EpicTitle    string
 	MaxCost      float64
 	MaxIteration int
+	PauseChan    chan<- bool // Channel to send pause state to engine
 }
 
 // New creates a new TUI model.
@@ -97,6 +101,7 @@ func New(cfg Config) Model {
 		focusedPane: PaneOutput,
 		running:     true,
 		startTime:   time.Now(),
+		pauseChan:   cfg.PauseChan,
 	}
 }
 
@@ -141,6 +146,11 @@ type (
 		Signal     string
 		Iterations int
 		Cost       float64
+	}
+
+	// PauseStateMsg signals a pause state change.
+	PauseStateMsg struct {
+		Paused bool
 	}
 )
 
@@ -199,7 +209,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, m.keys.Pause):
 			m.paused = !m.paused
-			// Note: actual pause logic handled in pwy task
+			// Send pause state to engine
+			if m.pauseChan != nil {
+				select {
+				case m.pauseChan <- m.paused:
+				default:
+					// Channel full, skip
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:
