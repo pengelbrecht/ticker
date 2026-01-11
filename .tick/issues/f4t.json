@@ -2,7 +2,7 @@
   "id": "f4t",
   "title": "Add unit tests for Model and rendering",
   "description": "Create internal/tui/model_test.go with tests:\n\nModel tests:\n- TestNew: verify initial state from Config\n- TestUpdate_WindowResize: verify dimension calculations\n- TestUpdate_KeyQuit: verify quitting state\n- TestUpdate_KeyPause: verify pause toggle and channel send\n- TestUpdate_KeyNavigation: verify j/k movement in each pane\n- TestUpdate_PaneFocus: verify tab cycling\n\nMessage tests:\n- TestUpdate_IterationStart: verify state updates\n- TestUpdate_IterationEnd: verify cost/token updates\n- TestUpdate_OutputMsg: verify output appending\n- TestUpdate_TasksUpdate: verify task list updates\n- TestUpdate_RunComplete: verify completion state\n\nRender tests:\n- TestRenderStatusBar: verify formatting\n- TestRenderTaskPane: verify task formatting\n- TestRenderFooter: verify hint formatting\n\nHelper tests:\n- TestFormatDuration: verify time formatting\n- TestTaskStatusIcon: verify icon selection\n- TestPulsingStyle: verify color cycling\n\nUse testing.T and assert on string contains for render tests.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -15,5 +15,7 @@
   "parent": "4pq",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:12:24.965933Z",
-  "updated_at": "2026-01-11T20:14:00.017685Z"
+  "updated_at": "2026-01-11T20:59:36.790587Z",
+  "closed_at": "2026-01-11T20:59:36.790587Z",
+  "closed_reason": "Added comprehensive unit tests in internal/tui/model_test.go covering: Model initialization (TestNew, TestInit), Update handlers (WindowResize, KeyQuit, KeyPause, KeyNavigation, PaneFocus), Messages (IterationStart/End, Output, Tasks, RunComplete, Signal, Error, Tick), Rendering (StatusBar, TaskPane, Footer), Helpers (formatDuration, StatusIcon, pulsingStyle, IsBlocked, RenderTask, focus helpers), View modes (Loading, Normal, Help/Complete overlays), and Picker (New, Selected, Navigation, Enter, Quit, View). 45 tests total, all passing."
 }

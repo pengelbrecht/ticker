@@ -1,0 +1,15 @@
+{
+  "id": "enp",
+  "title": "What day is it?",
+  "description": "Report today's date.",
+  "status": "closed",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "hqj",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T21:25:23.396199Z",
+  "updated_at": "2026-01-11T21:27:29.546447Z",
+  "closed_at": "2026-01-11T21:27:29.546447Z",
+  "closed_reason": "Today's date is 2026-01-11 (January 11, 2026). Simple date reporting task, no code changes required."
+}

@@ -15,6 +15,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/pengelbrecht/ticker/internal/agent"
 )
 
 func init() {
@@ -269,6 +271,7 @@ type Model struct {
 	paused    bool
 	quitting  bool
 	startTime time.Time
+	endTime   time.Time
 
 	// Budget tracking
 	cost          float64
@@ -287,7 +290,10 @@ type Model struct {
 	viewport     viewport.Model
 	tasks        []TaskInfo
 	selectedTask int
-	output       string
+	output       string            // legacy output buffer (kept for backward compatibility during transition)
+	agentState   *agent.AgentState // live streaming state for rich agent output display
+	taskOutputs  map[string]string // per-task output history
+	viewingTask  string            // task ID being viewed (empty = live output)
 
 	// Layout
 	width       int // clamped width for rendering (min: minWidth)
@@ -410,8 +416,9 @@ func New(cfg Config) Model {
 		showComplete: false,
 
 		// Components
-		viewport: vp,
-		tasks:    []TaskInfo{},
+		viewport:    vp,
+		tasks:       []TaskInfo{},
+		taskOutputs: make(map[string]string),
 
 		// Communication
 		pauseChan: cfg.PauseChan,
@@ -467,13 +474,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, tickCmd())
 
 	case OutputMsg:
-		// Append new output and update viewport
+		// Append new output to live buffer
 		m.output += string(msg)
-		m.viewport.SetContent(m.output)
-		// Auto-scroll to bottom on new content
-		m.viewport.GotoBottom()
+		// Only update viewport if viewing live output (not historical)
+		if m.viewingTask == "" {
+			m.viewport.SetContent(m.output)
+			// Auto-scroll to bottom on new content
+			m.viewport.GotoBottom()
+		}
 
 	case IterationStartMsg:
+		// Save output for the previous task before clearing
+		if m.taskID != "" && m.output != "" {
+			m.taskOutputs[m.taskID] = m.output
+		}
+
 		// Update iteration state
 		m.iteration = msg.Iteration
 		m.taskID = msg.TaskID
@@ -491,12 +506,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Clear output buffer for new iteration
 		m.output = ""
-		m.viewport.SetContent("")
+		if m.viewingTask == "" {
+			m.viewport.SetContent("")
+		}
 
 	case IterationEndMsg:
 		// Update cost and tokens from iteration metrics
 		m.cost += msg.Cost
 		m.tokens += msg.Tokens
+
+		// Save output for the completed task
+		if m.taskID != "" {
+			m.taskOutputs[m.taskID] = m.output
+		}
 
 	case SignalMsg:
 		// Store signal and reason for display
@@ -508,6 +530,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "COMPLETE", "EJECT", "BLOCKED", "MAX_ITER", "MAX_COST":
 			m.showComplete = true
 			m.running = false
+			m.endTime = time.Now()
 		}
 
 	case ErrorMsg:
@@ -520,11 +543,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case RunCompleteMsg:
+		// Save output for the final task
+		if m.taskID != "" && m.output != "" {
+			m.taskOutputs[m.taskID] = m.output
+		}
+
 		// Set completion state
 		m.showComplete = true
 		m.completeReason = msg.Reason
 		m.completeSignal = msg.Signal
 		m.running = false
+		m.endTime = time.Now()
 
 		// Update metrics from the message if provided
 		if msg.Iterations > 0 {
@@ -671,6 +700,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusedPane = PaneStatus
 			default:
 				m.focusedPane = PaneTasks
+			}
+		case "enter":
+			// View selected task's output history (stay in task pane)
+			if m.focusedPane == PaneTasks && len(m.tasks) > 0 && m.selectedTask < len(m.tasks) {
+				task := m.tasks[m.selectedTask]
+				if output, ok := m.taskOutputs[task.ID]; ok && output != "" {
+					m.viewingTask = task.ID
+					m.viewport.SetContent(output)
+					m.viewport.GotoTop()
+				}
+			}
+		case "esc":
+			// Return to live output
+			if m.viewingTask != "" {
+				m.viewingTask = ""
+				m.viewport.SetContent(m.output)
+				m.viewport.GotoBottom()
 			}
 		}
 	}
@@ -1045,19 +1091,33 @@ func (m Model) renderOutputPane(height int) string {
 	hdrStyle := m.focusHeaderStyle(PaneOutput)
 	var header string
 	scrollPercent := m.viewport.ScrollPercent()
+
+	// Determine header title based on viewing mode
+	var headerTitle string
+	if m.viewingTask != "" {
+		headerTitle = fmt.Sprintf("Output [%s]", m.viewingTask)
+	} else {
+		headerTitle = "Agent Output"
+	}
+
 	if m.viewport.TotalLineCount() > m.viewport.Height && m.viewport.Height > 0 {
 		// Show scroll percentage when content overflows
 		percentStr := fmt.Sprintf("(%d%%)", int(scrollPercent*100))
-		header = hdrStyle.Render("Agent Output") + " " + dimStyle.Render(percentStr)
+		header = hdrStyle.Render(headerTitle) + " " + dimStyle.Render(percentStr)
 	} else {
-		header = hdrStyle.Render("Agent Output")
+		header = hdrStyle.Render(headerTitle)
 	}
 
-	// Add spinner to header if actively running
-	if m.running && !m.paused {
+	// Add spinner to header if actively running (only for live output)
+	if m.running && !m.paused && m.viewingTask == "" {
 		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 		spinner := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinnerFrames[m.animFrame%len(spinnerFrames)])
 		header = spinner + " " + header
+	}
+
+	// Add hint when viewing historical output
+	if m.viewingTask != "" {
+		header += " " + dimStyle.Render("(esc: live)")
 	}
 
 	// Build content based on mode
@@ -1201,6 +1261,7 @@ func (m Model) renderFooter() string {
 		}
 
 		hints = append(hints, keyStyle.Render("j/k")+descStyle.Render(":nav"))
+		hints = append(hints, keyStyle.Render("↵")+descStyle.Render(":view"))
 		hints = append(hints, keyStyle.Render("tab")+descStyle.Render(":pane"))
 		hints = append(hints, keyStyle.Render("^d/u")+descStyle.Render(":scroll"))
 		hints = append(hints, keyStyle.Render("?")+descStyle.Render(":help"))
@@ -1499,10 +1560,15 @@ func (m Model) renderCompleteOverlay() string {
 		}
 	}
 
-	// Calculate duration
+	// Calculate duration (use endTime if set, otherwise current time)
 	var durationStr string
 	if !m.startTime.IsZero() {
-		elapsed := time.Since(m.startTime)
+		var elapsed time.Duration
+		if !m.endTime.IsZero() {
+			elapsed = m.endTime.Sub(m.startTime)
+		} else {
+			elapsed = time.Since(m.startTime)
+		}
 		hours := int(elapsed.Hours())
 		minutes := int(elapsed.Minutes()) % 60
 		seconds := int(elapsed.Seconds()) % 60
