@@ -8,6 +8,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/pengelbrecht/ticker/internal/agent"
 )
 
 // -----------------------------------------------------------------------------
@@ -635,6 +637,80 @@ func TestRenderStatusBar_Stopped(t *testing.T) {
 	}
 }
 
+func TestRenderStatusBar_WithAgentState(t *testing.T) {
+	m := New(Config{})
+	m.width = 150
+	m.height = 30
+	m.running = true
+
+	// Create an agent state with metrics
+	m.agentState = &agent.AgentState{}
+	m.agentState.Model = "claude-opus-4-5-20251101"
+	m.agentState.Metrics.InputTokens = 12500
+	m.agentState.Metrics.OutputTokens = 450
+	m.agentState.Metrics.CacheReadTokens = 8000
+	m.agentState.Metrics.CacheCreationTokens = 4000
+
+	output := m.renderStatusBar()
+
+	// Check for token metrics
+	if !strings.Contains(output, "Tokens:") {
+		t.Error("expected status bar to contain 'Tokens:'")
+	}
+	if !strings.Contains(output, "12k in") {
+		t.Error("expected status bar to contain '12k in' for input tokens")
+	}
+	if !strings.Contains(output, "450 out") {
+		t.Error("expected status bar to contain '450 out' for output tokens")
+	}
+	if !strings.Contains(output, "12k cache") {
+		t.Error("expected status bar to contain '12k cache' for cache tokens")
+	}
+
+	// Check for model name
+	if !strings.Contains(output, "Model:") {
+		t.Error("expected status bar to contain 'Model:'")
+	}
+	if !strings.Contains(output, "opus") {
+		t.Error("expected status bar to contain 'opus' for model name")
+	}
+}
+
+func TestRenderStatusBar_WithAgentState_NoCache(t *testing.T) {
+	m := New(Config{})
+	m.width = 150
+	m.height = 30
+	m.running = true
+
+	// Create an agent state without cache tokens
+	m.agentState = &agent.AgentState{}
+	m.agentState.Model = "claude-sonnet-4-20250514"
+	m.agentState.Metrics.InputTokens = 1500
+	m.agentState.Metrics.OutputTokens = 200
+	// No cache tokens
+
+	output := m.renderStatusBar()
+
+	// Check for token metrics (no cache shown when zero)
+	if !strings.Contains(output, "Tokens:") {
+		t.Error("expected status bar to contain 'Tokens:'")
+	}
+	if !strings.Contains(output, "1.5k in") {
+		t.Error("expected status bar to contain '1.5k in' for input tokens")
+	}
+	if !strings.Contains(output, "200 out") {
+		t.Error("expected status bar to contain '200 out' for output tokens")
+	}
+	if strings.Contains(output, "cache") {
+		t.Error("expected status bar NOT to contain 'cache' when cache tokens are zero")
+	}
+
+	// Check for model name
+	if !strings.Contains(output, "sonnet") {
+		t.Error("expected status bar to contain 'sonnet' for model name")
+	}
+}
+
 func TestRenderTaskPane(t *testing.T) {
 	m := New(Config{})
 	m.width = 100
@@ -769,6 +845,57 @@ func TestFormatDuration(t *testing.T) {
 		result := formatDuration(tc.duration)
 		if result != tc.expected {
 			t.Errorf("formatDuration(%v): expected '%s', got '%s'", tc.duration, tc.expected, result)
+		}
+	}
+}
+
+func TestFormatTokens(t *testing.T) {
+	testCases := []struct {
+		count    int
+		expected string
+	}{
+		{0, "0"},
+		{500, "500"},
+		{999, "999"},
+		{1000, "1.0k"},
+		{1500, "1.5k"},
+		{9999, "10.0k"},
+		{10000, "10k"},
+		{12000, "12k"},
+		{999000, "999k"},
+		{1000000, "1.0M"},
+		{1234567, "1.2M"},
+		{12345678, "12.3M"},
+	}
+
+	for _, tc := range testCases {
+		result := formatTokens(tc.count)
+		if result != tc.expected {
+			t.Errorf("formatTokens(%d): expected '%s', got '%s'", tc.count, tc.expected, result)
+		}
+	}
+}
+
+func TestShortModelName(t *testing.T) {
+	testCases := []struct {
+		model    string
+		expected string
+	}{
+		{"", ""},
+		{"claude-opus-4-5-20251101", "opus"},
+		{"claude-sonnet-4-20250514", "sonnet"},
+		{"claude-3-5-haiku-20241022", "haiku"},
+		{"claude-OPUS-4-5-20251101", "opus"},
+		{"CLAUDE-SONNET-4", "sonnet"},
+		{"some-unknown-model", "some-unkno"},
+		{"short", "short"},
+		{"claude-newmodel-1", "newmodel"},
+	}
+
+	for _, tc := range testCases {
+		result := shortModelName(tc.model)
+		if result != tc.expected {
+			t.Errorf("shortModelName(%q): expected '%s', got '%s'", tc.model, tc.expected, result)
 		}
 	}
 }

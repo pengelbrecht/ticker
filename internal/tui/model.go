@@ -228,6 +228,53 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
+// formatTokens formats a token count for compact display.
+// Examples: 0 -> "0", 500 -> "500", 1500 -> "1.5k", 12000 -> "12k", 1234567 -> "1.2M"
+func formatTokens(count int) string {
+	if count < 1000 {
+		return fmt.Sprintf("%d", count)
+	}
+	if count < 10000 {
+		// 1.0k - 9.9k: show one decimal
+		return fmt.Sprintf("%.1fk", float64(count)/1000)
+	}
+	if count < 1000000 {
+		// 10k - 999k: no decimal
+		return fmt.Sprintf("%dk", count/1000)
+	}
+	// 1M+: show one decimal
+	return fmt.Sprintf("%.1fM", float64(count)/1000000)
+}
+
+// shortModelName extracts a short model name from a full model ID.
+// Examples: "claude-opus-4-5-20251101" -> "opus", "claude-sonnet-4-20250514" -> "sonnet"
+func shortModelName(model string) string {
+	if model == "" {
+		return ""
+	}
+	lower := strings.ToLower(model)
+	if strings.Contains(lower, "opus") {
+		return "opus"
+	}
+	if strings.Contains(lower, "sonnet") {
+		return "sonnet"
+	}
+	if strings.Contains(lower, "haiku") {
+		return "haiku"
+	}
+	// Fallback: return first part after "claude-" or the whole string if short
+	if strings.HasPrefix(lower, "claude-") {
+		parts := strings.Split(model[7:], "-")
+		if len(parts) > 0 && len(parts[0]) > 0 {
+			return parts[0]
+		}
+	}
+	if len(model) > 10 {
+		return model[:10]
+	}
+	return model
+}
+
 // keyMap defines all keybindings for the TUI.
 type keyMap struct {
 	// Navigation
@@ -1078,7 +1125,7 @@ func (m Model) View() string {
 
 // renderStatusBar renders the top status bar with header, progress, and optional progress bar.
 // Line 1: '⚡ ticker: [epic-id] Epic Title          ● STATUS'
-// Line 2: 'Iter: 5 │ Tasks: 3/8 │ Time: 2:34 │ Cost: $1.23/$20.00'
+// Line 2: 'Iter: 5 │ Tasks: 3/8 │ Time: 2:34 │ Cost: $1.23/$20.00 │ Tokens: 1.2k in │ 450 out │ 12k cache │ Model: opus'
 // Line 3 (optional): Progress bar
 func (m Model) renderStatusBar() string {
 	// --- Line 1: Header ---
@@ -1154,6 +1201,29 @@ func (m Model) renderStatusBar() string {
 		costValue = fmt.Sprintf(" $%.2f", m.cost)
 	}
 	progressParts = append(progressParts, costLabel+costValue)
+
+	// Token metrics from agent state (if available)
+	if m.agentState != nil {
+		snap := m.agentState.Snapshot()
+		var tokenParts []string
+		tokenParts = append(tokenParts, formatTokens(snap.Metrics.InputTokens)+" in")
+		tokenParts = append(tokenParts, formatTokens(snap.Metrics.OutputTokens)+" out")
+		// Show cache if there are any cache tokens
+		if snap.Metrics.CacheReadTokens > 0 || snap.Metrics.CacheCreationTokens > 0 {
+			cacheTotal := snap.Metrics.CacheReadTokens + snap.Metrics.CacheCreationTokens
+			tokenParts = append(tokenParts, formatTokens(cacheTotal)+" cache")
+		}
+		tokensLabel := dimStyle.Render("Tokens:")
+		tokensValue := " " + strings.Join(tokenParts, " │ ")
+		progressParts = append(progressParts, tokensLabel+tokensValue)
+
+		// Model name (if available)
+		if snap.Model != "" {
+			modelLabel := dimStyle.Render("Model:")
+			modelValue := " " + shortModelName(snap.Model)
+			progressParts = append(progressParts, modelLabel+modelValue)
+		}
+	}
 
 	progressLine := strings.Join(progressParts, " │ ")
 
