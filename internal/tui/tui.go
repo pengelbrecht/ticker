@@ -105,9 +105,19 @@ func New(cfg Config) Model {
 	}
 }
 
+// tickMsg is sent every second to update the stopwatch.
+type tickMsg time.Time
+
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tickCmd()
+}
+
+// tickCmd returns a command that sends a tick every second.
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 // Message types for TUI updates from engine.
@@ -187,10 +197,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focusedPane == PaneOutput {
 				m.viewport.LineUp(1)
 			}
+			// Task pane: let list.Update handle j/k
 		case key.Matches(msg, m.keys.ScrollDown):
 			if m.focusedPane == PaneOutput {
 				m.viewport.LineDown(1)
 			}
+			// Task pane: let list.Update handle j/k
 		case key.Matches(msg, m.keys.PageUp):
 			if m.focusedPane == PaneOutput {
 				m.viewport.HalfViewUp()
@@ -287,12 +299,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.output += fmt.Sprintf("\n\n[Run Complete: %s]\n", msg.Reason)
 		m.viewport.SetContent(m.output)
 		m.viewport.GotoBottom()
+
+	case tickMsg:
+		// Schedule next tick to keep stopwatch updating
+		if m.running {
+			cmds = append(cmds, tickCmd())
+		}
 	}
 
 	// Update viewport
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
+
+	// Update task list when focused
+	if m.focusedPane == PaneTasks {
+		m.tasks, cmd = m.tasks.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 
 	return m, tea.Batch(cmds...)
 }

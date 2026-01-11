@@ -36,8 +36,9 @@ func TestNew(t *testing.T) {
 func TestInit(t *testing.T) {
 	m := New(Config{EpicID: "test"})
 	cmd := m.Init()
-	if cmd != nil {
-		t.Error("expected Init() to return nil")
+	// Init should return a tick command for stopwatch updates
+	if cmd == nil {
+		t.Error("expected Init() to return tick command")
 	}
 }
 
