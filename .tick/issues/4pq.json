@@ -2,11 +2,12 @@
   "id": "4pq",
   "title": "Rebuild TUI using ticks-style architecture",
   "description": "Complete rewrite of the ticker TUI to match the ticks TUI patterns. The new TUI needs 3 panes: top status bar, left task list, right detail/output pane. Uses Catppuccin Mocha colors, single-file model.go architecture, and consistent keybindings with ticks.",
+  "notes": "2026-01-11 21:19 - Created model.go scaffold (task 6lh). The tui package compiles independently but main.go build currently fails because it references old TUI API (tui.New, tui.Config, tui.TaskInfo, etc). This is expected - task pjf will update main.go. Key pattern followed: single-file model.go with keyMap implementing help.KeyMap interface, init() forcing COLORTERM=truecolor, and Model struct with minimal fields. Catppuccin Mocha footerStyle added as starting point for color palette.",
   "status": "open",
   "priority": 1,
   "type": "epic",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:09:23.914779Z",
-  "updated_at": "2026-01-11T20:09:23.914779Z"
+  "updated_at": "2026-01-11T20:19:35.55195Z"
 }

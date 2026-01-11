@@ -80,8 +80,44 @@ type Model struct {
 }
 
 // Catppuccin Mocha color palette
+const (
+	colorPink     = lipgloss.Color("#F5C2E7") // Headers, primary accents
+	colorBlue     = lipgloss.Color("#89DCEB") // Selected items (Sky)
+	colorLavender = lipgloss.Color("#A6ADC8") // Dim/unselected text (Subtext0)
+	colorGray     = lipgloss.Color("#6C7086") // Borders, muted (Overlay0)
+	colorOverlay  = lipgloss.Color("#7F849C") // Footer text (Overlay1)
+	colorPurple   = lipgloss.Color("#CBA6F7") // Epic type (Mauve)
+	colorRed      = lipgloss.Color("#F38BA8") // P1 priority, errors, blocked, bugs
+	colorPeach    = lipgloss.Color("#FAB387") // P2 priority, warnings
+	colorGreen    = lipgloss.Color("#A6E3A1") // P3 priority, success, closed
+	colorTeal     = lipgloss.Color("#94E2D5") // Features
+	colorSurface  = lipgloss.Color("#313244") // Backgrounds (Surface0)
+	colorBlueAlt  = lipgloss.Color("#89B4FA") // In-progress status (Blue)
+)
+
+// Base styles
 var (
-	footerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#7F849C"))
+	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(colorPink)
+	panelStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorGray).Padding(0, 1)
+	selectedStyle = lipgloss.NewStyle().Foreground(colorBlue).Bold(true)
+	dimStyle      = lipgloss.NewStyle().Foreground(colorLavender)
+	footerStyle   = lipgloss.NewStyle().Foreground(colorOverlay)
+	labelStyle    = lipgloss.NewStyle().Foreground(colorOverlay).Width(10)
+
+	// Priority color styles
+	priorityP1Style = lipgloss.NewStyle().Foreground(colorRed)
+	priorityP2Style = lipgloss.NewStyle().Foreground(colorPeach)
+	priorityP3Style = lipgloss.NewStyle().Foreground(colorGreen)
+
+	// Status color styles
+	statusOpenStyle       = lipgloss.NewStyle().Foreground(colorGray)
+	statusInProgressStyle = lipgloss.NewStyle().Foreground(colorBlueAlt)
+	statusClosedStyle     = lipgloss.NewStyle().Foreground(colorGreen)
+
+	// Type color styles
+	typeEpicStyle    = lipgloss.NewStyle().Foreground(colorPurple)
+	typeBugStyle     = lipgloss.NewStyle().Foreground(colorRed)
+	typeFeatureStyle = lipgloss.NewStyle().Foreground(colorTeal)
 )
 
 // NewModel creates a new TUI model.
