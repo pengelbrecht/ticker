@@ -354,22 +354,58 @@ func pulsingStyle(animFrame int, running bool) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colors[animFrame%4])
 }
 
-// NewModel creates a new TUI model.
-func NewModel() Model {
+// Config holds configuration for the TUI.
+type Config struct {
+	EpicID       string
+	EpicTitle    string
+	MaxCost      float64
+	MaxIteration int
+	PauseChan    chan<- bool
+}
+
+// New creates a new TUI model with the given configuration.
+func New(cfg Config) Model {
 	h := help.New()
 	h.Styles.ShortKey = footerStyle.Bold(true)
 	h.Styles.ShortDesc = footerStyle
 	h.Styles.ShortSeparator = footerStyle
 
+	// Create viewport with zero dimensions (resized on first WindowSizeMsg)
+	vp := viewport.New(0, 0)
+
 	return Model{
+		// Epic/Run state from config
+		epicID:    cfg.EpicID,
+		epicTitle: cfg.EpicTitle,
+		running:   true,
+		startTime: time.Now(),
+
+		// Budget tracking from config
+		maxCost:       cfg.MaxCost,
+		maxIterations: cfg.MaxIteration,
+
+		// UI state - defaults
+		focusedPane:  PaneTasks,
+		showHelp:     false,
+		showComplete: false,
+
+		// Components
+		viewport: vp,
+		tasks:    []TaskInfo{},
+
+		// Communication
+		pauseChan: cfg.PauseChan,
+
+		// Internal
 		keys: defaultKeyMap,
 		help: h,
 	}
 }
 
 // Init returns the initial command for the model.
+// Returns tickCmd() to start the animation ticker.
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tickCmd()
 }
 
 // Update handles incoming messages and updates the model.
@@ -1469,4 +1505,149 @@ func (m Model) renderCompleteOverlay() string {
 	// Render the base view and place the modal on top
 	baseView := m.renderBaseView()
 	return placeOverlay(box, baseView, m.width, m.height)
+}
+
+// -----------------------------------------------------------------------------
+// Epic picker
+// -----------------------------------------------------------------------------
+
+// EpicInfo represents an epic for the picker.
+type EpicInfo struct {
+	ID       string
+	Title    string
+	Priority int
+	Tasks    int
+}
+
+// Picker is the epic selection picker model.
+type Picker struct {
+	epics    []EpicInfo
+	selected int
+	chosen   *EpicInfo
+	quitting bool
+	width    int
+	height   int
+}
+
+// NewPicker creates a new picker model with the given epics.
+func NewPicker(epics []EpicInfo) Picker {
+	return Picker{
+		epics:    epics,
+		selected: 0,
+	}
+}
+
+// Selected returns the selected epic, or nil if none was chosen.
+func (p Picker) Selected() *EpicInfo {
+	return p.chosen
+}
+
+// Init initializes the picker.
+func (p Picker) Init() tea.Cmd {
+	return nil
+}
+
+// Update handles picker messages.
+func (p Picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		p.width = msg.Width
+		p.height = msg.Height
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", "ctrl+c", "esc":
+			p.quitting = true
+			return p, tea.Quit
+		case "j", "down":
+			if p.selected < len(p.epics)-1 {
+				p.selected++
+			}
+		case "k", "up":
+			if p.selected > 0 {
+				p.selected--
+			}
+		case "enter":
+			if len(p.epics) > 0 {
+				p.chosen = &p.epics[p.selected]
+			}
+			return p, tea.Quit
+		case "g":
+			p.selected = 0
+		case "G":
+			if len(p.epics) > 0 {
+				p.selected = len(p.epics) - 1
+			}
+		}
+	}
+
+	return p, nil
+}
+
+// View renders the picker.
+func (p Picker) View() string {
+	if p.width == 0 {
+		return "Loading...\n"
+	}
+
+	var b strings.Builder
+
+	// Header
+	b.WriteString(headerStyle.Render("⚡ ticker: Select an Epic"))
+	b.WriteString("\n\n")
+
+	// Epic list
+	if len(p.epics) == 0 {
+		b.WriteString(dimStyle.Render("No epics available"))
+		b.WriteString("\n")
+	} else {
+		for i, e := range p.epics {
+			cursor := "  "
+			if i == p.selected {
+				cursor = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("▶ ")
+			}
+
+			// Priority color
+			var priorityStyle lipgloss.Style
+			var priorityStr string
+			switch e.Priority {
+			case 1:
+				priorityStyle = priorityP1Style
+				priorityStr = "P1"
+			case 2:
+				priorityStyle = priorityP2Style
+				priorityStr = "P2"
+			case 3:
+				priorityStyle = priorityP3Style
+				priorityStr = "P3"
+			default:
+				priorityStyle = dimStyle
+				priorityStr = fmt.Sprintf("P%d", e.Priority)
+			}
+
+			// Format: ▶ [id] Title                     P1  3 tasks
+			idStr := lipgloss.NewStyle().Foreground(colorLavender).Render("[" + e.ID + "]")
+			title := e.Title
+			if i == p.selected {
+				title = selectedStyle.Render(title)
+			}
+			priority := priorityStyle.Render(priorityStr)
+			tasks := dimStyle.Render(fmt.Sprintf("%d tasks", e.Tasks))
+
+			b.WriteString(cursor)
+			b.WriteString(idStr)
+			b.WriteString(" ")
+			b.WriteString(title)
+			b.WriteString("  ")
+			b.WriteString(priority)
+			b.WriteString("  ")
+			b.WriteString(tasks)
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(footerStyle.Render("j/k:navigate  enter:select  q:quit"))
+
+	return b.String()
 }
