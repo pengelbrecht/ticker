@@ -143,6 +143,13 @@ type TasksUpdateMsg struct {
 	Tasks []TaskInfo
 }
 
+// TaskRunRecordMsg contains a RunRecord for a completed task.
+// Sent when a task is completed and its run data should be stored.
+type TaskRunRecordMsg struct {
+	TaskID    string            // The task ID this record belongs to
+	RunRecord *agent.RunRecord  // The completed run record (nil to clear)
+}
+
 // -----------------------------------------------------------------------------
 // Agent Streaming Messages - Rich agent output events
 // These messages map to AgentState changes for real-time TUI updates.
@@ -402,7 +409,9 @@ type Model struct {
 	thinking     string            // thinking/reasoning content (dimmed, collapsible section)
 	agentState   *agent.AgentState // live streaming state for rich agent output display
 	taskOutputs  map[string]string // per-task output history
+	taskRunRecords map[string]*agent.RunRecord // per-task RunRecord for completed tasks
 	viewingTask  string            // task ID being viewed (empty = live output)
+	viewingRunRecord bool          // true when viewing a RunRecord detail view
 
 	// Tool activity tracking
 	activeTool    *ToolActivityInfo   // currently active tool (nil if none)
@@ -530,9 +539,10 @@ func New(cfg Config) Model {
 		showComplete: false,
 
 		// Components
-		viewport:    vp,
-		tasks:       []TaskInfo{},
-		taskOutputs: make(map[string]string),
+		viewport:       vp,
+		tasks:          []TaskInfo{},
+		taskOutputs:    make(map[string]string),
+		taskRunRecords: make(map[string]*agent.RunRecord),
 
 		// Communication
 		pauseChan: cfg.PauseChan,
@@ -700,6 +710,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update viewport size since task count affects layout
 		m.updateViewportSize()
 
+	case TaskRunRecordMsg:
+		// Store run record for completed task
+		if msg.RunRecord != nil {
+			m.taskRunRecords[msg.TaskID] = msg.RunRecord
+		} else {
+			delete(m.taskRunRecords, msg.TaskID)
+		}
+
 	case AgentThinkingMsg:
 		// Append thinking text to thinking buffer
 		m.thinking += msg.Text
@@ -858,12 +876,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				m.focusedPane = PaneTasks
 			}
-		case "enter":
-			// View selected task's output history (stay in task pane)
+		case "enter", " ":
+			// View selected task's details (RunRecord for closed tasks, output for others)
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 && m.selectedTask < len(m.tasks) {
 				task := m.tasks[m.selectedTask]
-				if output, ok := m.taskOutputs[task.ID]; ok && output != "" {
+				// Prefer RunRecord view for closed tasks
+				if runRecord, ok := m.taskRunRecords[task.ID]; ok && runRecord != nil {
 					m.viewingTask = task.ID
+					m.viewingRunRecord = true
+					content := m.buildRunRecordContent(runRecord, m.viewport.Width)
+					m.viewport.SetContent(content)
+					m.viewport.GotoTop()
+				} else if output, ok := m.taskOutputs[task.ID]; ok && output != "" {
+					// Fallback to legacy output view
+					m.viewingTask = task.ID
+					m.viewingRunRecord = false
 					m.viewport.SetContent(output)
 					m.viewport.GotoTop()
 				}
@@ -872,8 +899,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Return to live output
 			if m.viewingTask != "" {
 				m.viewingTask = ""
-				m.viewport.SetContent(m.output)
-				m.viewport.GotoBottom()
+				m.viewingRunRecord = false
+				m.updateOutputViewport()
 			}
 		}
 	}
@@ -950,6 +977,135 @@ func (m *Model) buildOutputContent(width int) string {
 	}
 
 	return strings.Join(sections, "\n")
+}
+
+// buildRunRecordContent creates the content for displaying a completed task's RunRecord.
+// Includes: metrics summary, output text, thinking (collapsed), and tool history.
+func (m *Model) buildRunRecordContent(record *agent.RunRecord, width int) string {
+	var sections []string
+
+	// Metrics summary header
+	metricsHeader := headerStyle.Render("─── Run Summary ───")
+	sections = append(sections, metricsHeader)
+	sections = append(sections, "")
+
+	// Build metrics rows
+	lblStyle := dimStyle.Width(12)
+	valStyle := lipgloss.NewStyle().Foreground(colorBlue)
+
+	// Duration
+	duration := record.EndedAt.Sub(record.StartedAt)
+	durationStr := formatDuration(duration)
+	sections = append(sections, lblStyle.Render("Duration:")+"  "+valStyle.Render(durationStr))
+
+	// Turns
+	sections = append(sections, lblStyle.Render("Turns:")+"  "+valStyle.Render(fmt.Sprintf("%d", record.NumTurns)))
+
+	// Tokens
+	tokenInfo := fmt.Sprintf("%s in │ %s out",
+		formatTokens(record.Metrics.InputTokens),
+		formatTokens(record.Metrics.OutputTokens))
+	if record.Metrics.CacheReadTokens > 0 || record.Metrics.CacheCreationTokens > 0 {
+		cacheTotal := record.Metrics.CacheReadTokens + record.Metrics.CacheCreationTokens
+		tokenInfo += " │ " + formatTokens(cacheTotal) + " cache"
+	}
+	sections = append(sections, lblStyle.Render("Tokens:")+"  "+valStyle.Render(tokenInfo))
+
+	// Cost
+	costStr := fmt.Sprintf("$%.4f", record.Metrics.CostUSD)
+	sections = append(sections, lblStyle.Render("Cost:")+"  "+valStyle.Render(costStr))
+
+	// Model
+	if record.Model != "" {
+		modelStr := shortModelName(record.Model)
+		sections = append(sections, lblStyle.Render("Model:")+"  "+valStyle.Render(modelStr))
+	}
+
+	// Result status
+	var resultStr string
+	if record.Success {
+		resultStr = lipgloss.NewStyle().Foreground(colorGreen).Render("✓ Success")
+	} else {
+		resultStr = lipgloss.NewStyle().Foreground(colorRed).Render("✗ Failed")
+		if record.ErrorMsg != "" {
+			resultStr += " - " + dimStyle.Render(record.ErrorMsg)
+		}
+	}
+	sections = append(sections, lblStyle.Render("Result:")+"  "+resultStr)
+
+	sections = append(sections, "")
+
+	// Tool history section (if any tools were used)
+	if len(record.Tools) > 0 {
+		toolHeader := dimStyle.Render(fmt.Sprintf("─── Tools (%d) ───", len(record.Tools)))
+		sections = append(sections, toolHeader)
+
+		// Show all tools (limit to 10 for display)
+		maxTools := 10
+		showCount := len(record.Tools)
+		if showCount > maxTools {
+			showCount = maxTools
+		}
+
+		for i := 0; i < showCount; i++ {
+			tool := record.Tools[i]
+			toolLine := m.renderToolRecordLine(tool)
+			sections = append(sections, toolLine)
+		}
+
+		if len(record.Tools) > maxTools {
+			moreCount := len(record.Tools) - maxTools
+			moreLine := dimStyle.Render(fmt.Sprintf("  ... and %d more", moreCount))
+			sections = append(sections, moreLine)
+		}
+		sections = append(sections, "")
+	}
+
+	// Thinking section (collapsed by default, shown dimmed)
+	if record.Thinking != "" {
+		thinkingHeader := dimStyle.Render("─── Thinking ───")
+		sections = append(sections, thinkingHeader)
+
+		// Show truncated thinking content (first 500 chars)
+		thinkingPreview := record.Thinking
+		if len(thinkingPreview) > 500 {
+			thinkingPreview = thinkingPreview[:500] + "..."
+		}
+		thinkingLines := strings.Split(thinkingPreview, "\n")
+		for _, line := range thinkingLines {
+			sections = append(sections, dimStyle.Render(line))
+		}
+		sections = append(sections, "")
+	}
+
+	// Output section
+	if record.Output != "" {
+		outputHeader := dimStyle.Render("─── Output ───")
+		sections = append(sections, outputHeader)
+		sections = append(sections, record.Output)
+	}
+
+	return strings.Join(sections, "\n")
+}
+
+// renderToolRecordLine renders a single ToolRecord entry from a RunRecord.
+// Format: "  ✓ Read 0.2s" or "  ✗ Bash 1.2s" (for errors)
+func (m *Model) renderToolRecordLine(tool agent.ToolRecord) string {
+	// Status icon
+	var icon string
+	if tool.IsError {
+		icon = lipgloss.NewStyle().Foreground(colorRed).Render("✗")
+	} else {
+		icon = lipgloss.NewStyle().Foreground(colorGreen).Render("✓")
+	}
+
+	// Tool name
+	toolName := dimStyle.Render(tool.Name)
+
+	// Duration (in milliseconds)
+	durationStr := dimStyle.Render(fmt.Sprintf("%.1fs", float64(tool.Duration)/1000.0))
+
+	return fmt.Sprintf("  %s %s %s", icon, toolName, durationStr)
 }
 
 // buildToolActivitySection creates the tool activity display section.
@@ -1403,7 +1559,11 @@ func (m Model) renderOutputPane(height int) string {
 	// Determine header title based on viewing mode
 	var headerTitle string
 	if m.viewingTask != "" {
-		headerTitle = fmt.Sprintf("Output [%s]", m.viewingTask)
+		if m.viewingRunRecord {
+			headerTitle = fmt.Sprintf("Run Details [%s]", m.viewingTask)
+		} else {
+			headerTitle = fmt.Sprintf("Output [%s]", m.viewingTask)
+		}
 	} else {
 		headerTitle = "Agent Output"
 	}

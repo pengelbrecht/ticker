@@ -2064,3 +2064,392 @@ func TestBuildOutputContent_WithTools(t *testing.T) {
 		t.Error("expected content to contain output text")
 	}
 }
+
+// -----------------------------------------------------------------------------
+// RunRecord Detail View Tests
+// -----------------------------------------------------------------------------
+
+func TestUpdate_TaskRunRecordMsg(t *testing.T) {
+	m := New(Config{})
+
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session",
+		Model:     "claude-opus-4-5-20251101",
+		StartedAt: time.Now().Add(-time.Minute),
+		EndedAt:   time.Now(),
+		Output:    "Task completed successfully",
+		NumTurns:  5,
+		Success:   true,
+		Metrics: agent.MetricsRecord{
+			InputTokens:  1000,
+			OutputTokens: 500,
+			CostUSD:      0.05,
+		},
+	}
+
+	// Add run record
+	newM, _ := m.Update(TaskRunRecordMsg{TaskID: "abc", RunRecord: runRecord})
+	m = newM.(Model)
+
+	if m.taskRunRecords["abc"] != runRecord {
+		t.Error("expected run record to be stored for task 'abc'")
+	}
+
+	// Clear run record
+	newM, _ = m.Update(TaskRunRecordMsg{TaskID: "abc", RunRecord: nil})
+	m = newM.(Model)
+
+	if _, exists := m.taskRunRecords["abc"]; exists {
+		t.Error("expected run record to be deleted for task 'abc'")
+	}
+}
+
+func TestBuildRunRecordContent_Basic(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+
+	startTime := time.Now().Add(-2 * time.Minute)
+	endTime := time.Now()
+
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session",
+		Model:     "claude-opus-4-5-20251101",
+		StartedAt: startTime,
+		EndedAt:   endTime,
+		Output:    "Task completed successfully",
+		Thinking:  "Let me think about this...",
+		NumTurns:  5,
+		Success:   true,
+		Metrics: agent.MetricsRecord{
+			InputTokens:  1000,
+			OutputTokens: 500,
+			CostUSD:      0.05,
+		},
+	}
+
+	content := m.buildRunRecordContent(runRecord, 80)
+
+	// Check for metrics section
+	if !strings.Contains(content, "Run Summary") {
+		t.Error("expected content to contain 'Run Summary' header")
+	}
+	if !strings.Contains(content, "Duration:") {
+		t.Error("expected content to contain 'Duration:' label")
+	}
+	if !strings.Contains(content, "Turns:") {
+		t.Error("expected content to contain 'Turns:' label")
+	}
+	if !strings.Contains(content, "5") { // NumTurns
+		t.Error("expected content to contain turns count '5'")
+	}
+	if !strings.Contains(content, "Tokens:") {
+		t.Error("expected content to contain 'Tokens:' label")
+	}
+	if !strings.Contains(content, "Cost:") {
+		t.Error("expected content to contain 'Cost:' label")
+	}
+	if !strings.Contains(content, "Model:") {
+		t.Error("expected content to contain 'Model:' label")
+	}
+	if !strings.Contains(content, "opus") {
+		t.Error("expected content to contain model name 'opus'")
+	}
+	if !strings.Contains(content, "Success") {
+		t.Error("expected content to contain 'Success' result")
+	}
+
+	// Check for thinking section
+	if !strings.Contains(content, "Thinking") {
+		t.Error("expected content to contain 'Thinking' header")
+	}
+	if !strings.Contains(content, "Let me think about this") {
+		t.Error("expected content to contain thinking text")
+	}
+
+	// Check for output section
+	if !strings.Contains(content, "Output") {
+		t.Error("expected content to contain 'Output' header")
+	}
+	if !strings.Contains(content, "Task completed successfully") {
+		t.Error("expected content to contain output text")
+	}
+}
+
+func TestBuildRunRecordContent_WithTools(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session",
+		Model:     "claude-sonnet-4-20250514",
+		StartedAt: time.Now().Add(-time.Minute),
+		EndedAt:   time.Now(),
+		Output:    "Done",
+		NumTurns:  3,
+		Success:   true,
+		Tools: []agent.ToolRecord{
+			{Name: "Read", Duration: 500, IsError: false},
+			{Name: "Edit", Duration: 1200, IsError: false},
+			{Name: "Bash", Duration: 2500, IsError: true},
+		},
+		Metrics: agent.MetricsRecord{
+			InputTokens:  2000,
+			OutputTokens: 1000,
+			CostUSD:      0.10,
+		},
+	}
+
+	content := m.buildRunRecordContent(runRecord, 80)
+
+	// Check for tools section
+	if !strings.Contains(content, "Tools (3)") {
+		t.Error("expected content to contain 'Tools (3)' header")
+	}
+	if !strings.Contains(content, "Read") {
+		t.Error("expected content to contain tool 'Read'")
+	}
+	if !strings.Contains(content, "Edit") {
+		t.Error("expected content to contain tool 'Edit'")
+	}
+	if !strings.Contains(content, "Bash") {
+		t.Error("expected content to contain tool 'Bash'")
+	}
+}
+
+func TestBuildRunRecordContent_FailedRun(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session",
+		Model:     "claude-haiku-3-20250115",
+		StartedAt: time.Now().Add(-time.Minute),
+		EndedAt:   time.Now(),
+		Output:    "",
+		NumTurns:  1,
+		Success:   false,
+		ErrorMsg:  "API rate limit exceeded",
+		Metrics: agent.MetricsRecord{
+			InputTokens:  100,
+			OutputTokens: 0,
+			CostUSD:      0.001,
+		},
+	}
+
+	content := m.buildRunRecordContent(runRecord, 80)
+
+	// Check for failure indication
+	if !strings.Contains(content, "Failed") {
+		t.Error("expected content to contain 'Failed' result")
+	}
+	if !strings.Contains(content, "API rate limit exceeded") {
+		t.Error("expected content to contain error message")
+	}
+}
+
+func TestBuildRunRecordContent_WithCache(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session",
+		Model:     "claude-opus-4-5-20251101",
+		StartedAt: time.Now().Add(-time.Minute),
+		EndedAt:   time.Now(),
+		Output:    "Done",
+		NumTurns:  2,
+		Success:   true,
+		Metrics: agent.MetricsRecord{
+			InputTokens:         1000,
+			OutputTokens:        500,
+			CacheReadTokens:     5000,
+			CacheCreationTokens: 1000,
+			CostUSD:             0.02,
+		},
+	}
+
+	content := m.buildRunRecordContent(runRecord, 80)
+
+	// Check for cache display
+	if !strings.Contains(content, "cache") {
+		t.Error("expected content to contain 'cache' when cache tokens are present")
+	}
+}
+
+func TestRenderToolRecordLine_Success(t *testing.T) {
+	m := New(Config{})
+	tool := agent.ToolRecord{
+		Name:     "Read",
+		Duration: 500, // 0.5s in milliseconds
+		IsError:  false,
+	}
+
+	line := m.renderToolRecordLine(tool)
+
+	if !strings.Contains(line, "✓") {
+		t.Error("expected success icon '✓' for successful tool")
+	}
+	if !strings.Contains(line, "Read") {
+		t.Error("expected tool name 'Read'")
+	}
+	if !strings.Contains(line, "0.5s") {
+		t.Error("expected duration '0.5s'")
+	}
+}
+
+func TestRenderToolRecordLine_Error(t *testing.T) {
+	m := New(Config{})
+	tool := agent.ToolRecord{
+		Name:     "Bash",
+		Duration: 1500, // 1.5s in milliseconds
+		IsError:  true,
+	}
+
+	line := m.renderToolRecordLine(tool)
+
+	if !strings.Contains(line, "✗") {
+		t.Error("expected error icon '✗' for failed tool")
+	}
+	if !strings.Contains(line, "Bash") {
+		t.Error("expected tool name 'Bash'")
+	}
+	if !strings.Contains(line, "1.5s") {
+		t.Error("expected duration '1.5s'")
+	}
+}
+
+func TestEnterKey_ShowsRunRecordView(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 40
+	m.focusedPane = PaneTasks
+	m.tasks = []TaskInfo{
+		{ID: "abc", Title: "Test Task", Status: TaskStatusClosed},
+	}
+	m.selectedTask = 0
+
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session",
+		Model:     "claude-opus-4-5-20251101",
+		StartedAt: time.Now().Add(-time.Minute),
+		EndedAt:   time.Now(),
+		Output:    "Task completed",
+		NumTurns:  3,
+		Success:   true,
+		Metrics: agent.MetricsRecord{
+			InputTokens:  1000,
+			OutputTokens: 500,
+			CostUSD:      0.05,
+		},
+	}
+	m.taskRunRecords["abc"] = runRecord
+
+	// Process window size first to initialize viewport
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = newM.(Model)
+
+	// Press enter
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = newM.(Model)
+
+	if m.viewingTask != "abc" {
+		t.Errorf("expected viewingTask to be 'abc', got '%s'", m.viewingTask)
+	}
+	if !m.viewingRunRecord {
+		t.Error("expected viewingRunRecord to be true")
+	}
+}
+
+func TestEscKey_ClearsRunRecordView(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 40
+	m.viewingTask = "abc"
+	m.viewingRunRecord = true
+
+	// Process window size to initialize viewport
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = newM.(Model)
+	m.viewingTask = "abc"
+	m.viewingRunRecord = true
+
+	// Press escape
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	m = newM.(Model)
+
+	if m.viewingTask != "" {
+		t.Errorf("expected viewingTask to be empty, got '%s'", m.viewingTask)
+	}
+	if m.viewingRunRecord {
+		t.Error("expected viewingRunRecord to be false")
+	}
+}
+
+func TestSpaceKey_ShowsRunRecordView(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 40
+	m.focusedPane = PaneTasks
+	m.tasks = []TaskInfo{
+		{ID: "xyz", Title: "Another Task", Status: TaskStatusClosed},
+	}
+	m.selectedTask = 0
+
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session-2",
+		Model:     "claude-sonnet-4-20250514",
+		StartedAt: time.Now().Add(-2 * time.Minute),
+		EndedAt:   time.Now(),
+		Output:    "Another task completed",
+		NumTurns:  2,
+		Success:   true,
+		Metrics: agent.MetricsRecord{
+			InputTokens:  500,
+			OutputTokens: 200,
+			CostUSD:      0.02,
+		},
+	}
+	m.taskRunRecords["xyz"] = runRecord
+
+	// Process window size first to initialize viewport
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = newM.(Model)
+
+	// Press space
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	m = newM.(Model)
+
+	if m.viewingTask != "xyz" {
+		t.Errorf("expected viewingTask to be 'xyz', got '%s'", m.viewingTask)
+	}
+	if !m.viewingRunRecord {
+		t.Error("expected viewingRunRecord to be true when viewing RunRecord")
+	}
+}
+
+func TestEnterKey_FallsBackToLegacyOutput(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 40
+	m.focusedPane = PaneTasks
+	m.tasks = []TaskInfo{
+		{ID: "def", Title: "Old Task", Status: TaskStatusClosed},
+	}
+	m.selectedTask = 0
+	m.taskOutputs["def"] = "Legacy output content"
+
+	// Process window size first to initialize viewport
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = newM.(Model)
+
+	// Press enter - no RunRecord exists, should fall back to taskOutputs
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = newM.(Model)
+
+	if m.viewingTask != "def" {
+		t.Errorf("expected viewingTask to be 'def', got '%s'", m.viewingTask)
+	}
+	if m.viewingRunRecord {
+		t.Error("expected viewingRunRecord to be false when showing legacy output")
+	}
+}
