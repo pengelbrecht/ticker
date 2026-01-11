@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -377,12 +379,227 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// Layout constants
+const (
+	taskPaneWidth = 35 // Fixed width for task list pane
+	statusBarRows = 2  // Title + progress line
+	footerRows    = 1  // Help hints
+)
+
 // View renders the current model state.
 func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "Loading...\n"
 	}
 
+	// If showing help overlay, render it on top
+	if m.showHelp {
+		return m.renderHelpOverlay()
+	}
+
+	// If showing complete overlay, render it on top
+	if m.showComplete {
+		return m.renderCompleteOverlay()
+	}
+
+	// Build main layout
+	statusBar := m.renderStatusBar()
+	footer := m.renderFooter()
+
+	// Calculate remaining height for panes
+	contentHeight := m.height - statusBarRows - footerRows - 2 // -2 for borders
+
+	// Render task and output panes
+	taskPane := m.renderTaskPane(contentHeight)
+	outputPane := m.renderOutputPane(contentHeight)
+
+	// Join task and output panes horizontally
+	panes := lipgloss.JoinHorizontal(lipgloss.Top, taskPane, outputPane)
+
+	// Join everything vertically
+	return lipgloss.JoinVertical(lipgloss.Left, statusBar, panes, footer)
+}
+
+// renderStatusBar renders the top status bar (2 lines: title + progress).
+func (m Model) renderStatusBar() string {
+	// Animation spinner frames
+	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	spinner := spinners[m.animFrame%len(spinners)]
+
+	// Title line
+	var titleLine string
+	if m.running {
+		status := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinner + " Running")
+		titleLine = headerStyle.Render("ticker") + " " + status
+	} else if m.paused {
+		status := lipgloss.NewStyle().Foreground(colorPeach).Render("⏸ Paused")
+		titleLine = headerStyle.Render("ticker") + " " + status
+	} else {
+		titleLine = headerStyle.Render("ticker")
+	}
+
+	// Add epic title if available
+	if m.epicTitle != "" {
+		titleLine += " — " + dimStyle.Render(m.epicTitle)
+	}
+
+	// Progress line
+	var progressLine string
+	if m.taskID != "" {
+		taskInfo := lipgloss.NewStyle().Foreground(colorLavender).Render("[" + m.taskID + "]")
+		progressLine = fmt.Sprintf("Iteration %d: %s %s", m.iteration, taskInfo, m.taskTitle)
+	} else if m.iteration > 0 {
+		progressLine = fmt.Sprintf("Iteration %d", m.iteration)
+	}
+
+	// Cost info
+	if m.cost > 0 || m.maxCost > 0 {
+		costStr := fmt.Sprintf("$%.2f", m.cost)
+		if m.maxCost > 0 {
+			costStr += fmt.Sprintf(" / $%.2f", m.maxCost)
+		}
+		if progressLine != "" {
+			progressLine += " | " + dimStyle.Render(costStr)
+		} else {
+			progressLine = dimStyle.Render(costStr)
+		}
+	}
+
+	// Pad to full width
+	titleLine = lipgloss.NewStyle().Width(m.width).Render(titleLine)
+	progressLine = lipgloss.NewStyle().Width(m.width).Render(progressLine)
+
+	return lipgloss.JoinVertical(lipgloss.Left, titleLine, progressLine)
+}
+
+// renderTaskPane renders the left task list pane.
+func (m Model) renderTaskPane(height int) string {
+	// Build task list content
+	var content strings.Builder
+
+	if len(m.tasks) == 0 {
+		content.WriteString(dimStyle.Render("No tasks"))
+	} else {
+		for i, task := range m.tasks {
+			if i > 0 {
+				content.WriteString("\n")
+			}
+			selected := i == m.selectedTask
+			content.WriteString(task.RenderTask(selected))
+		}
+	}
+
+	// Create styled panel
+	style := panelStyle.Copy().
+		Width(taskPaneWidth).
+		Height(height)
+
+	// Add focus indicator
+	if m.focusedPane == PaneTasks {
+		style = style.BorderForeground(colorBlue)
+	}
+
+	return style.Render(content.String())
+}
+
+// renderOutputPane renders the right output/details pane.
+func (m Model) renderOutputPane(height int) string {
+	// Calculate available width (total - task pane - borders/padding)
+	outputWidth := m.width - taskPaneWidth - 4 // -4 for borders/padding on both panes
+
+	// Build content
+	var content string
+	if m.output != "" {
+		content = m.output
+	} else {
+		content = dimStyle.Render("Waiting for output...")
+	}
+
+	// Create styled panel
+	style := panelStyle.Copy().
+		Width(outputWidth).
+		Height(height)
+
+	// Add focus indicator
+	if m.focusedPane == PaneOutput {
+		style = style.BorderForeground(colorBlue)
+	}
+
+	return style.Render(content)
+}
+
+// renderFooter renders the bottom help hints line.
+func (m Model) renderFooter() string {
 	helpView := m.help.View(m.keys)
-	return "ticker TUI scaffold\n\n" + helpView
+	return footerStyle.Width(m.width).Render(helpView)
+}
+
+// renderHelpOverlay renders the full help modal overlay.
+func (m Model) renderHelpOverlay() string {
+	// Create centered help box
+	helpContent := m.help.View(m.keys)
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorPink).
+		Padding(1, 2).
+		Width(60)
+
+	title := headerStyle.Render("Keyboard Shortcuts")
+	content := lipgloss.JoinVertical(lipgloss.Left, title, "", helpContent, "", dimStyle.Render("Press ? to close"))
+
+	box := boxStyle.Render(content)
+
+	// Center in viewport
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+}
+
+// renderCompleteOverlay renders the run complete modal overlay.
+func (m Model) renderCompleteOverlay() string {
+	// Build message based on signal
+	var icon, title string
+	var titleStyle lipgloss.Style
+
+	switch m.completeSignal {
+	case "COMPLETE":
+		icon = "✓"
+		title = "Run Complete"
+		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorGreen)
+	case "EJECT":
+		icon = "⚠"
+		title = "Ejected"
+		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorPeach)
+	case "BLOCKED":
+		icon = "⊘"
+		title = "Blocked"
+		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorRed)
+	default:
+		icon = "●"
+		title = "Finished"
+		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorBlue)
+	}
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorGray).
+		Padding(1, 2).
+		Width(50)
+
+	titleLine := titleStyle.Render(icon + " " + title)
+	reason := m.completeReason
+	if reason == "" {
+		reason = "No additional details"
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		titleLine,
+		"",
+		dimStyle.Render(reason),
+		"",
+		footerStyle.Render("Press q to exit"),
+	)
+
+	box := boxStyle.Render(content)
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
