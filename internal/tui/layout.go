@@ -214,26 +214,36 @@ func (m Model) renderTaskPanel(height int) string {
 
 // renderOutputPanel renders the agent output panel.
 func (m Model) renderOutputPanel(width, height int) string {
-	// Title with spinner when running
-	var title string
+	title := panelTitleStyle.Render("Agent Output")
+
+	// Status line under title
+	var statusLine string
 	if m.running && !m.paused {
-		title = panelTitleStyle.Render("Agent Output " + m.spinner.View() + " Running...")
+		statusLine = m.spinner.View() + " Running..."
 	} else if m.paused {
-		title = panelTitleStyle.Render("Agent Output " + pausedStyle.Render("⏸ Paused"))
-	} else {
-		title = panelTitleStyle.Render("Agent Output")
+		statusLine = pausedStyle.Render("⏸ Paused")
 	}
 
-	// Update viewport dimensions
+	// Update viewport dimensions (account for title + status line)
 	m.viewport.Width = width - 4
-	m.viewport.Height = height - 4
+	m.viewport.Height = height - 5
+	if statusLine != "" {
+		m.viewport.Height = height - 6
+	}
 
 	content := m.viewport.View()
+
+	var parts []string
+	parts = append(parts, title)
+	if statusLine != "" {
+		parts = append(parts, statusLine)
+	}
+	parts = append(parts, content)
 
 	return outputPanelStyle.
 		Width(width).
 		Height(height).
-		Render(lipgloss.JoinVertical(lipgloss.Left, title, content))
+		Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
 }
 
 // renderFooter renders the footer with keybindings.

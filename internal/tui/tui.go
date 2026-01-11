@@ -181,7 +181,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle help overlay first
+		// Handle help overlay first - any key dismisses it
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
@@ -207,38 +207,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Pause):
 			m.paused = !m.paused
-			// Send pause state to engine
 			if m.pauseChan != nil {
 				select {
 				case m.pauseChan <- m.paused:
 				default:
-					// Channel full, skip
 				}
 			}
 			return m, nil
 		}
 
-		// Navigation keys - route to focused component
-		if m.focusedPane == PaneOutput {
-			switch {
-			case key.Matches(msg, m.keys.ScrollUp):
-				m.viewport.LineUp(1)
-			case key.Matches(msg, m.keys.ScrollDown):
-				m.viewport.LineDown(1)
-			case key.Matches(msg, m.keys.PageUp):
-				m.viewport.HalfViewUp()
-			case key.Matches(msg, m.keys.PageDown):
-				m.viewport.HalfViewDown()
-			case key.Matches(msg, m.keys.Top):
-				m.viewport.GotoTop()
-			case key.Matches(msg, m.keys.Bottom):
-				m.viewport.GotoBottom()
-			}
-			return m, nil
-		}
-		// Task pane focused - let list handle navigation
+		// Route navigation to focused component
 		var cmd tea.Cmd
-		m.tasks, cmd = m.tasks.Update(msg)
+		if m.focusedPane == PaneOutput {
+			// Pass key to viewport for scrolling
+			m.viewport, cmd = m.viewport.Update(msg)
+		} else {
+			// Pass key to task list for navigation
+			m.tasks, cmd = m.tasks.Update(msg)
+		}
 		return m, cmd
 
 	case tea.WindowSizeMsg:
