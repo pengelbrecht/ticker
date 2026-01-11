@@ -184,12 +184,83 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	// Create program
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
+	// Create context for engine
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initialize engine components
+	claudeAgent := agent.NewClaudeAgent()
+	if !claudeAgent.Available() {
+		fmt.Fprintln(os.Stderr, "Error: claude CLI not found. Please install Claude Code.")
+		os.Exit(ExitError)
+	}
+
+	ticksClient := ticks.NewClient()
+	budgetTracker := budget.NewTracker(budget.Limits{
+		MaxIterations: maxIterations,
+		MaxCost:       maxCost,
+	})
+	checkpointMgr := checkpoint.NewManager()
+
+	// Create engine
+	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
+
+	// Wire engine callbacks to send TUI messages
+	eng.OnOutput = func(chunk string) {
+		p.Send(tui.OutputMsg(chunk))
+	}
+
+	eng.OnIterationStart = func(ctx engine.IterationContext) {
+		p.Send(tui.IterationStartMsg{
+			Iteration: ctx.Iteration,
+			TaskID:    ctx.Task.ID,
+			TaskTitle: ctx.Task.Title,
+		})
+	}
+
+	eng.OnIterationEnd = func(result *engine.IterationResult) {
+		p.Send(tui.IterationEndMsg{
+			Iteration: result.Iteration,
+			Cost:      result.Cost,
+			Tokens:    result.TokensIn + result.TokensOut,
+		})
+	}
+
+	eng.OnSignal = func(sig engine.Signal, reason string) {
+		p.Send(tui.SignalMsg{Signal: sig.String(), Reason: reason})
+	}
+
+	// Run engine in background
+	go func() {
+		config := engine.RunConfig{
+			EpicID:          epicID,
+			MaxIterations:   maxIterations,
+			MaxCost:         maxCost,
+			CheckpointEvery: checkpointInterval,
+		}
+
+		result, err := eng.Run(ctx, config)
+		if err != nil {
+			p.Send(tui.ErrorMsg{Err: err})
+			return
+		}
+
+		p.Send(tui.RunCompleteMsg{
+			Reason:     result.ExitReason,
+			Signal:     result.Signal.String(),
+			Iterations: result.Iterations,
+			Cost:       result.TotalCost,
+		})
+	}()
+
 	// Run TUI (blocks until quit)
-	// TODO: Wire up engine to run in background and send messages to TUI
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
 		os.Exit(ExitError)
 	}
+
+	// Cancel engine context when TUI exits
+	cancel()
 }
 
 func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval int) {

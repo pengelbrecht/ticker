@@ -22,6 +22,7 @@ type Model struct {
 	taskTitle string
 	running   bool
 	quitting  bool
+	err       error
 
 	// Budget
 	cost       float64
@@ -112,9 +113,23 @@ type (
 	// OutputMsg appends output to the viewport.
 	OutputMsg string
 
+	// SignalMsg signals a signal was detected.
+	SignalMsg struct {
+		Signal string
+		Reason string
+	}
+
+	// ErrorMsg signals an error occurred.
+	ErrorMsg struct {
+		Err error
+	}
+
 	// RunCompleteMsg signals the run has finished.
 	RunCompleteMsg struct {
-		Reason string
+		Reason     string
+		Signal     string
+		Iterations int
+		Cost       float64
 	}
 )
 
@@ -172,8 +187,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.SetContent(m.output)
 		m.viewport.GotoBottom()
 
+	case SignalMsg:
+		// Append signal info to output
+		m.output += fmt.Sprintf("\n\n[Signal: %s", msg.Signal)
+		if msg.Reason != "" {
+			m.output += fmt.Sprintf(" - %s", msg.Reason)
+		}
+		m.output += "]\n"
+		m.viewport.SetContent(m.output)
+		m.viewport.GotoBottom()
+
+	case ErrorMsg:
+		m.running = false
+		m.err = msg.Err
+		m.output += fmt.Sprintf("\n\n[Error: %v]\n", msg.Err)
+		m.viewport.SetContent(m.output)
+		m.viewport.GotoBottom()
+
 	case RunCompleteMsg:
 		m.running = false
+		m.output += fmt.Sprintf("\n\n[Run Complete: %s]\n", msg.Reason)
+		m.viewport.SetContent(m.output)
+		m.viewport.GotoBottom()
 	}
 
 	// Update viewport
