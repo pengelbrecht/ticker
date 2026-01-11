@@ -1,0 +1,11 @@
+{
+  "id": "1fy",
+  "title": "Test inprog",
+  "status": "in_progress",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T14:24:06.943330706Z",
+  "updated_at": "2026-01-11T14:24:12.200424628Z"
+}

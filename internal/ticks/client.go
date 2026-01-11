@@ -90,15 +90,36 @@ func (c *Client) ListTasks(epicID string) ([]Task, error) {
 	return tasks, nil
 }
 
-// ListReadyEpics returns all ready (unblocked) epics.
-func (c *Client) ListReadyEpics() ([]Epic, error) {
-	out, err := c.run("ready", "--epic", "--json")
+// NextReadyEpic returns the next ready (unblocked) epic.
+// Returns nil if no epics are available.
+func (c *Client) NextReadyEpic() (*Epic, error) {
+	out, err := c.run("next", "--epic", "--json")
 	if err != nil {
 		// Check if it's "no ready epics" vs actual error
-		if strings.Contains(err.Error(), "no ready") || strings.Contains(err.Error(), "No ready") {
+		if strings.Contains(err.Error(), "no ready") || strings.Contains(err.Error(), "No ready") ||
+			strings.Contains(err.Error(), "no open") || strings.Contains(err.Error(), "No open") {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("tk ready --epic: %w", err)
+		return nil, fmt.Errorf("tk next --epic: %w", err)
+	}
+
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	var epic Epic
+	if err := json.Unmarshal(out, &epic); err != nil {
+		return nil, fmt.Errorf("parse epic JSON: %w", err)
+	}
+	return &epic, nil
+}
+
+// ListReadyEpics returns all open epics (for picker display).
+func (c *Client) ListReadyEpics() ([]Epic, error) {
+	out, err := c.run("list", "--type", "epic", "--status", "open", "--json")
+	if err != nil {
+		return nil, fmt.Errorf("tk list --type epic: %w", err)
 	}
 
 	out = bytes.TrimSpace(out)

@@ -542,15 +542,14 @@ func runCheckpoints(cmd *cobra.Command, args []string) {
 // autoSelectEpic uses tk to find a ready epic
 func autoSelectEpic() (string, error) {
 	ticksClient := ticks.NewClient()
-	epics, err := ticksClient.ListReadyEpics()
+	epic, err := ticksClient.NextReadyEpic()
 	if err != nil {
 		return "", err
 	}
-	if len(epics) == 0 {
+	if epic == nil {
 		return "", nil
 	}
-	// Return first ready epic
-	return epics[0].ID, nil
+	return epic.ID, nil
 }
 
 // runPicker shows the interactive epic picker and returns the selected epic
