@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func init() {
@@ -352,27 +353,65 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "j", "down":
-			// TODO: navigate down in task list
+			// Navigate down in task list when task pane is focused
+			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				m.selectedTask++
+				if m.selectedTask >= len(m.tasks) {
+					m.selectedTask = len(m.tasks) - 1 // Clamp at bounds
+				}
+			}
 		case "k", "up":
-			// TODO: navigate up in task list
+			// Navigate up in task list when task pane is focused
+			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				m.selectedTask--
+				if m.selectedTask < 0 {
+					m.selectedTask = 0 // Clamp at bounds
+				}
+			}
 		case "ctrl+d":
 			// TODO: scroll down in detail pane
 		case "ctrl+u":
 			// TODO: scroll up in detail pane
 		case "g":
-			// TODO: go to top
+			// Go to top of task list when task pane is focused
+			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				m.selectedTask = 0
+			}
 		case "G":
-			// TODO: go to bottom
+			// Go to bottom of task list when task pane is focused
+			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				m.selectedTask = len(m.tasks) - 1
+			}
 		case "pgup":
-			// TODO: page up in viewport
+			// Page up in task list (move by 5 items)
+			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				m.selectedTask -= 5
+				if m.selectedTask < 0 {
+					m.selectedTask = 0
+				}
+			}
 		case "pgdown":
-			// TODO: page down in viewport
+			// Page down in task list (move by 5 items)
+			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				m.selectedTask += 5
+				if m.selectedTask >= len(m.tasks) {
+					m.selectedTask = len(m.tasks) - 1
+				}
+			}
 		case "?":
-			// TODO: toggle help modal
+			m.showHelp = !m.showHelp
 		case "p":
 			// TODO: toggle pause/resume
 		case "tab":
-			// TODO: cycle focus between panes
+			// Cycle focus between panes: Tasks -> Output -> Tasks
+			switch m.focusedPane {
+			case PaneTasks:
+				m.focusedPane = PaneOutput
+			case PaneOutput:
+				m.focusedPane = PaneTasks
+			default:
+				m.focusedPane = PaneTasks
+			}
 		}
 	}
 
@@ -546,21 +585,54 @@ func (m Model) renderStatusBar() string {
 }
 
 // renderTaskPane renders the left task list pane.
+// Layout:
+// - Fixed width: 35 characters
+// - Rounded border (gray unfocused, blue focused)
+// - Header: 'Tasks' or 'Tasks (3/8)'
+// - Scrollable list of tasks with selection cursor
 func (m Model) renderTaskPane(height int) string {
+	// Calculate inner width (taskPaneWidth minus border and padding)
+	innerWidth := taskPaneWidth - 4 // -2 for border, -2 for padding
+
+	// Build header: 'Tasks' or 'Tasks (3/8)' showing completed/total
+	var header string
+	if len(m.tasks) == 0 {
+		header = headerStyle.Render("Tasks")
+	} else {
+		completed := 0
+		for _, t := range m.tasks {
+			if t.Status == TaskStatusClosed {
+				completed++
+			}
+		}
+		header = headerStyle.Render(fmt.Sprintf("Tasks (%d/%d)", completed, len(m.tasks)))
+	}
+
 	// Build task list content
-	var content strings.Builder
+	var lines []string
+	lines = append(lines, header)
+	lines = append(lines, "") // Separator line after header
 
 	if len(m.tasks) == 0 {
-		content.WriteString(dimStyle.Render("No tasks"))
+		lines = append(lines, dimStyle.Render("No tasks"))
 	} else {
 		for i, task := range m.tasks {
-			if i > 0 {
-				content.WriteString("\n")
+			selected := i == m.selectedTask && m.focusedPane == PaneTasks
+			line := m.renderTaskLine(task, selected, innerWidth)
+			lines = append(lines, line)
+
+			// If blocked, add 'blocked by: [ids]' line below
+			if task.IsBlocked() {
+				blockedIDs := strings.Join(task.BlockedBy, ", ")
+				blockedLine := "  " + lipgloss.NewStyle().Foreground(colorRed).Italic(true).Render("blocked by: "+blockedIDs)
+				// Truncate blocked line if too long
+				blockedLine = ansi.Truncate(blockedLine, innerWidth, "…")
+				lines = append(lines, blockedLine)
 			}
-			selected := i == m.selectedTask
-			content.WriteString(task.RenderTask(selected))
 		}
 	}
+
+	content := strings.Join(lines, "\n")
 
 	// Create styled panel
 	style := panelStyle.Copy().
@@ -572,7 +644,67 @@ func (m Model) renderTaskPane(height int) string {
 		style = style.BorderForeground(colorBlue)
 	}
 
-	return style.Render(content.String())
+	return style.Render(content)
+}
+
+// renderTaskLine formats a single task line with cursor, icon, ID, and title.
+// Format: '▶ ● [id] Task title here...'
+// - Selection cursor: ▶ if selected, space otherwise
+// - Status icon: ○/●/✓/⊘ with appropriate color
+// - ID in brackets
+// - Title truncated with ... if too long
+func (m Model) renderTaskLine(task TaskInfo, selected bool, maxWidth int) string {
+	// Selection cursor
+	var cursor string
+	if selected {
+		cursor = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("▶")
+	} else {
+		cursor = " "
+	}
+
+	// Status icon with pulsing effect for current executing task
+	var icon string
+	if task.IsCurrent && task.Status == TaskStatusInProgress {
+		// Pulsing indicator: alternate between bright and dim based on animFrame
+		if m.animFrame%2 == 0 {
+			icon = lipgloss.NewStyle().Foreground(colorBlueAlt).Bold(true).Render("●")
+		} else {
+			icon = lipgloss.NewStyle().Foreground(colorBlue).Render("●")
+		}
+	} else {
+		icon = task.StatusIcon()
+	}
+
+	// ID in brackets
+	idStr := lipgloss.NewStyle().Foreground(colorLavender).Render("[" + task.ID + "]")
+
+	// Calculate space used by prefix: cursor(1) + space(1) + icon(1) + space(1) + [id] + space(1)
+	// Note: icon may be multi-byte but displays as 1 char width
+	idLen := len(task.ID) + 2 // [id]
+	prefixWidth := 1 + 1 + 1 + 1 + idLen + 1 // cursor + sp + icon + sp + [id] + sp
+
+	// Calculate max title width
+	maxTitleWidth := maxWidth - prefixWidth
+	if maxTitleWidth < 5 {
+		maxTitleWidth = 5
+	}
+
+	// Title with truncation and styling
+	title := task.Title
+	if len(title) > maxTitleWidth {
+		title = ansi.Truncate(title, maxTitleWidth, "…")
+	}
+
+	// Apply styling based on state
+	if selected {
+		title = selectedStyle.Render(title)
+	} else if task.Status == TaskStatusClosed {
+		title = dimStyle.Render(title)
+	} else if task.IsBlocked() {
+		title = lipgloss.NewStyle().Foreground(colorRed).Render(title)
+	}
+
+	return cursor + " " + icon + " " + idStr + " " + title
 }
 
 // renderOutputPane renders the right output/details pane.
