@@ -87,6 +87,61 @@ func (t TaskInfo) RenderTask(selected bool) string {
 	return icon + " " + id + " " + title
 }
 
+// -----------------------------------------------------------------------------
+// Message types for engine -> TUI communication
+// -----------------------------------------------------------------------------
+
+// tickMsg is the animation heartbeat message (1/second).
+type tickMsg time.Time
+
+// IterationStartMsg signals the start of a new iteration.
+type IterationStartMsg struct {
+	Iteration int
+	TaskID    string
+	TaskTitle string
+}
+
+// IterationEndMsg signals the end of an iteration with metrics.
+type IterationEndMsg struct {
+	Iteration int
+	Cost      float64
+	Tokens    int
+}
+
+// OutputMsg contains a chunk of agent output.
+type OutputMsg string
+
+// SignalMsg contains a control signal from the engine.
+type SignalMsg struct {
+	Signal string // COMPLETE, EJECT, BLOCKED
+	Reason string
+}
+
+// ErrorMsg contains an error from the engine.
+type ErrorMsg struct {
+	Err error
+}
+
+// RunCompleteMsg signals that the run has finished.
+type RunCompleteMsg struct {
+	Reason     string
+	Signal     string
+	Iterations int
+	Cost       float64
+}
+
+// TasksUpdateMsg contains an updated task list.
+type TasksUpdateMsg struct {
+	Tasks []TaskInfo
+}
+
+// tickCmd returns a tea.Cmd that ticks every second for animation.
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
 // keyMap defines all keybindings for the TUI.
 type keyMap struct {
 	// Navigation
