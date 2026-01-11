@@ -21,8 +21,9 @@ func NewClient() *Client {
 
 // NextTask returns the next open, unblocked task for the given epic.
 // Returns nil if no tasks are available.
+// Uses --all to see tasks from all owners (important for blockers check).
 func (c *Client) NextTask(epicID string) (*Task, error) {
-	out, err := c.run("next", epicID, "--json")
+	out, err := c.run("next", epicID, "--all", "--json")
 	if err != nil {
 		// Check if it's "no tasks" vs actual error
 		if strings.Contains(err.Error(), "no open") || strings.Contains(err.Error(), "No tasks") {
@@ -77,7 +78,7 @@ func (c *Client) GetEpic(epicID string) (*Epic, error) {
 
 // ListTasks returns all tasks under the given parent epic.
 func (c *Client) ListTasks(epicID string) ([]Task, error) {
-	out, err := c.run("list", "--parent", epicID, "--json")
+	out, err := c.run("list", "--parent", epicID, "--all", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("tk list --parent %s: %w", epicID, err)
 	}
@@ -97,7 +98,7 @@ func (c *Client) ListTasks(epicID string) ([]Task, error) {
 // NextReadyEpic returns the next ready (unblocked) epic.
 // Returns nil if no epics are available.
 func (c *Client) NextReadyEpic() (*Epic, error) {
-	out, err := c.run("next", "--epic", "--json")
+	out, err := c.run("next", "--epic", "--all", "--json")
 	if err != nil {
 		// Check if it's "no ready epics" vs actual error
 		if strings.Contains(err.Error(), "no ready") || strings.Contains(err.Error(), "No ready") ||
@@ -125,7 +126,7 @@ func (c *Client) NextReadyEpic() (*Epic, error) {
 
 // ListReadyEpics returns all open epics (for picker display).
 func (c *Client) ListReadyEpics() ([]Epic, error) {
-	out, err := c.run("list", "--type", "epic", "--status", "open", "--json")
+	out, err := c.run("list", "--type", "epic", "--status", "open", "--all", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("tk list --type epic: %w", err)
 	}
