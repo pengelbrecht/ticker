@@ -52,6 +52,9 @@ type RunConfig struct {
 	// PauseChan is a channel that signals pause/resume. When true, engine pauses.
 	// Nil means no pause support.
 	PauseChan <-chan bool
+
+	// MaxTaskRetries is the maximum iterations on the same task before assuming stuck (0 = 3 default).
+	MaxTaskRetries int
 }
 
 // Defaults for RunConfig.
@@ -60,10 +63,7 @@ const (
 	DefaultMaxCost         = 20.00
 	DefaultCheckpointEvery = 5
 	DefaultAgentTimeout    = 5 * time.Minute
-
-	// MaxSameTaskIterations is the maximum iterations on the same task before
-	// assuming the agent is stuck (forgot to close, infinite loop, etc).
-	MaxSameTaskIterations = 3
+	DefaultMaxTaskRetries  = 3
 )
 
 // RunResult contains the outcome of an engine run.
@@ -154,6 +154,9 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 	}
 	if config.CheckpointEvery == 0 {
 		config.CheckpointEvery = DefaultCheckpointEvery
+	}
+	if config.MaxTaskRetries == 0 {
+		config.MaxTaskRetries = DefaultMaxTaskRetries
 	}
 	if config.AgentTimeout == 0 {
 		config.AgentTimeout = DefaultAgentTimeout
@@ -248,7 +251,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Stuck loop detection - catch agent forgetting to close tasks
 		if task.ID == state.lastTaskID {
 			state.sameTaskCount++
-			if state.sameTaskCount > MaxSameTaskIterations {
+			if state.sameTaskCount > config.MaxTaskRetries {
 				return state.toResult(fmt.Sprintf("stuck on task %s after %d iterations - may need manual review", task.ID, state.sameTaskCount)), nil
 			}
 		} else {

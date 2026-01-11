@@ -131,12 +131,14 @@ func (m Model) renderStatusBar() string {
 	// First line: stats
 	iteration := fmt.Sprintf("%s %s",
 		statusLabelStyle.Render("Iter:"),
-		statusItemStyle.Render(fmt.Sprintf("%d/%d", m.iteration, m.maxIter)),
+		statusItemStyle.Render(fmt.Sprintf("%d", m.iteration)),
 	)
 
-	task := fmt.Sprintf("%s %s",
-		statusLabelStyle.Render("Task:"),
-		statusItemStyle.Render(fmt.Sprintf("[%s] %s", m.taskID, truncate(m.taskTitle, 20))),
+	// Task progress from task list
+	completed, total := m.taskProgress()
+	taskProgress := fmt.Sprintf("%s %s",
+		statusLabelStyle.Render("Tasks:"),
+		statusItemStyle.Render(fmt.Sprintf("%d/%d", completed, total)),
 	)
 
 	duration := fmt.Sprintf("%s %s",
@@ -145,19 +147,31 @@ func (m Model) renderStatusBar() string {
 	)
 
 	statsLine := lipgloss.JoinHorizontal(lipgloss.Center,
-		iteration, " │ ", task, " │ ", duration,
+		iteration, " │ ", taskProgress, " │ ", duration,
 	)
 
-	// Second line: progress bar
+	// Second line: progress bar based on task completion
 	var progressLine string
-	if m.maxIter > 0 {
-		percent := float64(m.iteration) / float64(m.maxIter)
+	if total > 0 {
+		percent := float64(completed) / float64(total)
 		progressLine = m.progress.ViewAs(percent)
 	}
 
 	return statusBarStyle.Width(m.width).Render(
 		lipgloss.JoinVertical(lipgloss.Left, statsLine, progressLine),
 	)
+}
+
+// taskProgress returns completed and total task counts from the task list.
+func (m Model) taskProgress() (completed, total int) {
+	items := m.tasks.Items()
+	total = len(items)
+	for _, item := range items {
+		if ti, ok := item.(taskItem); ok && ti.info.Status == TaskStatusClosed {
+			completed++
+		}
+	}
+	return completed, total
 }
 
 // formatDuration formats a duration as MM:SS or HH:MM:SS.
@@ -373,6 +387,68 @@ func (m Model) renderHelpOverlay(background string) string {
 
 	// Place overlay on background
 	return placeOverlay(x, y, help, background)
+}
+
+// Completion overlay styles
+var (
+	completeOverlayStyle = lipgloss.NewStyle().
+				Border(lipgloss.DoubleBorder()).
+				BorderForeground(successColor).
+				Padding(1, 3).
+				Background(lipgloss.Color("235"))
+
+	completeTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(successColor).
+				MarginBottom(1)
+
+	completeLabelStyle = lipgloss.NewStyle().
+				Foreground(mutedColor).
+				Width(12)
+
+	completeValueStyle = lipgloss.NewStyle().
+				Foreground(secondaryColor).
+				Bold(true)
+
+	completeHintStyle = lipgloss.NewStyle().
+				Foreground(mutedColor).
+				Italic(true).
+				MarginTop(1)
+)
+
+// renderCompletionOverlay renders a completion modal on top of the main view.
+func (m Model) renderCompletionOverlay(background string) string {
+	title := completeTitleStyle.Render("Run Complete")
+
+	completed, total := m.taskProgress()
+
+	var lines []string
+	lines = append(lines, completeLabelStyle.Render("Reason:")+completeValueStyle.Render(m.completeReason))
+	lines = append(lines, completeLabelStyle.Render("Tasks:")+completeValueStyle.Render(fmt.Sprintf("%d/%d completed", completed, total)))
+	lines = append(lines, completeLabelStyle.Render("Iterations:")+completeValueStyle.Render(fmt.Sprintf("%d", m.iterations)))
+	lines = append(lines, completeLabelStyle.Render("Duration:")+completeValueStyle.Render(formatDuration(time.Since(m.startTime))))
+	lines = append(lines, completeLabelStyle.Render("Cost:")+completeValueStyle.Render(fmt.Sprintf("$%.4f", m.cost)))
+
+	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
+	hint := completeHintStyle.Render("Press any key to dismiss, q to quit")
+
+	modal := completeOverlayStyle.Render(lipgloss.JoinVertical(lipgloss.Left, title, content, hint))
+
+	// Center the overlay
+	modalWidth := lipgloss.Width(modal)
+	modalHeight := lipgloss.Height(modal)
+
+	x := (m.width - modalWidth) / 2
+	y := (m.height - modalHeight) / 2
+
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+
+	return placeOverlay(x, y, modal, background)
 }
 
 // placeOverlay places a foreground string on top of a background at the given position.

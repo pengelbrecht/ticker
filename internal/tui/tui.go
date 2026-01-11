@@ -37,6 +37,11 @@ type Model struct {
 	paused    bool
 	showHelp  bool
 
+	// Completion state
+	showComplete   bool
+	completeReason string
+	completeSignal string
+
 	// Focus
 	focusedPane FocusedPane
 
@@ -187,6 +192,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Handle completion overlay - any key dismisses, q quits
+		if m.showComplete {
+			if key.Matches(msg, m.keys.Quit) {
+				m.quitting = true
+				return m, tea.Quit
+			}
+			m.showComplete = false
+			return m, nil
+		}
+
 		// Global keys (work regardless of focus)
 		switch {
 		case key.Matches(msg, m.keys.Quit):
@@ -214,18 +229,48 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		}
 
-		// Route navigation to focused component
-		var cmd tea.Cmd
-		if m.focusedPane == PaneOutput {
-			// Pass key to viewport for scrolling
-			m.viewport, cmd = m.viewport.Update(msg)
-		} else {
-			// Pass key to task list for navigation
-			m.tasks, cmd = m.tasks.Update(msg)
+		// Navigation keys - handle directly like ticks TUI
+		case key.Matches(msg, m.keys.ScrollDown):
+			if m.focusedPane == PaneOutput {
+				m.viewport.LineDown(1)
+			} else {
+				m.tasks.CursorDown()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.ScrollUp):
+			if m.focusedPane == PaneOutput {
+				m.viewport.LineUp(1)
+			} else {
+				m.tasks.CursorUp()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.PageDown):
+			if m.focusedPane == PaneOutput {
+				m.viewport.HalfViewDown()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.PageUp):
+			if m.focusedPane == PaneOutput {
+				m.viewport.HalfViewUp()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Top):
+			if m.focusedPane == PaneOutput {
+				m.viewport.GotoTop()
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.Bottom):
+			if m.focusedPane == PaneOutput {
+				m.viewport.GotoBottom()
+			}
+			return m, nil
 		}
-		return m, cmd
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -292,6 +337,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RunCompleteMsg:
 		m.running = false
+		m.showComplete = true
+		m.completeReason = msg.Reason
+		m.completeSignal = msg.Signal
+		m.iterations = msg.Iterations
+		m.cost = msg.Cost
 		m.output += fmt.Sprintf("\n\n[Run Complete: %s]\n", msg.Reason)
 		m.viewport.SetContent(m.output)
 		m.viewport.GotoBottom()
@@ -342,6 +392,11 @@ func (m Model) View() string {
 	// Show help overlay if active
 	if m.showHelp {
 		view = m.renderHelpOverlay(view)
+	}
+
+	// Show completion overlay if run finished
+	if m.showComplete {
+		view = m.renderCompletionOverlay(view)
 	}
 
 	return view

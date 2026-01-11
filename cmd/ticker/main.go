@@ -121,6 +121,7 @@ func init() {
 	runCmd.Flags().IntP("max-iterations", "n", 50, "Maximum number of iterations")
 	runCmd.Flags().Float64("max-cost", 20.0, "Maximum cost in USD")
 	runCmd.Flags().Int("checkpoint-interval", 5, "Save checkpoint every N iterations (0 to disable)")
+	runCmd.Flags().Int("max-task-retries", 3, "Maximum iterations on same task before assuming stuck")
 	runCmd.Flags().Bool("auto", false, "Auto-select next ready epic")
 	runCmd.Flags().Bool("headless", false, "Run without TUI (stdout/stderr only)")
 
@@ -143,6 +144,7 @@ func runRun(cmd *cobra.Command, args []string) {
 	maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 	maxCost, _ := cmd.Flags().GetFloat64("max-cost")
 	checkpointInterval, _ := cmd.Flags().GetInt("checkpoint-interval")
+	maxTaskRetries, _ := cmd.Flags().GetInt("max-task-retries")
 
 	var epicID string
 	var epicTitle string
@@ -188,15 +190,15 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	// TUI mode (default)
 	if !headless {
-		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval)
+		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries)
 		return
 	}
 
 	// Headless mode
-	runHeadless(epicID, maxIterations, maxCost, checkpointInterval)
+	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries)
 }
 
-func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval int) {
+func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int) {
 	// Create pause channel for TUI <-> engine communication
 	pauseChan := make(chan bool, 1)
 
@@ -284,11 +286,12 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	// Run engine in background
 	go func() {
 		config := engine.RunConfig{
-			EpicID:          epicID,
-			MaxIterations:   maxIterations,
-			MaxCost:         maxCost,
-			CheckpointEvery: checkpointInterval,
-			PauseChan:       pauseChan,
+			EpicID:           epicID,
+			MaxIterations:    maxIterations,
+			MaxCost:          maxCost,
+			CheckpointEvery:  checkpointInterval,
+			MaxTaskRetries:   maxTaskRetries,
+			PauseChan:        pauseChan,
 		}
 
 		result, err := eng.Run(ctx, config)
@@ -315,7 +318,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	cancel()
 }
 
-func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval int) {
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -373,6 +376,7 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		MaxIterations:   maxIterations,
 		MaxCost:         maxCost,
 		CheckpointEvery: checkpointInterval,
+		MaxTaskRetries:  maxTaskRetries,
 	}
 
 	fmt.Printf("Starting ticker run for epic %s\n", epicID)
