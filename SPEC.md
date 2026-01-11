@@ -13,6 +13,128 @@ Ticker is a Go implementation of the Ralph Wiggum technique - running AI agents 
 - **Ticks-native**: Deep integration with `tk` CLI, not a generic task abstraction
 - **Parallel execution**: Multiple epics can run simultaneously in git worktrees
 
+## Roadmap
+
+### Phase 1: Core Engine (Claude Code Only)
+
+Minimal viable Ralph runner with feature parity to ralph-ticker bash script. No TUI, no worktrees - just a solid Go foundation.
+
+**Scope:**
+- Single epic execution loop
+- Claude Code agent only (`claude` CLI)
+- Signal detection (COMPLETE, EJECT, BLOCKED)
+- Ticks integration (`tk next`, `tk close`, `tk note`)
+- Basic budget limits (iterations, cost)
+- Scratchpad persistence
+- Checkpointing and resume
+- Headless CLI operation
+
+**CLI:**
+```bash
+ticker run <epic-id> --max-iterations 50
+ticker run --auto  # auto-select next ready epic
+ticker resume <checkpoint-id>
+```
+
+**Non-goals for Phase 1:**
+- No TUI (stdout/stderr only)
+- No worktrees (runs in current directory)
+- No parallel epics
+- No other agents (Claude Code only)
+- No permission management beyond `--dangerously-skip-permissions`
+
+**Exit criteria:** Can complete an epic autonomously, equivalent to ralph-ticker.sh
+
+---
+
+### Phase 2: TUI
+
+Add Bubbletea-based terminal UI while maintaining headless mode.
+
+**Scope:**
+- Main dashboard view (tasks, output, budget)
+- Streaming agent output
+- Progress visualization
+- Log history panel
+- Pause/resume controls
+- Dependency graph view
+- Interactive epic selection (`ticker` with no args)
+- Keyboard navigation
+
+**CLI:**
+```bash
+ticker                    # Interactive TUI mode
+ticker run <epic-id>      # TUI mode by default
+ticker run <epic-id> --headless  # Disable TUI
+```
+
+**Exit criteria:** Full TUI with all views from spec mockups working.
+
+---
+
+### Phase 3: Worktrees & Parallel Execution
+
+Enable running multiple epics simultaneously in isolated git worktrees.
+
+**Scope:**
+- Git worktree lifecycle management
+- Parallel epic execution
+- Per-worktree scratchpad/checkpoints
+- Worktree TUI view
+- Merge workflow (auto-merge on complete, pause on conflict)
+- .gitignore auto-configuration
+- Resource management (max parallel, shared budget)
+- Cross-epic cost tracking
+
+**CLI:**
+```bash
+ticker run <epic-id> --worktree
+ticker run h8d fbv 5b8 --parallel 3
+```
+
+**Exit criteria:** Can run 3 epics in parallel, merge results cleanly.
+
+---
+
+### Phase 4: Multi-Agent Support
+
+Add support for non-Claude coding agents with unified permission management.
+
+**Scope:**
+- Agent interface abstraction
+- Agent implementations:
+  - Codex (OpenAI)
+  - Gemini CLI (Google)
+  - Amp (Sourcegraph)
+  - OpenCode (open source)
+- Agent auto-detection and registry
+- Unified permission modes (interactive, auto-edit, auto-all, yolo)
+- Permission policy engine (allow/deny rules)
+- Agent-specific sandbox mapping
+- Permission audit logging
+- TUI permission view
+
+**CLI:**
+```bash
+ticker run <epic-id> --agent codex
+ticker run <epic-id> --agent gemini --permission auto-edit
+ticker run <epic-id> --allow-network --deny-commands "rm -rf"
+```
+
+**Exit criteria:** Can complete an epic using any of the 5 supported agents with appropriate permission controls.
+
+---
+
+### Future Considerations
+
+Not in initial roadmap, but worth tracking:
+
+- **Remote execution**: Run agents in cloud containers
+- **Team features**: Shared checkpoints, handoff between developers
+- **MCP integration**: Leverage agent MCP capabilities
+- **Metrics dashboard**: Historical cost/success tracking
+- **Plugin system**: Custom verifiers, agents, views
+
 ## Architecture
 
 ```
