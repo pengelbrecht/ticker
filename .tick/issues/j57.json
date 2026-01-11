@@ -2,7 +2,7 @@
   "id": "j57",
   "title": "Add integration test with mock engine",
   "description": "Create integration test to verify TUI + engine communication:\n\nTest setup:\n1. Create mock engine that sends predefined messages\n2. Create TUI model with test config\n3. Simulate message sequence\n\nTest scenarios:\n1. Normal run flow:\n   - Send IterationStartMsg\n   - Send OutputMsg chunks\n   - Send IterationEndMsg\n   - Send TasksUpdateMsg\n   - Repeat for multiple iterations\n   - Send RunCompleteMsg with COMPLETE signal\n   - Verify final state\n\n2. Pause/Resume flow:\n   - Start run\n   - Simulate 'p' key press\n   - Verify pauseChan receives true\n   - Simulate 'p' key press again\n   - Verify pauseChan receives false\n\n3. Error flow:\n   - Send ErrorMsg\n   - Verify error displayed\n\n4. Blocked flow:\n   - Send SignalMsg with BLOCKED\n   - Verify blocked state\n\nUse tea.TestModel or manual Update() calls for testing.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -15,5 +15,7 @@
   "parent": "4pq",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:12:25.783195Z",
-  "updated_at": "2026-01-11T20:14:00.049968Z"
+  "updated_at": "2026-01-11T21:03:47.127447Z",
+  "closed_at": "2026-01-11T21:03:47.127447Z",
+  "closed_reason": "Added integration_test.go with 14 comprehensive tests covering TUI + mock engine communication: normal run flow, pause/resume with pauseChan verification, error handling, BLOCKED/EJECT/MAX_ITER/MAX_COST signals, task state transitions, viewport scrolling, help overlay, pane focus cycling, animation frames, unknown signal handling, and RunCompleteMsg metrics handling. Uses mockEngine struct for message sequencing and updateModel helper for clean test syntax."
 }
