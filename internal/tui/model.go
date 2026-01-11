@@ -1,3 +1,6 @@
+// Package tui implements the terminal user interface for ticker.
+// It uses Bubble Tea for the TUI framework and follows the same
+// patterns as the ticks TUI for consistency across the suite.
 package tui
 
 import (
@@ -91,7 +94,7 @@ func (t TaskInfo) RenderTask(selected bool) string {
 }
 
 // -----------------------------------------------------------------------------
-// Message types for engine -> TUI communication
+// Messages - Engine communication types
 // -----------------------------------------------------------------------------
 
 // tickMsg is the animation heartbeat message (1/second).
@@ -137,6 +140,10 @@ type RunCompleteMsg struct {
 type TasksUpdateMsg struct {
 	Tasks []TaskInfo
 }
+
+// -----------------------------------------------------------------------------
+// Helpers - Utility functions
+// -----------------------------------------------------------------------------
 
 // tickCmd returns a tea.Cmd that ticks every second for animation.
 func tickCmd() tea.Cmd {
@@ -191,6 +198,10 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Pause, k.SwitchPane, k.Help, k.Quit},
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Model - Main TUI state
+// -----------------------------------------------------------------------------
 
 var defaultKeyMap = keyMap{
 	// Navigation
@@ -294,7 +305,10 @@ type Model struct {
 	help help.Model
 }
 
-// Catppuccin Mocha color palette
+// -----------------------------------------------------------------------------
+// Colors - Catppuccin Mocha palette
+// -----------------------------------------------------------------------------
+
 const (
 	colorPink     = lipgloss.Color("#F5C2E7") // Headers, primary accents
 	colorBlue     = lipgloss.Color("#89DCEB") // Selected items (Sky)
@@ -310,7 +324,10 @@ const (
 	colorBlueAlt  = lipgloss.Color("#89B4FA") // In-progress status (Blue)
 )
 
-// Base styles
+// -----------------------------------------------------------------------------
+// Styles - Lipgloss style definitions
+// -----------------------------------------------------------------------------
+
 var (
 	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(colorPink)
 	panelStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorGray).Padding(0, 1)
@@ -356,7 +373,8 @@ func pulsingStyle(animFrame int, running bool) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colors[animFrame%4])
 }
 
-// Config holds configuration for the TUI.
+// Config holds configuration for initializing the TUI.
+// Passed to New() to create a configured Model.
 type Config struct {
 	EpicID       string
 	EpicTitle    string
@@ -410,7 +428,12 @@ func (m Model) Init() tea.Cmd {
 	return tickCmd()
 }
 
+// -----------------------------------------------------------------------------
+// Update - Message handling
+// -----------------------------------------------------------------------------
+
 // Update handles incoming messages and updates the model.
+// Processes key events, window resize, and engine communication messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -720,7 +743,12 @@ func (m Model) focusHeaderStyle(pane FocusedPane) lipgloss.Style {
 	return headerStyle
 }
 
+// -----------------------------------------------------------------------------
+// View - Rendering functions
+// -----------------------------------------------------------------------------
+
 // View renders the current model state.
+// Composes status bar, task pane, output pane, and footer into final layout.
 func (m Model) View() string {
 	if m.realWidth == 0 || m.realHeight == 0 {
 		return "Loading...\n"
@@ -1556,7 +1584,8 @@ func (m Model) renderCompleteOverlay() string {
 // Epic picker
 // -----------------------------------------------------------------------------
 
-// EpicInfo represents an epic for the picker.
+// EpicInfo represents an epic for the picker display.
+// Contains metadata shown in the selection list.
 type EpicInfo struct {
 	ID       string
 	Title    string
@@ -1565,6 +1594,7 @@ type EpicInfo struct {
 }
 
 // Picker is the epic selection picker model.
+// Implements tea.Model for interactive epic selection with vim-style navigation.
 type Picker struct {
 	epics    []EpicInfo
 	selected int
