@@ -146,10 +146,11 @@ These notes were left by previous iterations. Read them carefully before startin
 1. **One task per iteration** - Focus only on the current task. Do not work on other tasks.
 2. **No questions** - You are autonomous. Make reasonable decisions based on the context provided.
 3. **Always leave notes** - Before finishing, add a note summarizing what you did and any context for the next iteration.
-4. **Signal protocol** - Use signals to communicate status:
-   - ` + "`<promise>COMPLETE</promise>`" + ` - All tasks in the epic are done
+4. **Signal protocol** - Use signals ONLY in these specific situations:
+   - ` + "`<promise>COMPLETE</promise>`" + ` - ONLY if you have verified ALL tasks in the epic are closed. Do NOT emit this just because you finished your current task. Ticker will automatically continue to the next task.
    - ` + "`<promise>EJECT: reason</promise>`" + ` - Exit for large install or external dependency
    - ` + "`<promise>BLOCKED: reason</promise>`" + ` - Cannot proceed (missing credentials, unclear requirements, etc.)
+5. **Do NOT emit COMPLETE after finishing a task** - Just close your task with ` + "`tk close`" + `. Ticker handles task sequencing automatically.
 
 Begin working on the task now.
 `
