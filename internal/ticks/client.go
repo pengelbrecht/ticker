@@ -94,6 +94,15 @@ func (c *Client) AddNote(issueID, message string) error {
 	return nil
 }
 
+// SetStatus updates the status of an issue (open, in_progress, closed).
+func (c *Client) SetStatus(issueID, status string) error {
+	_, err := c.run("update", issueID, "--status", status)
+	if err != nil {
+		return fmt.Errorf("tk update %s --status %s: %w", issueID, status, err)
+	}
+	return nil
+}
+
 // GetNotes returns the notes for an epic or task.
 // Notes are parsed from the tk show output.
 func (c *Client) GetNotes(epicID string) ([]string, error) {

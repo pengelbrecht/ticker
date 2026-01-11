@@ -25,7 +25,7 @@ Minimal viable Ralph runner with feature parity to ralph-ticker bash script. No 
 - Signal detection (COMPLETE, EJECT, BLOCKED)
 - Ticks integration (`tk next`, `tk close`, `tk note`)
 - Basic budget limits (iterations, cost)
-- Scratchpad persistence
+- Epic notes for iteration context (via `tk note`)
 - Checkpointing and resume
 - Headless CLI operation
 
@@ -79,7 +79,7 @@ Enable running multiple epics simultaneously in isolated git worktrees.
 **Scope:**
 - Git worktree lifecycle management
 - Parallel epic execution
-- Per-worktree scratchpad/checkpoints
+- Per-worktree checkpoints
 - Worktree TUI view
 - Merge workflow (auto-merge on complete, pause on conflict)
 - .gitignore auto-configuration
@@ -179,7 +179,6 @@ ticker/
 │   ├── checkpoint/
 │   │   ├── checkpoint.go    # Checkpoint data structures
 │   │   ├── git.go           # Git-based snapshots
-│   │   ├── scratchpad.go    # .ticker/scratchpad.md persistence
 │   │   └── resume.go        # Resume from checkpoint
 │   │
 │   ├── worktree/
@@ -301,7 +300,6 @@ type Engine struct {
     budget     *budget.Tracker
     checkpoint *checkpoint.Manager
     verify     []Verifier
-    scratchpad *Scratchpad
 
     // Callbacks for TUI
     onIterationStart  func(IterationContext)
@@ -329,16 +327,18 @@ type RunConfig struct {
 │                      ITERATION LIFECYCLE                     │
 │                                                              │
 │  1. tk next <epic> ─────────────► Get next unblocked task    │
-│  2. Gather context ─────────────► Epic, scratchpad, notes    │
+│  2. Gather context ─────────────► Epic info + epic notes     │
 │  3. Build prompt ───────────────► Inject all context         │
 │  4. agent.Run(prompt) ──────────► Stream output to TUI       │
 │  5. Parse signals ──────────────► COMPLETE/EJECT/BLOCKED     │
 │  6. Run verifiers ──────────────► Tests, build, git, tick    │
-│  7. Update scratchpad ──────────► Persist learnings          │
-│  8. Checkpoint if interval ─────► Git commit + JSON state    │
-│  9. Loop or exit ───────────────► Based on signal/budget     │
+│  7. Checkpoint if interval ─────► Git commit + JSON state    │
+│  8. Loop or exit ───────────────► Based on signal/budget     │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+**Note:** Agent is instructed to add notes via `tk note <epic-id>` for context
+that should persist across iterations. Epic notes replace the scratchpad concept.
 
 ### Signal Protocol
 
@@ -367,7 +367,7 @@ Built-in verifiers:
 - **TickVerifier**: Confirms task was closed in Ticks
 - **ScriptVerifier**: Custom verification scripts
 
-Verification failures inject feedback into scratchpad for next iteration.
+Verification failures are added as epic notes (via `tk note`) for the next iteration to review.
 
 ## Agent Interface
 
@@ -662,7 +662,6 @@ project/
 │       └── (full repo)
 ├── .ticker/
 │   ├── config.json
-│   ├── scratchpad.md
 │   └── checkpoints/
 └── (main repo)
 ```
@@ -688,7 +687,6 @@ Worktrees inside the repo require careful .gitignore setup to avoid tracking wor
 # Ticker runtime state (keep config, ignore runtime)
 .ticker/checkpoints/
 .ticker/audit.jsonl
-.ticker/scratchpad.md
 
 # Keep these tracked:
 # .ticker/config.json (project settings)
@@ -702,7 +700,6 @@ Worktrees inside the repo require careful .gitignore setup to avoid tracking wor
 | `.ticker-worktrees/` | No | Contains full repo clones, would duplicate everything |
 | `.ticker/config.json` | Yes | Shared project configuration |
 | `.ticker/checkpoints/` | No | Runtime state, can be large, resumable locally |
-| `.ticker/scratchpad.md` | No | Per-session agent memory, not shareable |
 | `.ticker/audit.jsonl` | No | Local audit trail, grows unbounded |
 
 ### Worktree Complications
@@ -725,15 +722,13 @@ project/                          # Main worktree
 ├── .gitignore                    # Contains .ticker-worktrees/
 ├── .ticker/
 │   ├── config.json               # Tracked - shared config
-│   ├── checkpoints/              # Ignored - main worktree checkpoints
-│   └── scratchpad.md             # Ignored - main worktree scratchpad
+│   └── checkpoints/              # Ignored - main worktree checkpoints
 ├── .ticker-worktrees/
 │   ├── h8d/                      # Worktree for epic h8d
 │   │   ├── .git                  # File pointing to main .git
 │   │   ├── .ticker/
 │   │   │   ├── config.json       # Same as main (tracked)
-│   │   │   ├── checkpoints/      # h8d-specific checkpoints
-│   │   │   └── scratchpad.md     # h8d-specific scratchpad
+│   │   │   └── checkpoints/      # h8d-specific checkpoints
 │   │   └── src/...               # Working copy
 │   └── fbv/                      # Worktree for epic fbv
 │       └── ...
@@ -765,7 +760,6 @@ func (m *WorktreeManager) Create(epicID string) error {
     }
 
     // 4. Copy config.json to worktree (will be same via git, but ensure exists)
-    // Scratchpad starts fresh for this epic
 
     return nil
 }
@@ -853,7 +847,6 @@ type Checkpoint struct {
     TotalTokens    int       `json:"total_tokens"`
     TotalCost      float64   `json:"total_cost"`
     CompletedTasks []string  `json:"completed_tasks"`
-    Scratchpad     string    `json:"scratchpad"`
     GitCommit      string    `json:"git_commit"`
 }
 ```
@@ -866,15 +859,15 @@ type Checkpoint struct {
 │   ├── h8d-7.json
 │   ├── h8d-14.json
 │   └── fbv-3.json
-└── scratchpad.md
+└── config.json
 ```
 
 ### Resume Flow
 
 1. Load checkpoint JSON
 2. Restore git state: `git checkout <commit>`
-3. Restore scratchpad content
-4. Resume engine from iteration N
+3. Resume engine from iteration N
+4. Epic notes are already persisted in ticks, available on resume
 
 ## Budget Management
 
@@ -1060,45 +1053,43 @@ const (
 ### Engine
 
 5. **Iteration timeout**: Per-iteration timeout (current: 5min)? Configurable?
-6. **Scratchpad size limit**: Auto-summarize when too large? What threshold?
-7. **Verification failure threshold**: How many failures before giving up on a task?
-8. **Task skip behavior**: Should we support skipping stuck tasks automatically?
+6. **Verification failure threshold**: How many failures before giving up on a task?
+7. **Task skip behavior**: Should we support skipping stuck tasks automatically?
 
 ### Parallel Execution
 
-9. **Resource contention**: How to handle if two epics try to modify same file?
-10. **Merge conflicts**: Auto-resolve? Pause and alert? Configurable strategy?
-11. **Shared vs isolated scratchpad**: Per-worktree or shared across epics?
-12. **Cost allocation**: Track cost per-epic or only aggregate?
+8. **Resource contention**: How to handle if two epics try to modify same file?
+9. **Merge conflicts**: Auto-resolve? Pause and alert? Configurable strategy?
+10. **Cost allocation**: Track cost per-epic or only aggregate?
 
 ### Agents
 
-13. **Agent fallback**: If primary agent fails, try secondary? Chain of agents?
-14. **Model selection per task**: Different models for different task types?
-15. **Context window management**: How to handle prompts approaching context limit?
-16. **Streaming granularity**: Chunk size for TUI streaming? Buffer strategy?
+11. **Agent fallback**: If primary agent fails, try secondary? Chain of agents?
+12. **Model selection per task**: Different models for different task types?
+13. **Context window management**: How to handle prompts approaching context limit?
+14. **Streaming granularity**: Chunk size for TUI streaming? Buffer strategy?
 
 ### Integration
 
-17. **Ticks version compatibility**: Minimum `tk` version required?
-18. **Git hooks**: Should ticker install/manage git hooks?
-19. **CI integration**: GitHub Actions workflow template? Exit codes?
-20. **Telemetry**: Anonymous usage stats? Opt-in/out?
+15. **Ticks version compatibility**: Minimum `tk` version required?
+16. **Git hooks**: Should ticker install/manage git hooks?
+17. **CI integration**: GitHub Actions workflow template? Exit codes?
+18. **Telemetry**: Anonymous usage stats? Opt-in/out?
 
 ### Permissions
 
-21. **Permission mode switching**: Allow changing mode mid-run via TUI?
-22. **Cross-agent consistency**: How to handle when agent doesn't support a permission feature?
-23. **Rule inheritance**: Should project rules inherit from user-level rules?
-24. **Approval timeout**: How long to wait for user approval before skipping/aborting?
-25. **Batch approvals**: Allow approving patterns ("always allow go test")?
+19. **Permission mode switching**: Allow changing mode mid-run via TUI?
+20. **Cross-agent consistency**: How to handle when agent doesn't support a permission feature?
+21. **Rule inheritance**: Should project rules inherit from user-level rules?
+22. **Approval timeout**: How long to wait for user approval before skipping/aborting?
+23. **Batch approvals**: Allow approving patterns ("always allow go test")?
 
 ### Security
 
-26. **Secrets in scratchpad**: Warn if API keys detected in scratchpad?
-27. **Sandbox enforcement**: Can Ticker enforce sandbox when agent doesn't support it?
-28. **Audit log retention**: How long to keep audit logs? Auto-rotate?
-29. **Container mode**: Built-in Docker/container isolation option?
+24. **Secrets in epic notes**: Warn if API keys detected in notes?
+25. **Sandbox enforcement**: Can Ticker enforce sandbox when agent doesn't support it?
+26. **Audit log retention**: How long to keep audit logs? Auto-rotate?
+27. **Container mode**: Built-in Docker/container isolation option?
 
 ## References
 

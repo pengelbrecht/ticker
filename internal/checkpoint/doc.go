@@ -1,3 +1,3 @@
 // Package checkpoint manages checkpoint data structures, git-based snapshots,
-// scratchpad persistence, and resume functionality.
+// and resume functionality for ticker runs.
 package checkpoint

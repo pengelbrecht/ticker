@@ -2,13 +2,13 @@
   "id": "cv5",
   "title": "Phase 1: Core Engine",
   "description": "Minimal viable Ralph runner with feature parity to ralph-ticker bash script.\n\nClaude Code only, no TUI, no worktrees - just a solid Go foundation.\n\nExit criteria: Can complete an epic autonomously, equivalent to ralph-ticker.sh\n\nSee SPEC.md ## Roadmap \u003e Phase 1 for full details.",
-  "notes": "2026-01-11 10:13 - Iteration 1: wkg | Created Go project scaffolding - go.mod, cobra CLI in cmd/ticker/main.go, internal/ packages (engine, agent, ticks, budget, checkpoint) | No blockers\n2026-01-11 10:13 - test\n2026-01-11 10:15 - Iteration 2: l83 | Created ticks client wrapper - types.go (Task/Epic structs), client.go (NextTask, GetEpic, CloseTask, AddNote, GetNotes), unit tests and integration tests passing | No blockers\n2026-01-11 10:18 - Iteration 3: 95d | Implemented Agent interface (agent.go) and ClaudeAgent (claude.go) - Run method with streaming, timeout/cancellation, token usage parsing | No blockers",
+  "notes": "2026-01-11 10:13 - Iteration 1: wkg | Created Go project scaffolding - go.mod, cobra CLI in cmd/ticker/main.go, internal/ packages (engine, agent, ticks, budget, checkpoint) | No blockers\n2026-01-11 10:13 - test\n2026-01-11 10:15 - Iteration 2: l83 | Created ticks client wrapper - types.go (Task/Epic structs), client.go (NextTask, GetEpic, CloseTask, AddNote, GetNotes), unit tests and integration tests passing | No blockers\n2026-01-11 10:18 - Iteration 3: 95d | Implemented Agent interface (agent.go) and ClaudeAgent (claude.go) - Run method with streaming, timeout/cancellation, token usage parsing | No blockers\n2026-01-11 10:19 - Iteration 4: 7aq | Implemented signal detection - Signal enum (None, Complete, Eject, Blocked), ParseSignals function with regex patterns for promise tags, 22 unit tests | No blockers",
   "status": "closed",
   "priority": 1,
   "type": "epic",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T09:30:34.260732433Z",
-  "updated_at": "2026-01-11T10:18:06.849250651Z",
+  "updated_at": "2026-01-11T10:19:47.038913019Z",
   "closed_at": "2026-01-11T10:13:44.992848995Z"
 }
