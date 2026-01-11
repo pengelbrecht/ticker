@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+
+	"github.com/pengelbrecht/ticker/internal/agent"
 )
 
 // Client wraps the tk CLI for programmatic access to the Ticks issue tracker.
@@ -213,6 +217,71 @@ func (c *Client) GetNotes(epicID string) ([]string, error) {
 		}
 	}
 	return notes, nil
+}
+
+// SetRunRecord stores a RunRecord on a task by updating the tick file directly.
+// Since the tk CLI doesn't support the run field, we read-modify-write the JSON file.
+func (c *Client) SetRunRecord(taskID string, record *agent.RunRecord) error {
+	if record == nil {
+		return nil // nothing to set
+	}
+
+	// Find the .tick/issues directory relative to current working directory
+	tickDir, err := findTickDir()
+	if err != nil {
+		return fmt.Errorf("finding .tick directory: %w", err)
+	}
+
+	filePath := filepath.Join(tickDir, "issues", taskID+".json")
+
+	// Read the existing file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("reading tick file %s: %w", taskID, err)
+	}
+
+	// Parse into a generic map to preserve all fields
+	var tickData map[string]interface{}
+	if err := json.Unmarshal(data, &tickData); err != nil {
+		return fmt.Errorf("parsing tick file %s: %w", taskID, err)
+	}
+
+	// Add the run field
+	tickData["run"] = record
+
+	// Write back with indentation
+	output, err := json.MarshalIndent(tickData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling tick file %s: %w", taskID, err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(filePath, output, 0600); err != nil {
+		return fmt.Errorf("writing tick file %s: %w", taskID, err)
+	}
+
+	return nil
+}
+
+// findTickDir locates the .tick directory by walking up from cwd.
+func findTickDir() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		tickPath := filepath.Join(dir, ".tick")
+		if info, err := os.Stat(tickPath); err == nil && info.IsDir() {
+			return tickPath, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf(".tick directory not found")
+		}
+		dir = parent
+	}
 }
 
 // run executes a tk command and returns the output.

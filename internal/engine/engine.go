@@ -446,6 +446,14 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 	result.TokensOut = agentResult.TokensOut
 	result.Cost = agentResult.Cost
 
+	// Persist RunRecord to task (enables viewing historical run data)
+	if agentResult.Record != nil {
+		if err := e.ticks.SetRunRecord(task.ID, agentResult.Record); err != nil {
+			// Log but don't fail on record persistence error
+			_ = e.ticks.AddNote(state.epicID, fmt.Sprintf("Warning: could not persist RunRecord for %s: %v", task.ID, err))
+		}
+	}
+
 	// Parse signals
 	result.Signal, result.SignalReason = ParseSignals(agentResult.Output)
 
