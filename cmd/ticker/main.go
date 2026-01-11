@@ -257,11 +257,83 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	go refreshTasks()
 
 	// Wire engine callbacks to send TUI messages
+
+	// Track previous snapshot state for delta-based TUI updates
+	var prevOutput, prevThinking string
+	var prevToolID string
+
+	// Rich streaming callback - converts AgentStateSnapshot to TUI messages
+	eng.OnAgentState = func(snap agent.AgentStateSnapshot) {
+		// Send text deltas (only new content since last update)
+		if snap.Output != prevOutput {
+			delta := snap.Output[len(prevOutput):]
+			if delta != "" {
+				p.Send(tui.AgentTextMsg{Text: delta})
+			}
+			prevOutput = snap.Output
+		}
+
+		// Send thinking deltas
+		if snap.Thinking != prevThinking {
+			delta := snap.Thinking[len(prevThinking):]
+			if delta != "" {
+				p.Send(tui.AgentThinkingMsg{Text: delta})
+			}
+			prevThinking = snap.Thinking
+		}
+
+		// Send tool activity updates
+		if snap.ActiveTool != nil && snap.ActiveTool.ID != prevToolID {
+			// New tool started
+			p.Send(tui.AgentToolStartMsg{
+				ID:   snap.ActiveTool.ID,
+				Name: snap.ActiveTool.Name,
+			})
+			prevToolID = snap.ActiveTool.ID
+		} else if snap.ActiveTool == nil && prevToolID != "" {
+			// Tool ended - find it in history to get duration and error status
+			for _, tool := range snap.ToolHistory {
+				if tool.ID == prevToolID {
+					p.Send(tui.AgentToolEndMsg{
+						ID:       tool.ID,
+						Name:     tool.Name,
+						Duration: tool.Duration,
+						IsError:  tool.IsError,
+					})
+					break
+				}
+			}
+			prevToolID = ""
+		}
+
+		// Send metrics update (including model name)
+		p.Send(tui.AgentMetricsMsg{
+			InputTokens:         snap.Metrics.InputTokens,
+			OutputTokens:        snap.Metrics.OutputTokens,
+			CacheReadTokens:     snap.Metrics.CacheReadTokens,
+			CacheCreationTokens: snap.Metrics.CacheCreationTokens,
+			CostUSD:             snap.Metrics.CostUSD,
+			Model:               snap.Model,
+		})
+
+		// Send status update
+		p.Send(tui.AgentStatusMsg{
+			Status: snap.Status,
+			Error:  snap.ErrorMsg,
+		})
+	}
+
+	// Legacy output callback kept for backward compatibility
 	eng.OnOutput = func(chunk string) {
 		p.Send(tui.OutputMsg(chunk))
 	}
 
 	eng.OnIterationStart = func(ctx engine.IterationContext) {
+		// Reset delta tracking state for new iteration
+		prevOutput = ""
+		prevThinking = ""
+		prevToolID = ""
+
 		p.Send(tui.IterationStartMsg{
 			Iteration: ctx.Iteration,
 			TaskID:    ctx.Task.ID,

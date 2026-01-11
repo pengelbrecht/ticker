@@ -191,6 +191,7 @@ type AgentMetricsMsg struct {
 	CacheReadTokens     int     // Tokens read from cache
 	CacheCreationTokens int     // Tokens used to create cache
 	CostUSD             float64 // Total cost in USD
+	Model               string  // Model name (set on first update, may be empty)
 }
 
 // AgentStatusMsg signals a change in agent run status.
@@ -418,6 +419,13 @@ type Model struct {
 	toolHistory   []ToolActivityInfo  // completed tools (most recent first)
 	showToolHist  bool                // whether to show expanded tool history
 
+	// Live streaming metrics (updated via AgentMetricsMsg)
+	liveInputTokens         int
+	liveOutputTokens        int
+	liveCacheReadTokens     int
+	liveCacheCreationTokens int
+	liveModel               string // model name from streaming
+
 	// Layout
 	width       int // clamped width for rendering (min: minWidth)
 	height      int // clamped height for rendering (min: minHeight)
@@ -626,11 +634,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Clear output, thinking, and tool state for new iteration
+		// Clear output, thinking, tool state, and metrics for new iteration
 		m.output = ""
 		m.thinking = ""
 		m.activeTool = nil
 		m.toolHistory = nil
+		m.liveInputTokens = 0
+		m.liveOutputTokens = 0
+		m.liveCacheReadTokens = 0
+		m.liveCacheCreationTokens = 0
+		m.liveModel = ""
 		if m.viewingTask == "" {
 			m.viewport.SetContent("")
 		}
@@ -759,6 +772,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.viewingTask == "" {
 			m.updateOutputViewport()
 		}
+
+	case AgentMetricsMsg:
+		// Update live streaming metrics for status bar display
+		m.liveInputTokens = msg.InputTokens
+		m.liveOutputTokens = msg.OutputTokens
+		m.liveCacheReadTokens = msg.CacheReadTokens
+		m.liveCacheCreationTokens = msg.CacheCreationTokens
+		if msg.Model != "" {
+			m.liveModel = msg.Model
+		}
+
+	case AgentStatusMsg:
+		// Status updates are informational; the TUI reacts to content changes
+		// Status is displayed via agentState when rendering the status bar
+		// Future: could show status indicator in output pane header
 
 	case tea.KeyMsg:
 		// Priority 1: If complete overlay is showing, any key except 'q' dismisses, 'q' quits
@@ -1358,15 +1386,14 @@ func (m Model) renderStatusBar() string {
 	}
 	progressParts = append(progressParts, costLabel+costValue)
 
-	// Token metrics from agent state (if available)
-	if m.agentState != nil {
-		snap := m.agentState.Snapshot()
+	// Token metrics from live streaming (if available)
+	if m.liveInputTokens > 0 || m.liveOutputTokens > 0 {
 		var tokenParts []string
-		tokenParts = append(tokenParts, formatTokens(snap.Metrics.InputTokens)+" in")
-		tokenParts = append(tokenParts, formatTokens(snap.Metrics.OutputTokens)+" out")
+		tokenParts = append(tokenParts, formatTokens(m.liveInputTokens)+" in")
+		tokenParts = append(tokenParts, formatTokens(m.liveOutputTokens)+" out")
 		// Show cache if there are any cache tokens
-		if snap.Metrics.CacheReadTokens > 0 || snap.Metrics.CacheCreationTokens > 0 {
-			cacheTotal := snap.Metrics.CacheReadTokens + snap.Metrics.CacheCreationTokens
+		if m.liveCacheReadTokens > 0 || m.liveCacheCreationTokens > 0 {
+			cacheTotal := m.liveCacheReadTokens + m.liveCacheCreationTokens
 			tokenParts = append(tokenParts, formatTokens(cacheTotal)+" cache")
 		}
 		tokensLabel := dimStyle.Render("Tokens:")
@@ -1374,9 +1401,9 @@ func (m Model) renderStatusBar() string {
 		progressParts = append(progressParts, tokensLabel+tokensValue)
 
 		// Model name (if available)
-		if snap.Model != "" {
+		if m.liveModel != "" {
 			modelLabel := dimStyle.Render("Model:")
-			modelValue := " " + shortModelName(snap.Model)
+			modelValue := " " + shortModelName(m.liveModel)
 			progressParts = append(progressParts, modelLabel+modelValue)
 		}
 	}

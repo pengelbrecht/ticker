@@ -643,13 +643,12 @@ func TestRenderStatusBar_WithAgentState(t *testing.T) {
 	m.height = 30
 	m.running = true
 
-	// Create an agent state with metrics
-	m.agentState = &agent.AgentState{}
-	m.agentState.Model = "claude-opus-4-5-20251101"
-	m.agentState.Metrics.InputTokens = 12500
-	m.agentState.Metrics.OutputTokens = 450
-	m.agentState.Metrics.CacheReadTokens = 8000
-	m.agentState.Metrics.CacheCreationTokens = 4000
+	// Set live streaming metrics (updated via AgentMetricsMsg)
+	m.liveModel = "claude-opus-4-5-20251101"
+	m.liveInputTokens = 12500
+	m.liveOutputTokens = 450
+	m.liveCacheReadTokens = 8000
+	m.liveCacheCreationTokens = 4000
 
 	output := m.renderStatusBar()
 
@@ -682,11 +681,10 @@ func TestRenderStatusBar_WithAgentState_NoCache(t *testing.T) {
 	m.height = 30
 	m.running = true
 
-	// Create an agent state without cache tokens
-	m.agentState = &agent.AgentState{}
-	m.agentState.Model = "claude-sonnet-4-20250514"
-	m.agentState.Metrics.InputTokens = 1500
-	m.agentState.Metrics.OutputTokens = 200
+	// Set live streaming metrics without cache tokens
+	m.liveModel = "claude-sonnet-4-20250514"
+	m.liveInputTokens = 1500
+	m.liveOutputTokens = 200
 	// No cache tokens
 
 	output := m.renderStatusBar()

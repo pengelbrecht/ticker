@@ -24,6 +24,11 @@ type Engine struct {
 	OnIterationEnd   func(result *IterationResult)
 	OnOutput         func(chunk string)
 	OnSignal         func(signal Signal, reason string)
+
+	// Rich streaming callback for real-time agent state updates.
+	// Called whenever agent state changes (text, thinking, tools, metrics).
+	// If set, this provides structured updates; OnOutput is still called for backward compat.
+	OnAgentState func(snap agent.AgentStateSnapshot)
 }
 
 // RunConfig configures an engine run.
@@ -403,7 +408,12 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 		Timeout: timeout,
 	}
 
-	// Set up streaming if callback is configured
+	// Set up rich streaming callback if configured (preferred)
+	if e.OnAgentState != nil {
+		opts.StateCallback = e.OnAgentState
+	}
+
+	// Set up legacy streaming if callback is configured (backward compat)
 	var streamChan chan string
 	if e.OnOutput != nil {
 		streamChan = make(chan string, 100)
