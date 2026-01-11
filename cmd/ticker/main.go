@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
-	"runtime"
 	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,9 +16,11 @@ import (
 	"github.com/pengelbrecht/ticker/internal/engine"
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/tui"
+	"github.com/pengelbrecht/ticker/internal/update"
 )
 
-var version = "0.1.0"
+// Version is set at build time via ldflags
+var Version = "dev"
 
 // Exit codes per spec
 const (
@@ -37,7 +37,13 @@ var rootCmd = &cobra.Command{
 	Long: `Ticker is a Go implementation of the Ralph Wiggum technique - running AI agents
 in continuous loops until tasks are complete. It wraps the Ticks issue tracker
 and orchestrates coding agents to autonomously complete epics.`,
-	Version: version,
+	Version: Version,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Check for updates periodically (once per day, cached)
+		if notice := update.CheckPeriodically(Version); notice != "" {
+			fmt.Fprintln(os.Stderr, notice)
+		}
+	},
 }
 
 var runCmd = &cobra.Command{
@@ -77,31 +83,36 @@ used with 'ticker resume' to continue from that point.`,
 	Run:  runCheckpoints,
 }
 
-const installScriptURL = "https://raw.githubusercontent.com/pengelbrecht/ticker/main/scripts/install.sh"
-
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Upgrade ticker to the latest version",
-	Long:  `Downloads and runs the installation script to upgrade ticker in-place.`,
+	Long:  `Downloads and installs the latest version of ticker.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if runtime.GOOS == "windows" {
-			fmt.Fprintln(os.Stderr, "Error: upgrade command is not supported on Windows")
-			fmt.Fprintln(os.Stderr, "Please download the latest release manually from GitHub")
-			os.Exit(1)
-		}
-
-		fmt.Printf("Current version: %s\n", version)
+		fmt.Printf("Current version: %s\n", Version)
 		fmt.Println("Checking for updates...")
 
-		shellCmd := exec.Command("sh", "-c", fmt.Sprintf("curl -fsSL %s | sh", installScriptURL))
-		shellCmd.Stdout = os.Stdout
-		shellCmd.Stderr = os.Stderr
-		shellCmd.Stdin = os.Stdin
-
-		if err := shellCmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error running upgrade: %v\n", err)
+		release, hasUpdate, err := update.CheckForUpdate(Version)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
 			os.Exit(1)
 		}
+
+		if !hasUpdate {
+			fmt.Println("Already at latest version")
+			return
+		}
+
+		fmt.Printf("New version available: %s\n", release.Version)
+		fmt.Println("Upgrading...")
+
+		if err := update.Update(Version); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			method := update.DetectInstallMethod()
+			fmt.Fprintln(os.Stderr, update.UpdateInstructions(method))
+			os.Exit(1)
+		}
+
+		fmt.Printf("Successfully upgraded to %s\n", release.Version)
 	},
 }
 
