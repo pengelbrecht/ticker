@@ -90,6 +90,29 @@ func (c *Client) ListTasks(epicID string) ([]Task, error) {
 	return tasks, nil
 }
 
+// ListReadyEpics returns all ready (unblocked) epics.
+func (c *Client) ListReadyEpics() ([]Epic, error) {
+	out, err := c.run("ready", "--epic", "--json")
+	if err != nil {
+		// Check if it's "no ready epics" vs actual error
+		if strings.Contains(err.Error(), "no ready") || strings.Contains(err.Error(), "No ready") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("tk ready --epic: %w", err)
+	}
+
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	var epics []Epic
+	if err := json.Unmarshal(out, &epics); err != nil {
+		return nil, fmt.Errorf("parse epics JSON: %w", err)
+	}
+	return epics, nil
+}
+
 // CloseTask closes a task with the given reason.
 func (c *Client) CloseTask(taskID, reason string) error {
 	_, err := c.run("close", taskID, "--reason", reason)

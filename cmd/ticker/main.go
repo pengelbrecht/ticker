@@ -134,6 +134,8 @@ func runRun(cmd *cobra.Command, args []string) {
 	checkpointInterval, _ := cmd.Flags().GetInt("checkpoint-interval")
 
 	var epicID string
+	var epicTitle string
+
 	if len(args) > 0 {
 		epicID = args[0]
 	} else if auto {
@@ -149,22 +151,33 @@ func runRun(cmd *cobra.Command, args []string) {
 		}
 		epicID = selected
 		fmt.Printf("Auto-selected epic: %s\n", epicID)
+	} else if !headless {
+		// Interactive mode: show epic picker
+		selected := runPicker()
+		if selected == nil {
+			os.Exit(0) // User quit without selecting
+		}
+		epicID = selected.ID
+		epicTitle = selected.Title
 	} else {
 		fmt.Fprintln(os.Stderr, "Error: either provide an epic-id or use --auto")
 		os.Exit(ExitError)
 	}
 
-	// Get epic info for TUI
-	ticksClient := ticks.NewClient()
-	epic, err := ticksClient.GetEpic(epicID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting epic: %v\n", err)
-		os.Exit(ExitError)
+	// Get epic info for TUI (if not already from picker)
+	if epicTitle == "" {
+		ticksClient := ticks.NewClient()
+		epic, err := ticksClient.GetEpic(epicID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting epic: %v\n", err)
+			os.Exit(ExitError)
+		}
+		epicTitle = epic.Title
 	}
 
 	// TUI mode (default)
 	if !headless {
-		runWithTUI(epicID, epic.Title, maxIterations, maxCost, checkpointInterval)
+		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval)
 		return
 	}
 
@@ -517,25 +530,56 @@ func runCheckpoints(cmd *cobra.Command, args []string) {
 
 // autoSelectEpic uses tk to find a ready epic
 func autoSelectEpic() (string, error) {
-	// Use tk ready to find epics with no blockers
-	cmd := exec.Command("tk", "ready", "--json")
-	output, err := cmd.Output()
+	ticksClient := ticks.NewClient()
+	epics, err := ticksClient.ListReadyEpics()
 	if err != nil {
-		return "", fmt.Errorf("tk ready failed: %w", err)
+		return "", err
 	}
-
-	// For now, just get the first line which should be the epic ID
-	// In a full implementation, we'd parse JSON and pick intelligently
-	if len(output) == 0 {
+	if len(epics) == 0 {
 		return "", nil
 	}
+	// Return first ready epic
+	return epics[0].ID, nil
+}
 
-	// Simple approach: tk ready might return issue IDs, pick first epic type
+// runPicker shows the interactive epic picker and returns the selected epic
+func runPicker() *tui.EpicInfo {
 	ticksClient := ticks.NewClient()
 
-	// Try to find epics via tk
-	// This is a simplified version - we'd need proper tk integration
-	_ = ticksClient
+	// Get ready epics
+	epics, err := ticksClient.ListReadyEpics()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error listing epics: %v\n", err)
+		os.Exit(ExitError)
+	}
 
-	return "", fmt.Errorf("auto-select not fully implemented - please specify an epic ID")
+	if len(epics) == 0 {
+		fmt.Fprintln(os.Stderr, "No ready epics found")
+		os.Exit(0)
+	}
+
+	// Convert to EpicInfo with task counts
+	epicInfos := make([]tui.EpicInfo, len(epics))
+	for i, e := range epics {
+		tasks, _ := ticksClient.ListTasks(e.ID)
+		epicInfos[i] = tui.EpicInfo{
+			ID:       e.ID,
+			Title:    e.Title,
+			Priority: e.Priority,
+			Tasks:    len(tasks),
+		}
+	}
+
+	// Run picker
+	p := tui.NewPicker(epicInfos)
+	program := tea.NewProgram(p, tea.WithAltScreen())
+
+	model, err := program.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running picker: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	picker := model.(tui.Picker)
+	return picker.Selected()
 }

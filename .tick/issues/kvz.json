@@ -2,7 +2,7 @@
   "id": "kvz",
   "title": "Interactive epic selection",
   "description": "Show epic picker when ticker run with no args.\n\ninternal/tui/picker.go:\n- Use bubbles/list for epic selection\n- List ready epics (tk ready --epic)\n- Show epic title, task count, priority\n- Enter to start run\n\ncmd/ticker/main.go:\n- If no epic-id and not --auto, show picker\n- Transition to dashboard on selection\n\nVerify: ticker (no args) shows picker, selection starts run",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,6 @@
   "parent": "e8g",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T13:04:31.684488782Z",
-  "updated_at": "2026-01-11T13:08:23.063280932Z"
+  "updated_at": "2026-01-11T14:22:06.168562006Z",
+  "closed_at": "2026-01-11T14:22:06.168562006Z"
 }
