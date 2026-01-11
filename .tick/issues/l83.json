@@ -2,7 +2,7 @@
   "id": "l83",
   "title": "Ticks client wrapper",
   "description": "Wrap tk CLI commands in Go.\n\ninternal/ticks/client.go:\n- NextTask(epicID string) (*Task, error) - calls tk next\n- GetEpic(epicID string) (*Epic, error) - calls tk show  \n- CloseTask(taskID, reason string) error - calls tk close\n- AddNote(epicID, message string) error - calls tk note\n- GetNotes(epicID string) ([]string, error) - parses tk show\n\nParse JSON output from tk commands (--json flag).\n\nVerify: Can fetch next task from an epic, close it, add notes.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "cv5",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T09:30:53.983233627Z",
-  "updated_at": "2026-01-11T09:32:19.167682952Z"
+  "updated_at": "2026-01-11T10:15:29.364283348Z",
+  "closed_at": "2026-01-11T10:15:29.364283348Z",
+  "closed_reason": "Implemented Go wrapper for tk CLI with NextTask, GetEpic, CloseTask, AddNote, GetNotes functions"
 }
