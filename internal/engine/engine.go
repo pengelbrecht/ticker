@@ -56,10 +56,14 @@ type RunConfig struct {
 
 // Defaults for RunConfig.
 const (
-	DefaultMaxIterations  = 50
-	DefaultMaxCost        = 20.00
+	DefaultMaxIterations   = 50
+	DefaultMaxCost         = 20.00
 	DefaultCheckpointEvery = 5
-	DefaultAgentTimeout   = 5 * time.Minute
+	DefaultAgentTimeout    = 5 * time.Minute
+
+	// MaxSameTaskIterations is the maximum iterations on the same task before
+	// assuming the agent is stuck (forgot to close, infinite loop, etc).
+	MaxSameTaskIterations = 3
 )
 
 // RunResult contains the outcome of an engine run.
@@ -241,6 +245,17 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			return state.toResult(reason), nil
 		}
 
+		// Stuck loop detection - catch agent forgetting to close tasks
+		if task.ID == state.lastTaskID {
+			state.sameTaskCount++
+			if state.sameTaskCount > MaxSameTaskIterations {
+				return state.toResult(fmt.Sprintf("stuck on task %s after %d iterations - may need manual review", task.ID, state.sameTaskCount)), nil
+			}
+		} else {
+			state.lastTaskID = task.ID
+			state.sameTaskCount = 1
+		}
+
 		// Run iteration
 		state.iteration++
 		iterResult := e.runIteration(ctx, state, task, config.AgentTimeout)
@@ -308,6 +323,10 @@ type runState struct {
 	startTime      time.Time
 	signal         Signal
 	signalReason   string
+
+	// Stuck loop detection
+	lastTaskID     string
+	sameTaskCount  int
 }
 
 // toResult converts run state to a RunResult.
