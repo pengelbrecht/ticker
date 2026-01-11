@@ -1411,3 +1411,161 @@ func TestRenderOutputPane_ScrollPercentageUpdatesOnScroll(t *testing.T) {
 		// Detailed percentage verification is in integration tests
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Thinking/Output Split Pane Tests
+// -----------------------------------------------------------------------------
+
+func TestUpdate_AgentThinkingMsg(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Send thinking message
+	msg := AgentThinkingMsg{Text: "Let me think about this..."}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.thinking != "Let me think about this..." {
+		t.Errorf("expected thinking 'Let me think about this...', got '%s'", m.thinking)
+	}
+
+	// Append more thinking
+	msg = AgentThinkingMsg{Text: "\nStill thinking..."}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	expected := "Let me think about this...\nStill thinking..."
+	if m.thinking != expected {
+		t.Errorf("expected thinking '%s', got '%s'", expected, m.thinking)
+	}
+}
+
+func TestUpdate_AgentTextMsg(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Send text message
+	msg := AgentTextMsg{Text: "Here's my response:"}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.output != "Here's my response:" {
+		t.Errorf("expected output 'Here's my response:', got '%s'", m.output)
+	}
+
+	// Append more text
+	msg = AgentTextMsg{Text: " More content here."}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	expected := "Here's my response: More content here."
+	if m.output != expected {
+		t.Errorf("expected output '%s', got '%s'", expected, m.output)
+	}
+}
+
+func TestBuildOutputContent_OutputOnly(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.output = "Some output text"
+	m.thinking = ""
+
+	content := m.buildOutputContent(80)
+
+	// Should contain output but no thinking section
+	if !strings.Contains(content, "Some output text") {
+		t.Error("expected content to contain output text")
+	}
+	if strings.Contains(content, "Thinking") {
+		t.Error("expected no Thinking section when thinking is empty")
+	}
+}
+
+func TestBuildOutputContent_ThinkingOnly(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.output = ""
+	m.thinking = "Some thinking text"
+
+	content := m.buildOutputContent(80)
+
+	// Should contain thinking section
+	if !strings.Contains(content, "Thinking") {
+		t.Error("expected Thinking section header")
+	}
+	// Note: thinking content is rendered with dimStyle so we check for presence
+}
+
+func TestBuildOutputContent_BothThinkingAndOutput(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.thinking = "My reasoning process"
+	m.output = "The final answer"
+
+	content := m.buildOutputContent(80)
+
+	// Should contain both sections
+	if !strings.Contains(content, "Thinking") {
+		t.Error("expected Thinking section header")
+	}
+	if !strings.Contains(content, "Output") {
+		t.Error("expected Output section header/separator")
+	}
+	if !strings.Contains(content, "The final answer") {
+		t.Error("expected output text in content")
+	}
+}
+
+func TestBuildOutputContent_Empty(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.output = ""
+	m.thinking = ""
+
+	content := m.buildOutputContent(80)
+
+	// Should be empty
+	if content != "" {
+		t.Errorf("expected empty content, got '%s'", content)
+	}
+}
+
+func TestIterationStartMsg_ClearsThinking(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Set initial output and thinking
+	m.output = "previous output"
+	m.thinking = "previous thinking"
+	m.taskID = "task1"
+
+	// Start new iteration
+	msg := IterationStartMsg{
+		Iteration: 2,
+		TaskID:    "task2",
+		TaskTitle: "New Task",
+	}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Both should be cleared
+	if m.output != "" {
+		t.Errorf("expected output to be cleared, got '%s'", m.output)
+	}
+	if m.thinking != "" {
+		t.Errorf("expected thinking to be cleared, got '%s'", m.thinking)
+	}
+}

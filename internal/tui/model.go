@@ -341,6 +341,7 @@ type Model struct {
 	tasks        []TaskInfo
 	selectedTask int
 	output       string            // legacy output buffer (kept for backward compatibility during transition)
+	thinking     string            // thinking/reasoning content (dimmed, collapsible section)
 	agentState   *agent.AgentState // live streaming state for rich agent output display
 	taskOutputs  map[string]string // per-task output history
 	viewingTask  string            // task ID being viewed (empty = live output)
@@ -524,13 +525,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, tickCmd())
 
 	case OutputMsg:
-		// Append new output to live buffer
+		// Append new output to live buffer (legacy message type)
 		m.output += string(msg)
 		// Only update viewport if viewing live output (not historical)
 		if m.viewingTask == "" {
-			m.viewport.SetContent(m.output)
-			// Auto-scroll to bottom on new content
-			m.viewport.GotoBottom()
+			m.updateOutputViewport()
 		}
 
 	case IterationStartMsg:
@@ -554,8 +553,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Clear output buffer for new iteration
+		// Clear output and thinking buffers for new iteration
 		m.output = ""
+		m.thinking = ""
 		if m.viewingTask == "" {
 			m.viewport.SetContent("")
 		}
@@ -634,6 +634,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update viewport size since task count affects layout
 		m.updateViewportSize()
+
+	case AgentThinkingMsg:
+		// Append thinking text to thinking buffer
+		m.thinking += msg.Text
+		// Update viewport if viewing live output
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case AgentTextMsg:
+		// Append response text to output buffer
+		m.output += msg.Text
+		// Update viewport if viewing live output
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
 
 	case tea.KeyMsg:
 		// Priority 1: If complete overlay is showing, any key except 'q' dismisses, 'q' quits
@@ -799,6 +815,43 @@ func (m *Model) updateViewportSize() {
 
 	m.viewport.Width = viewportWidth
 	m.viewport.Height = viewportHeight
+}
+
+// updateOutputViewport builds the combined thinking+output content and updates the viewport.
+// This is called when new thinking or output text arrives.
+func (m *Model) updateOutputViewport() {
+	content := m.buildOutputContent(m.viewport.Width)
+	m.viewport.SetContent(content)
+	m.viewport.GotoBottom()
+}
+
+// buildOutputContent creates the combined content for the output viewport.
+// It includes a collapsible thinking section (when non-empty) and the main output.
+func (m *Model) buildOutputContent(width int) string {
+	var sections []string
+
+	// Thinking section (collapsible - only shown when non-empty)
+	if m.thinking != "" {
+		thinkingHeader := dimStyle.Render("─── Thinking ───")
+		sections = append(sections, thinkingHeader)
+
+		// Render thinking content dimmed
+		thinkingLines := strings.Split(m.thinking, "\n")
+		for _, line := range thinkingLines {
+			sections = append(sections, dimStyle.Render(line))
+		}
+
+		// Separator between thinking and output
+		separator := dimStyle.Render("─── Output ───")
+		sections = append(sections, "", separator)
+	}
+
+	// Main output section
+	if m.output != "" {
+		sections = append(sections, m.output)
+	}
+
+	return strings.Join(sections, "\n")
 }
 
 // Layout constants
@@ -1181,8 +1234,8 @@ func (m Model) renderOutputPane(height int) string {
 		task := m.tasks[m.selectedTask]
 		detailContent := m.renderTaskDetail(task, innerWidth, innerHeight)
 		contentLines = append(contentLines, detailContent)
-	} else if m.output != "" {
-		// Running mode: show viewport content (already rendered by viewport)
+	} else if m.output != "" || m.thinking != "" {
+		// Running mode: show viewport content (thinking + output sections)
 		viewportContent := m.viewport.View()
 		contentLines = append(contentLines, viewportContent)
 	} else {
