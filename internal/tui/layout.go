@@ -97,12 +97,13 @@ var (
 
 // renderHeader renders the header with epic title and status.
 func (m Model) renderHeader() string {
-	title := m.epicTitle
-	if title == "" {
-		title = m.epicID
+	// Show both ID and title: "⚡ ticker: [abc] Epic Title"
+	var left string
+	if m.epicTitle != "" {
+		left = titleStyle.Render(fmt.Sprintf("⚡ ticker: [%s] %s", m.epicID, m.epicTitle))
+	} else {
+		left = titleStyle.Render(fmt.Sprintf("⚡ ticker: %s", m.epicID))
 	}
-
-	left := titleStyle.Render(fmt.Sprintf("⚡ ticker: %s", title))
 
 	// Status indicator
 	var status string
