@@ -108,6 +108,95 @@ type AgentStateSnapshot struct {
 	ErrorMsg    string
 }
 
+// RunRecord is a serializable record of a completed agent run.
+// Store this with the tick for displaying completed tick details.
+type RunRecord struct {
+	// Session metadata
+	SessionID string    `json:"session_id"`
+	Model     string    `json:"model"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
+
+	// Content
+	Output   string `json:"output"`
+	Thinking string `json:"thinking,omitempty"`
+
+	// Tool activity log
+	Tools []ToolRecord `json:"tools,omitempty"`
+
+	// Final metrics
+	Metrics MetricsRecord `json:"metrics"`
+
+	// Result
+	Success  bool   `json:"success"`
+	NumTurns int    `json:"num_turns"`
+	ErrorMsg string `json:"error_msg,omitempty"`
+}
+
+// ToolRecord is a serializable record of a tool invocation.
+type ToolRecord struct {
+	Name     string `json:"name"`
+	Input    string `json:"input,omitempty"`  // truncated for storage
+	Output   string `json:"output,omitempty"` // truncated for storage
+	Duration int    `json:"duration_ms"`
+	IsError  bool   `json:"is_error,omitempty"`
+}
+
+// MetricsRecord is a serializable metrics snapshot.
+type MetricsRecord struct {
+	InputTokens         int     `json:"input_tokens"`
+	OutputTokens        int     `json:"output_tokens"`
+	CacheReadTokens     int     `json:"cache_read_tokens"`
+	CacheCreationTokens int     `json:"cache_creation_tokens"`
+	CostUSD             float64 `json:"cost_usd"`
+	DurationMS          int     `json:"duration_ms"`
+}
+
+// ToRecord converts the current state to a persistable RunRecord.
+func (s *AgentState) ToRecord() RunRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tools := make([]ToolRecord, len(s.ToolHistory))
+	for i, t := range s.ToolHistory {
+		tools[i] = ToolRecord{
+			Name:     t.Name,
+			Input:    truncate(t.Input, 500),
+			Output:   truncate(t.Output, 500),
+			Duration: int(t.Duration.Milliseconds()),
+			IsError:  t.IsError,
+		}
+	}
+
+	return RunRecord{
+		SessionID: s.SessionID,
+		Model:     s.Model,
+		StartedAt: s.StartedAt,
+		EndedAt:   time.Now(),
+		Output:    s.Output.String(),
+		Thinking:  s.Thinking.String(),
+		Tools:     tools,
+		Metrics: MetricsRecord{
+			InputTokens:         s.Metrics.InputTokens,
+			OutputTokens:        s.Metrics.OutputTokens,
+			CacheReadTokens:     s.Metrics.CacheReadTokens,
+			CacheCreationTokens: s.Metrics.CacheCreationTokens,
+			CostUSD:             s.Metrics.CostUSD,
+			DurationMS:          s.Metrics.DurationMS,
+		},
+		Success:  s.Status == StatusComplete,
+		NumTurns: s.NumTurns,
+		ErrorMsg: s.ErrorMsg,
+	}
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
+}
+
 // StreamParser parses Claude's stream-json format and updates AgentState.
 type StreamParser struct {
 	state    *AgentState

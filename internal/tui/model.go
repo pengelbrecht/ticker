@@ -164,9 +164,10 @@ type keyMap struct {
 	SwitchPane key.Binding
 }
 
-// ShortHelp returns bindings for the short help view (single line).
+// ShortHelp returns bindings for the short help view (footer line).
+// Order matches footer format: quit, pause, nav, pane, scroll, help
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.ScrollUp, k.Pause, k.SwitchPane, k.Help, k.Quit}
+	return []key.Binding{k.Quit, k.Pause, k.Down, k.SwitchPane, k.ScrollDn, k.Help}
 }
 
 // FullHelp returns bindings for the full help view (multiple columns).
@@ -917,9 +918,52 @@ func (m Model) renderTaskDetail(task TaskInfo, width, maxHeight int) string {
 }
 
 // renderFooter renders the bottom help hints line.
+// Format: 'q:quit  p:pause  j/k:nav  tab:pane  ^d/u:scroll  ?:help'
+// Dynamic hints based on state:
+// - When paused: 'p:resume' instead of 'p:pause'
+// - When in help overlay: 'esc:close' only
+// - When in completion: 'q:quit' only
 func (m Model) renderFooter() string {
-	helpView := m.help.View(m.keys)
-	return footerStyle.Width(m.width).Render(helpView)
+	keyStyle := footerStyle.Bold(true)
+	descStyle := footerStyle
+
+	// Build hint pairs based on current state
+	var hints []string
+
+	if m.showComplete {
+		// Completion overlay: only quit
+		hints = append(hints, keyStyle.Render("q")+descStyle.Render(":quit"))
+	} else if m.showHelp {
+		// Help overlay: only close hint
+		hints = append(hints, keyStyle.Render("?")+descStyle.Render(":close"))
+	} else {
+		// Normal mode: full hint set
+		hints = append(hints, keyStyle.Render("q")+descStyle.Render(":quit"))
+
+		// Pause/resume based on state
+		if m.paused {
+			hints = append(hints, keyStyle.Render("p")+descStyle.Render(":resume"))
+		} else {
+			hints = append(hints, keyStyle.Render("p")+descStyle.Render(":pause"))
+		}
+
+		hints = append(hints, keyStyle.Render("j/k")+descStyle.Render(":nav"))
+		hints = append(hints, keyStyle.Render("tab")+descStyle.Render(":pane"))
+		hints = append(hints, keyStyle.Render("^d/u")+descStyle.Render(":scroll"))
+		hints = append(hints, keyStyle.Render("?")+descStyle.Render(":help"))
+	}
+
+	// Join with double space separator
+	helpLine := strings.Join(hints, "  ")
+
+	// Center in available width
+	lineWidth := lipgloss.Width(helpLine)
+	padding := (m.width - lineWidth) / 2
+	if padding < 0 {
+		padding = 0
+	}
+
+	return strings.Repeat(" ", padding) + helpLine
 }
 
 // renderHelpOverlay renders the full help modal overlay.
