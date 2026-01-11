@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -54,7 +55,11 @@ type Model struct {
 	viewport viewport.Model
 	tasks    list.Model
 	progress progress.Model
+	spinner  spinner.Model
 	output   string
+
+	// Animation state
+	animFrame int
 
 	// Dimensions
 	width  int
@@ -89,6 +94,11 @@ func New(cfg Config) Model {
 	// Initialize progress bar
 	prog := progress.New(progress.WithDefaultGradient())
 
+	// Initialize spinner for running indicator
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	return Model{
 		epicID:      cfg.EpicID,
 		epicTitle:   cfg.EpicTitle,
@@ -97,6 +107,7 @@ func New(cfg Config) Model {
 		viewport:    vp,
 		tasks:       taskList,
 		progress:    prog,
+		spinner:     sp,
 		keys:        DefaultKeyMap(),
 		focusedPane: PaneOutput,
 		running:     true,
@@ -110,7 +121,7 @@ type tickMsg time.Time
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
-	return tickCmd()
+	return tea.Batch(tickCmd(), m.spinner.Tick)
 }
 
 // tickCmd returns a command that sends a tick every second.
@@ -176,6 +187,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Global keys (work regardless of focus)
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			m.quitting = true
@@ -193,32 +205,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case key.Matches(msg, m.keys.ScrollUp):
-			if m.focusedPane == PaneOutput {
-				m.viewport.LineUp(1)
-			}
-			// Task pane: let list.Update handle j/k
-		case key.Matches(msg, m.keys.ScrollDown):
-			if m.focusedPane == PaneOutput {
-				m.viewport.LineDown(1)
-			}
-			// Task pane: let list.Update handle j/k
-		case key.Matches(msg, m.keys.PageUp):
-			if m.focusedPane == PaneOutput {
-				m.viewport.HalfViewUp()
-			}
-		case key.Matches(msg, m.keys.PageDown):
-			if m.focusedPane == PaneOutput {
-				m.viewport.HalfViewDown()
-			}
-		case key.Matches(msg, m.keys.Top):
-			if m.focusedPane == PaneOutput {
-				m.viewport.GotoTop()
-			}
-		case key.Matches(msg, m.keys.Bottom):
-			if m.focusedPane == PaneOutput {
-				m.viewport.GotoBottom()
-			}
 		case key.Matches(msg, m.keys.Pause):
 			m.paused = !m.paused
 			// Send pause state to engine
@@ -229,7 +215,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Channel full, skip
 				}
 			}
+			return m, nil
 		}
+
+		// Navigation keys - route to focused component
+		if m.focusedPane == PaneOutput {
+			switch {
+			case key.Matches(msg, m.keys.ScrollUp):
+				m.viewport.LineUp(1)
+			case key.Matches(msg, m.keys.ScrollDown):
+				m.viewport.LineDown(1)
+			case key.Matches(msg, m.keys.PageUp):
+				m.viewport.HalfViewUp()
+			case key.Matches(msg, m.keys.PageDown):
+				m.viewport.HalfViewDown()
+			case key.Matches(msg, m.keys.Top):
+				m.viewport.GotoTop()
+			case key.Matches(msg, m.keys.Bottom):
+				m.viewport.GotoBottom()
+			}
+			return m, nil
+		}
+		// Task pane focused - let list handle navigation
+		var cmd tea.Cmd
+		m.tasks, cmd = m.tasks.Update(msg)
+		return m, cmd
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -301,9 +311,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case tickMsg:
-		// Schedule next tick to keep stopwatch updating
+		// Schedule next tick to keep stopwatch updating and drive animations
 		if m.running {
 			cmds = append(cmds, tickCmd())
+			m.animFrame++
+			m.updateAnimFrame() // Update task list animation
+		}
+
+	case spinner.TickMsg:
+		// Update spinner when running
+		if m.running && !m.paused {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			cmds = append(cmds, cmd)
 		}
 	}
 
@@ -312,11 +332,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
 
-	// Update task list when focused
-	if m.focusedPane == PaneTasks {
-		m.tasks, cmd = m.tasks.Update(msg)
-		cmds = append(cmds, cmd)
-	}
+	// Always update task list to handle key events
+	m.tasks, cmd = m.tasks.Update(msg)
+	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
 }

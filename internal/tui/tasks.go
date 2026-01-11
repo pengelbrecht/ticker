@@ -23,6 +23,7 @@ type TaskInfo struct {
 	Status    TaskStatus
 	BlockedBy []string
 	IsCurrent bool
+	AnimFrame int // For pulsing animation
 }
 
 // TasksUpdateMsg updates the task list.
@@ -38,17 +39,21 @@ type taskItem struct {
 // Status icons
 var (
 	iconOpen       = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("○")
-	iconInProgress = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("◐")
 	iconClosed     = lipgloss.NewStyle().Foreground(lipgloss.Color("78")).Render("●")
 	iconBlocked    = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("⊘")
 	currentMarker  = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Render("▶")
+
+	// Pulsing colors for in-progress indicator
+	pulseColors = []lipgloss.Color{"214", "215", "216", "215"}
 )
 
 func (t taskItem) Title() string {
 	icon := iconOpen
 	switch t.info.Status {
 	case TaskStatusInProgress:
-		icon = iconInProgress
+		// Pulsing color for in-progress tasks
+		colorIdx := t.info.AnimFrame % len(pulseColors)
+		icon = lipgloss.NewStyle().Foreground(pulseColors[colorIdx]).Render("◐")
 	case TaskStatusClosed:
 		icon = iconClosed
 	}
@@ -58,10 +63,11 @@ func (t taskItem) Title() string {
 		icon = iconBlocked
 	}
 
-	// Show current marker
+	// Show current marker with pulse effect
 	prefix := "  "
 	if t.info.IsCurrent {
-		prefix = currentMarker + " "
+		colorIdx := t.info.AnimFrame % len(pulseColors)
+		prefix = lipgloss.NewStyle().Foreground(pulseColors[colorIdx]).Bold(true).Render("▶") + " "
 	}
 
 	return fmt.Sprintf("%s%s [%s] %s", prefix, icon, t.info.ID, t.info.Title)
@@ -93,6 +99,18 @@ func (m *Model) markCurrentTask(taskID string) {
 	for i, item := range items {
 		if ti, ok := item.(taskItem); ok {
 			ti.info.IsCurrent = ti.info.ID == taskID
+			items[i] = ti
+		}
+	}
+	m.tasks.SetItems(items)
+}
+
+// updateAnimFrame updates the animation frame for all tasks (for pulsing effect).
+func (m *Model) updateAnimFrame() {
+	items := m.tasks.Items()
+	for i, item := range items {
+		if ti, ok := item.(taskItem); ok {
+			ti.info.AnimFrame = m.animFrame
 			items[i] = ti
 		}
 	}

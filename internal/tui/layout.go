@@ -213,7 +213,15 @@ func (m Model) renderTaskPanel(height int) string {
 
 // renderOutputPanel renders the agent output panel.
 func (m Model) renderOutputPanel(width, height int) string {
-	title := panelTitleStyle.Render("Agent Output")
+	// Title with spinner when running
+	var title string
+	if m.running && !m.paused {
+		title = panelTitleStyle.Render("Agent Output " + m.spinner.View() + " Running...")
+	} else if m.paused {
+		title = panelTitleStyle.Render("Agent Output " + pausedStyle.Render("⏸ Paused"))
+	} else {
+		title = panelTitleStyle.Render("Agent Output")
+	}
 
 	// Update viewport dimensions
 	m.viewport.Width = width - 4
