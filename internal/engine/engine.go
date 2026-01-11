@@ -221,7 +221,13 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// No more tasks - epic complete
 		if task == nil {
 			state.signal = SignalComplete
-			return state.toResult("all tasks completed"), nil
+			// Close the epic
+			reason := "all tasks completed"
+			if state.iteration == 0 {
+				reason = "no tasks found"
+			}
+			_ = e.ticks.CloseEpic(config.EpicID, reason)
+			return state.toResult(reason), nil
 		}
 
 		// Run iteration
@@ -254,6 +260,8 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 
 			switch iterResult.Signal {
 			case SignalComplete:
+				// Close the epic when agent signals complete
+				_ = e.ticks.CloseEpic(config.EpicID, "completed by agent")
 				return state.toResult("epic complete (COMPLETE signal)"), nil
 			case SignalEject:
 				return state.toResult(fmt.Sprintf("agent ejected: %s", iterResult.SignalReason)), nil
