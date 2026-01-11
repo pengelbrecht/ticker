@@ -16,30 +16,39 @@ func init() {
 
 // keyMap defines all keybindings for the TUI.
 type keyMap struct {
+	// Navigation
 	Up       key.Binding
 	Down     key.Binding
 	ScrollUp key.Binding
 	ScrollDn key.Binding
 	Top      key.Binding
 	Bottom   key.Binding
-	Quit     key.Binding
+	PageUp   key.Binding
+	PageDown key.Binding
+
+	// Actions
+	Quit       key.Binding
+	Help       key.Binding
+	Pause      key.Binding
+	SwitchPane key.Binding
 }
 
 // ShortHelp returns bindings for the short help view (single line).
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.ScrollUp, k.Quit}
+	return []key.Binding{k.Up, k.ScrollUp, k.Pause, k.SwitchPane, k.Help, k.Quit}
 }
 
 // FullHelp returns bindings for the full help view (multiple columns).
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down},
-		{k.ScrollUp, k.ScrollDn, k.Top, k.Bottom},
-		{k.Quit},
+		{k.Up, k.Down, k.Top, k.Bottom},
+		{k.ScrollUp, k.ScrollDn, k.PageUp, k.PageDown},
+		{k.Pause, k.SwitchPane, k.Help, k.Quit},
 	}
 }
 
 var defaultKeyMap = keyMap{
+	// Navigation
 	Up: key.NewBinding(
 		key.WithKeys("k", "up"),
 		key.WithHelp("j/k", "move"),
@@ -64,9 +73,31 @@ var defaultKeyMap = keyMap{
 		key.WithKeys("G"),
 		key.WithHelp("g/G", "top/bottom"),
 	),
+	PageUp: key.NewBinding(
+		key.WithKeys("pgup"),
+		key.WithHelp("pgup/dn", "page"),
+	),
+	PageDown: key.NewBinding(
+		key.WithKeys("pgdown"),
+		key.WithHelp("pgup/dn", "page"),
+	),
+
+	// Actions
 	Quit: key.NewBinding(
 		key.WithKeys("q", "ctrl+c"),
 		key.WithHelp("q", "quit"),
+	),
+	Help: key.NewBinding(
+		key.WithKeys("?"),
+		key.WithHelp("?", "help"),
+	),
+	Pause: key.NewBinding(
+		key.WithKeys("p"),
+		key.WithHelp("p", "pause"),
+	),
+	SwitchPane: key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "switch pane"),
 	),
 }
 
@@ -165,6 +196,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// TODO: go to top
 		case "G":
 			// TODO: go to bottom
+		case "pgup":
+			// TODO: page up in viewport
+		case "pgdown":
+			// TODO: page down in viewport
+		case "?":
+			// TODO: toggle help modal
+		case "p":
+			// TODO: toggle pause/resume
+		case "tab":
+			// TODO: cycle focus between panes
 		}
 	}
 
