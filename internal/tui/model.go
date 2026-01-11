@@ -368,6 +368,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case tea.KeyMsg:
+		// If help overlay is showing, any key closes it (except q/ctrl+c which quit)
+		if m.showHelp {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			default:
+				m.showHelp = false
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -967,23 +978,177 @@ func (m Model) renderFooter() string {
 }
 
 // renderHelpOverlay renders the full help modal overlay.
+// Layout:
+// ┌─ Keyboard Shortcuts ─────────────────┐
+// │                                      │
+// │  Navigation                          │
+// │  j/k, ↑/↓     Move up/down           │
+// │  g/G          Top/bottom             │
+// │  ^d/^u        Page down/up           │
+// │  tab          Switch pane            │
+// │                                      │
+// │  Actions                             │
+// │  p            Pause/Resume           │
+// │  ?            Toggle help            │
+// │  q            Quit                   │
+// │                                      │
+// │  Press any key to close              │
+// └──────────────────────────────────────┘
 func (m Model) renderHelpOverlay() string {
-	// Create centered help box
-	helpContent := m.help.View(m.keys)
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(colorBlue).Width(14)
+	descStyle := dimStyle
+	sectionStyle := headerStyle
 
+	// Build help content
+	var lines []string
+
+	// Navigation section
+	lines = append(lines, sectionStyle.Render("Navigation"))
+	lines = append(lines, keyStyle.Render("j/k, ↑/↓")+descStyle.Render("Move up/down"))
+	lines = append(lines, keyStyle.Render("g/G")+descStyle.Render("Top/bottom"))
+	lines = append(lines, keyStyle.Render("^d/^u")+descStyle.Render("Page down/up"))
+	lines = append(lines, keyStyle.Render("tab")+descStyle.Render("Switch pane"))
+	lines = append(lines, "")
+
+	// Actions section
+	lines = append(lines, sectionStyle.Render("Actions"))
+	lines = append(lines, keyStyle.Render("p")+descStyle.Render("Pause/Resume"))
+	lines = append(lines, keyStyle.Render("?")+descStyle.Render("Toggle help"))
+	lines = append(lines, keyStyle.Render("q")+descStyle.Render("Quit"))
+	lines = append(lines, "")
+
+	// Footer
+	lines = append(lines, dimStyle.Render("Press any key to close"))
+
+	helpContent := strings.Join(lines, "\n")
+
+	// Box with rounded border, pink header, surface background
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorPink).
+		BorderTop(true).
+		BorderBottom(true).
+		BorderLeft(true).
+		BorderRight(true).
+		Background(colorSurface).
 		Padding(1, 2).
-		Width(60)
+		Width(40)
 
 	title := headerStyle.Render("Keyboard Shortcuts")
-	content := lipgloss.JoinVertical(lipgloss.Left, title, "", helpContent, "", dimStyle.Render("Press ? to close"))
+	content := lipgloss.JoinVertical(lipgloss.Left, title, "", helpContent)
 
 	box := boxStyle.Render(content)
 
-	// Center in viewport
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	// Render the base view (without help overlay) and place the modal on top
+	baseView := m.renderBaseView()
+	return placeOverlay(box, baseView, m.width, m.height)
+}
+
+// renderBaseView renders the normal 3-pane layout without any overlays.
+func (m Model) renderBaseView() string {
+	// Build main layout
+	statusBar := m.renderStatusBar()
+	footer := m.renderFooter()
+
+	// Calculate remaining height for panes
+	statusBarHeight := statusBarMinRows
+	if len(m.tasks) > 0 {
+		statusBarHeight++
+	}
+	contentHeight := m.height - statusBarHeight - footerRows - 2
+
+	// Render task and output panes
+	taskPane := m.renderTaskPane(contentHeight)
+	outputPane := m.renderOutputPane(contentHeight)
+
+	// Join task and output panes horizontally
+	panes := lipgloss.JoinHorizontal(lipgloss.Top, taskPane, outputPane)
+
+	// Join everything vertically
+	return lipgloss.JoinVertical(lipgloss.Left, statusBar, panes, footer)
+}
+
+// placeOverlay centers the foreground (fg) modal over the background (bg),
+// preserving ANSI escape codes in both layers.
+func placeOverlay(fg, bg string, width, height int) string {
+	// Split background into lines
+	bgLines := strings.Split(bg, "\n")
+
+	// Pad or trim background to match expected height
+	for len(bgLines) < height {
+		bgLines = append(bgLines, strings.Repeat(" ", width))
+	}
+	if len(bgLines) > height {
+		bgLines = bgLines[:height]
+	}
+
+	// Split foreground into lines and calculate dimensions
+	fgLines := strings.Split(fg, "\n")
+	fgHeight := len(fgLines)
+
+	// Calculate fg width (max visible width of any line)
+	fgWidth := 0
+	for _, line := range fgLines {
+		w := lipgloss.Width(line)
+		if w > fgWidth {
+			fgWidth = w
+		}
+	}
+
+	// Calculate centering offsets
+	startRow := (height - fgHeight) / 2
+	startCol := (width - fgWidth) / 2
+	if startRow < 0 {
+		startRow = 0
+	}
+	if startCol < 0 {
+		startCol = 0
+	}
+
+	// Overlay fg onto bg
+	result := make([]string, len(bgLines))
+	for i, bgLine := range bgLines {
+		if i >= startRow && i < startRow+fgHeight {
+			fgLineIdx := i - startRow
+			if fgLineIdx < len(fgLines) {
+				fgLine := fgLines[fgLineIdx]
+				fgLineWidth := lipgloss.Width(fgLine)
+
+				// Build the overlaid line:
+				// [left bg portion][fg line][right bg portion]
+				bgWidth := lipgloss.Width(bgLine)
+
+				// Left portion of background (before fg starts)
+				leftEnd := startCol
+				if leftEnd > bgWidth {
+					leftEnd = bgWidth
+				}
+				leftPart := ansi.Truncate(bgLine, leftEnd, "")
+
+				// Pad left part if needed
+				leftPartWidth := lipgloss.Width(leftPart)
+				if leftPartWidth < startCol {
+					leftPart += strings.Repeat(" ", startCol-leftPartWidth)
+				}
+
+				// Right portion of background (after fg ends)
+				rightStart := startCol + fgLineWidth
+				var rightPart string
+				if rightStart < bgWidth {
+					// Cut the background from the right start position
+					rightPart = ansi.Cut(bgLine, rightStart, bgWidth)
+				}
+
+				result[i] = leftPart + fgLine + rightPart
+			} else {
+				result[i] = bgLine
+			}
+		} else {
+			result[i] = bgLine
+		}
+	}
+
+	return strings.Join(result, "\n")
 }
 
 // renderCompleteOverlay renders the run complete modal overlay.
@@ -1033,5 +1198,7 @@ func (m Model) renderCompleteOverlay() string {
 
 	box := boxStyle.Render(content)
 
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	// Render the base view and place the modal on top
+	baseView := m.renderBaseView()
+	return placeOverlay(box, baseView, m.width, m.height)
 }
