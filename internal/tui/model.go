@@ -426,6 +426,10 @@ type Model struct {
 	liveCacheCreationTokens int
 	liveModel               string // model name from streaming
 
+	// Live agent status (updated via AgentStatusMsg)
+	liveStatus         agent.RunStatus // current agent status
+	liveActiveToolName string          // name of active tool (when status is tool_use)
+
 	// Layout
 	width       int // clamped width for rendering (min: minWidth)
 	height      int // clamped height for rendering (min: minHeight)
@@ -634,7 +638,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Clear output, thinking, tool state, and metrics for new iteration
+		// Clear output, thinking, tool state, metrics, and status for new iteration
 		m.output = ""
 		m.thinking = ""
 		m.activeTool = nil
@@ -644,6 +648,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.liveCacheReadTokens = 0
 		m.liveCacheCreationTokens = 0
 		m.liveModel = ""
+		m.liveStatus = ""
+		m.liveActiveToolName = ""
 		if m.viewingTask == "" {
 			m.viewport.SetContent("")
 		}
@@ -754,6 +760,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Name:      msg.Name,
 			StartedAt: time.Now(),
 		}
+		// Track active tool name for status indicator
+		m.liveActiveToolName = msg.Name
 		// Update viewport to show active tool
 		if m.viewingTask == "" {
 			m.updateOutputViewport()
@@ -784,9 +792,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case AgentStatusMsg:
-		// Status updates are informational; the TUI reacts to content changes
-		// Status is displayed via agentState when rendering the status bar
-		// Future: could show status indicator in output pane header
+		// Update live status for output pane header indicator
+		m.liveStatus = msg.Status
+		// Clear active tool name when not in tool_use status
+		if msg.Status != agent.StatusToolUse {
+			m.liveActiveToolName = ""
+		}
 
 	case tea.KeyMsg:
 		// Priority 1: If complete overlay is showing, any key except 'q' dismisses, 'q' quits
@@ -1220,6 +1231,46 @@ func (m *Model) renderToolHistoryLine(tool ToolActivityInfo, width int) string {
 	return fmt.Sprintf("  %s %s %s", icon, toolName, durationStr)
 }
 
+// renderStatusIndicator returns a styled status indicator for the output pane header.
+// Icons:
+//   - thinking: 🧠 (brain, dimmed)
+//   - writing: ✏ (pencil, blue)
+//   - tool_use: 🔧 tool_name (wrench + tool name, blue)
+//   - complete: ✓ (checkmark, green)
+//   - error: ✗ (x, red)
+//   - starting/default: spinner (blue)
+func (m Model) renderStatusIndicator() string {
+	switch m.liveStatus {
+	case agent.StatusThinking:
+		// Brain icon, dimmed
+		return dimStyle.Render("🧠 thinking")
+	case agent.StatusWriting:
+		// Pencil icon, blue
+		return lipgloss.NewStyle().Foreground(colorBlue).Render("✏ writing")
+	case agent.StatusToolUse:
+		// Wrench icon + tool name, blue
+		toolName := m.liveActiveToolName
+		if toolName == "" {
+			toolName = "tool"
+		}
+		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("🔧 " + toolName)
+	case agent.StatusComplete:
+		// Checkmark, green
+		return lipgloss.NewStyle().Foreground(colorGreen).Render("✓ complete")
+	case agent.StatusError:
+		// X icon, red
+		return lipgloss.NewStyle().Foreground(colorRed).Render("✗ error")
+	case agent.StatusStarting:
+		// Spinner for starting
+		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		spinner := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinnerFrames[m.animFrame%len(spinnerFrames)])
+		return spinner + dimStyle.Render(" starting")
+	default:
+		// No status set - return empty
+		return ""
+	}
+}
+
 // Layout constants
 const (
 	taskPaneWidth    = 35 // Fixed width for task list pane
@@ -1603,11 +1654,17 @@ func (m Model) renderOutputPane(height int) string {
 		header = hdrStyle.Render(headerTitle)
 	}
 
-	// Add spinner to header if actively running (only for live output)
+	// Add status indicator to header for live output (only when running)
 	if m.running && !m.paused && m.viewingTask == "" {
-		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-		spinner := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinnerFrames[m.animFrame%len(spinnerFrames)])
-		header = spinner + " " + header
+		statusIndicator := m.renderStatusIndicator()
+		if statusIndicator != "" {
+			header = header + " │ " + statusIndicator
+		} else {
+			// Fallback to spinner if no status set yet
+			spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+			spinner := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinnerFrames[m.animFrame%len(spinnerFrames)])
+			header = spinner + " " + header
+		}
 	}
 
 	// Add hint when viewing historical output

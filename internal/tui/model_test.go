@@ -2451,3 +2451,149 @@ func TestEnterKey_FallsBackToLegacyOutput(t *testing.T) {
 		t.Error("expected viewingRunRecord to be false when showing legacy output")
 	}
 }
+
+func TestRenderStatusIndicator(t *testing.T) {
+	testCases := []struct {
+		name               string
+		status             agent.RunStatus
+		activeToolName     string
+		expectedSubstrings []string
+	}{
+		{
+			name:               "thinking status",
+			status:             agent.StatusThinking,
+			expectedSubstrings: []string{"🧠", "thinking"},
+		},
+		{
+			name:               "writing status",
+			status:             agent.StatusWriting,
+			expectedSubstrings: []string{"✏", "writing"},
+		},
+		{
+			name:               "tool_use status with tool name",
+			status:             agent.StatusToolUse,
+			activeToolName:     "Read",
+			expectedSubstrings: []string{"🔧", "Read"},
+		},
+		{
+			name:               "tool_use status without tool name",
+			status:             agent.StatusToolUse,
+			activeToolName:     "",
+			expectedSubstrings: []string{"🔧", "tool"},
+		},
+		{
+			name:               "complete status",
+			status:             agent.StatusComplete,
+			expectedSubstrings: []string{"✓", "complete"},
+		},
+		{
+			name:               "error status",
+			status:             agent.StatusError,
+			expectedSubstrings: []string{"✗", "error"},
+		},
+		{
+			name:               "starting status",
+			status:             agent.StatusStarting,
+			expectedSubstrings: []string{"starting"},
+		},
+		{
+			name:               "empty status",
+			status:             "",
+			expectedSubstrings: []string{}, // should return empty
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := New(Config{})
+			m.liveStatus = tc.status
+			m.liveActiveToolName = tc.activeToolName
+
+			result := m.renderStatusIndicator()
+
+			// If no expected substrings, result should be empty
+			if len(tc.expectedSubstrings) == 0 {
+				if result != "" {
+					t.Errorf("expected empty result for status %q, got '%s'", tc.status, result)
+				}
+				return
+			}
+
+			// Check all expected substrings are present
+			for _, substr := range tc.expectedSubstrings {
+				if !strings.Contains(result, substr) {
+					t.Errorf("expected result to contain '%s' for status %q, got '%s'", substr, tc.status, result)
+				}
+			}
+		})
+	}
+}
+
+func TestAgentStatusMsg_UpdatesLiveStatus(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Update with thinking status
+	newM, _ := m.Update(AgentStatusMsg{Status: agent.StatusThinking})
+	m = newM.(Model)
+
+	if m.liveStatus != agent.StatusThinking {
+		t.Errorf("expected liveStatus to be %q, got %q", agent.StatusThinking, m.liveStatus)
+	}
+
+	// Update with tool_use status
+	m.liveActiveToolName = "Read"
+	newM, _ = m.Update(AgentStatusMsg{Status: agent.StatusToolUse})
+	m = newM.(Model)
+
+	if m.liveStatus != agent.StatusToolUse {
+		t.Errorf("expected liveStatus to be %q, got %q", agent.StatusToolUse, m.liveStatus)
+	}
+	// Active tool name should be preserved
+	if m.liveActiveToolName != "Read" {
+		t.Errorf("expected liveActiveToolName to be 'Read', got '%s'", m.liveActiveToolName)
+	}
+
+	// Update to writing status - should clear tool name
+	newM, _ = m.Update(AgentStatusMsg{Status: agent.StatusWriting})
+	m = newM.(Model)
+
+	if m.liveStatus != agent.StatusWriting {
+		t.Errorf("expected liveStatus to be %q, got %q", agent.StatusWriting, m.liveStatus)
+	}
+	if m.liveActiveToolName != "" {
+		t.Errorf("expected liveActiveToolName to be cleared, got '%s'", m.liveActiveToolName)
+	}
+}
+
+func TestAgentToolStartMsg_UpdatesActiveToolName(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	newM, _ := m.Update(AgentToolStartMsg{ID: "tool-1", Name: "Edit"})
+	m = newM.(Model)
+
+	if m.liveActiveToolName != "Edit" {
+		t.Errorf("expected liveActiveToolName to be 'Edit', got '%s'", m.liveActiveToolName)
+	}
+}
+
+func TestIterationStart_ResetsStatusFields(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.liveStatus = agent.StatusWriting
+	m.liveActiveToolName = "Read"
+
+	newM, _ := m.Update(IterationStartMsg{Iteration: 1, TaskID: "abc", TaskTitle: "Test"})
+	m = newM.(Model)
+
+	if m.liveStatus != "" {
+		t.Errorf("expected liveStatus to be reset, got %q", m.liveStatus)
+	}
+	if m.liveActiveToolName != "" {
+		t.Errorf("expected liveActiveToolName to be reset, got '%s'", m.liveActiveToolName)
+	}
+}

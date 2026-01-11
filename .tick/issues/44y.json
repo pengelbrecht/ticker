@@ -2,7 +2,7 @@
   "id": "44y",
   "title": "Add agent status indicator to output pane",
   "description": "Add visual status indicator in output pane header showing current agent status: thinking (brain icon, dimmed), writing (pencil icon), tool_use (tool icon + tool name), complete (checkmark), error (X icon). Status comes from AgentState.Status.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "n26",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:43:00.077616Z",
-  "updated_at": "2026-01-11T20:43:00.077616Z"
+  "updated_at": "2026-01-11T22:06:51.295329Z",
+  "closed_at": "2026-01-11T22:06:51.295329Z",
+  "closed_reason": "Added agent status indicator to output pane header. New fields liveStatus and liveActiveToolName in Model track current state. renderStatusIndicator() renders icons: 🧠 thinking (dimmed), ✏ writing (blue), 🔧 tool_name (blue), ✓ complete (green), ✗ error (red). Status appears in header as 'Agent Output │ 🔧 Read'. Tests added for all status types and message handlers."
 }
