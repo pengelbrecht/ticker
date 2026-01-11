@@ -262,6 +262,128 @@ ticker/
  1-9 focus epic  m merge completed  k kill epic  + add epic  esc back
 ```
 
+### Epic Switcher (Parallel Mode)
+
+When running multiple epics in parallel, the TUI needs to manage focus between them. The main dashboard always shows one "active" epic, while others run in the background.
+
+**Model State for Multi-Epic:**
+
+```go
+type Model struct {
+    // Multi-epic state
+    engines      map[string]*engine.Engine  // epic ID -> engine instance
+    epicOrder    []string                   // ordered list of epic IDs (for 1-9 keys)
+    activeEpic   string                     // currently displayed epic
+
+    // Per-epic state (keyed by epic ID)
+    outputs      map[string]*OutputBuffer   // streaming output per epic
+    tasks        map[string][]ticks.Task    // task list per epic
+    iterations   map[string]int             // current iteration per epic
+
+    // Shared state
+    budget       *budget.Tracker            // aggregate budget across all epics
+
+    // ... existing pane state (renders activeEpic data)
+}
+```
+
+**Message Routing:**
+
+All engine messages are tagged with their source epic:
+
+```go
+// Wrapper for all engine-originated messages
+type EngineMsg struct {
+    EpicID string
+    Inner  tea.Msg  // IterationStartMsg, OutputMsg, SignalMsg, etc.
+}
+
+// In Update(), route messages to appropriate state
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch msg := msg.(type) {
+    case EngineMsg:
+        // Always update state for the source epic
+        m.updateEpicState(msg.EpicID, msg.Inner)
+
+        // Only trigger view refresh if it's the active epic
+        if msg.EpicID == m.activeEpic {
+            return m.handleActiveEpicMsg(msg.Inner)
+        }
+        return m, nil
+    }
+}
+```
+
+**Key Bindings:**
+
+| Key | Action | Context |
+|-----|--------|---------|
+| `1-9` | Switch to epic by index | Any view |
+| `[` | Previous epic | Any view |
+| `]` | Next epic | Any view |
+| `w` | Open worktrees view | Dashboard |
+| `Tab` | Cycle panes (existing) | Dashboard |
+
+**Switching Behavior:**
+
+When switching epics:
+1. **Instant switch** - No animation or delay
+2. **State preserved** - Output buffer, scroll position, pane focus retained per-epic
+3. **Background continues** - Non-active epics keep running, accumulating output
+4. **Status bar updates** - Shows active epic ID and quick status of others
+
+**Status Indicators (Header Bar):**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ticker v0.1.0    [1:h8d ●]  [2:fbv ↻]  [3:5b8 ✓]    $7.35 total │
+│ Agent: claude    Epic: h8d (Parallel test execution)            │
+```
+
+Legend: `●` active/focused, `↻` running in background, `✓` complete, `⏸` paused, `✗` failed
+
+**Output Buffering:**
+
+Each epic maintains its own circular output buffer:
+
+```go
+type OutputBuffer struct {
+    lines      []string
+    maxLines   int        // e.g., 10000 lines
+    scrollPos  int        // preserved when switching away
+    following  bool       // auto-scroll to bottom
+}
+```
+
+When switching to an epic:
+- If `following` was true, scroll to latest output
+- If user had scrolled up, restore exact scroll position
+- New output since last view is highlighted briefly (optional)
+
+**Notification System:**
+
+Background epics can surface important events:
+
+```go
+type Notification struct {
+    EpicID    string
+    Level     NotificationLevel  // Info, Warning, Error, Complete
+    Message   string
+    Timestamp time.Time
+}
+
+// Shown in status bar or toast overlay
+// "fbv: COMPLETE - all tasks done"
+// "5b8: BLOCKED - missing API key"
+```
+
+**Worktree View Integration:**
+
+The `w` key worktrees view serves as a "bird's eye" overview, while number keys provide quick switching without leaving dashboard context. Users can:
+1. Press `w` to see all epics at a glance
+2. Press `1-9` to jump directly to an epic from any view
+3. Use `[`/`]` to cycle through epics sequentially
+
 ### Dependency Graph View (`g` key)
 
 ```
