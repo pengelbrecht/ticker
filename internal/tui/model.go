@@ -320,6 +320,27 @@ var (
 	typeFeatureStyle = lipgloss.NewStyle().Foreground(colorTeal)
 )
 
+// pulsingStyle returns a style with a pulsing color based on animation frame.
+// Animation cycle (4 frames at 1fps):
+// Frame 0: #FAB387 (peach)
+// Frame 1: #F9E2AF (yellow)
+// Frame 2: #FAB387 (peach)
+// Frame 3: #F38BA8 (red-ish)
+// Only animates when running is true; otherwise returns static orange (peach).
+func pulsingStyle(animFrame int, running bool) lipgloss.Style {
+	if !running {
+		// Static orange when not running (paused/stopped)
+		return lipgloss.NewStyle().Foreground(colorPeach)
+	}
+	colors := []lipgloss.Color{
+		lipgloss.Color("#FAB387"), // Frame 0: peach
+		lipgloss.Color("#F9E2AF"), // Frame 1: yellow
+		lipgloss.Color("#FAB387"), // Frame 2: peach
+		lipgloss.Color("#F38BA8"), // Frame 3: red-ish
+	}
+	return lipgloss.NewStyle().Foreground(colors[animFrame%4])
+}
+
 // NewModel creates a new TUI model.
 func NewModel() Model {
 	h := help.New()
@@ -704,11 +725,14 @@ func (m Model) renderStatusBar() string {
 		leftContent += ": " + m.epicTitle
 	}
 
-	// Right side: status indicator
+	// Right side: status indicator with pulsing animation when running
 	var statusIndicator string
 	if m.running && !m.paused {
-		statusIndicator = lipgloss.NewStyle().Foreground(colorGreen).Render("● RUNNING")
+		// Pulsing indicator when actively running
+		pulseStyle := pulsingStyle(m.animFrame, true)
+		statusIndicator = pulseStyle.Render("●") + " " + lipgloss.NewStyle().Foreground(colorGreen).Render("RUNNING")
 	} else if m.paused {
+		// Static orange when paused
 		statusIndicator = lipgloss.NewStyle().Foreground(colorPeach).Render("⏸ PAUSED")
 	} else {
 		statusIndicator = lipgloss.NewStyle().Foreground(colorGray).Render("■ STOPPED")
@@ -870,28 +894,29 @@ func (m Model) renderTaskPane(height int) string {
 
 // renderTaskLine formats a single task line with cursor, icon, ID, and title.
 // Format: '▶ ● [id] Task title here...'
-// - Selection cursor: ▶ if selected, space otherwise
-// - Status icon: ○/●/✓/⊘ with appropriate color
+// - Selection cursor: ▶ if selected, space otherwise (pulsing for current task)
+// - Status icon: ○/●/✓/⊘ with appropriate color (pulsing for in-progress)
 // - ID in brackets
 // - Title truncated with ... if too long
 func (m Model) renderTaskLine(task TaskInfo, selected bool, maxWidth int) string {
-	// Selection cursor
+	// Selection cursor - pulsing for current task when running
 	var cursor string
 	if selected {
-		cursor = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("▶")
+		if task.IsCurrent && m.running {
+			// Pulsing cursor for current task
+			cursor = pulsingStyle(m.animFrame, m.running).Bold(true).Render("▶")
+		} else {
+			cursor = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("▶")
+		}
 	} else {
 		cursor = " "
 	}
 
-	// Status icon with pulsing effect for current executing task
+	// Status icon with pulsing effect for in-progress tasks
 	var icon string
-	if task.IsCurrent && task.Status == TaskStatusInProgress {
-		// Pulsing indicator: alternate between bright and dim based on animFrame
-		if m.animFrame%2 == 0 {
-			icon = lipgloss.NewStyle().Foreground(colorBlueAlt).Bold(true).Render("●")
-		} else {
-			icon = lipgloss.NewStyle().Foreground(colorBlue).Render("●")
-		}
+	if task.Status == TaskStatusInProgress {
+		// Pulsing indicator for in-progress tasks
+		icon = pulsingStyle(m.animFrame, m.running).Render("●")
 	} else {
 		icon = task.StatusIcon()
 	}
