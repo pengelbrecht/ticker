@@ -296,3 +296,159 @@ func join(items []string, sep string) []string {
 	}
 	return result
 }
+
+// Help overlay styles
+var (
+	helpOverlayStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(primaryColor).
+				Padding(1, 2).
+				Background(lipgloss.Color("235"))
+
+	helpTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(primaryColor).
+			MarginBottom(1)
+
+	helpKeyStyle = lipgloss.NewStyle().
+			Foreground(secondaryColor).
+			Bold(true).
+			Width(12)
+
+	helpDescStyle = lipgloss.NewStyle().
+			Foreground(mutedColor)
+)
+
+// renderHelpOverlay renders a help overlay on top of the main view.
+func (m Model) renderHelpOverlay(background string) string {
+	// Build help content
+	title := helpTitleStyle.Render("Keyboard Shortcuts")
+
+	bindings := []struct {
+		key  string
+		desc string
+	}{
+		{"q", "Quit ticker"},
+		{"p", "Pause/resume agent"},
+		{"j/k", "Scroll output up/down"},
+		{"g/G", "Go to top/bottom"},
+		{"PgUp/PgDn", "Page up/down"},
+		{"Tab", "Switch pane focus"},
+		{"?", "Toggle this help"},
+	}
+
+	var lines []string
+	for _, b := range bindings {
+		line := helpKeyStyle.Render(b.key) + helpDescStyle.Render(b.desc)
+		lines = append(lines, line)
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
+	help := helpOverlayStyle.Render(lipgloss.JoinVertical(lipgloss.Left, title, content))
+
+	// Center the overlay
+	helpWidth := lipgloss.Width(help)
+	helpHeight := lipgloss.Height(help)
+
+	x := (m.width - helpWidth) / 2
+	y := (m.height - helpHeight) / 2
+
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+
+	// Place overlay on background
+	return placeOverlay(x, y, help, background)
+}
+
+// placeOverlay places a foreground string on top of a background at the given position.
+func placeOverlay(x, y int, fg, bg string) string {
+	bgLines := splitLines(bg)
+	fgLines := splitLines(fg)
+
+	// Ensure background has enough lines
+	for len(bgLines) < y+len(fgLines) {
+		bgLines = append(bgLines, "")
+	}
+
+	// Overlay foreground onto background
+	for i, fgLine := range fgLines {
+		bgIdx := y + i
+		if bgIdx < 0 || bgIdx >= len(bgLines) {
+			continue
+		}
+
+		bgLine := bgLines[bgIdx]
+
+		// Pad background line if needed
+		for lipgloss.Width(bgLine) < x {
+			bgLine += " "
+		}
+
+		// Split background line and insert foreground
+		before := truncateWidth(bgLine, x)
+		after := ""
+		if lipgloss.Width(bgLine) > x+lipgloss.Width(fgLine) {
+			after = substringFromWidth(bgLine, x+lipgloss.Width(fgLine))
+		}
+
+		bgLines[bgIdx] = before + fgLine + after
+	}
+
+	return joinLines(bgLines)
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	lines = append(lines, s[start:])
+	return lines
+}
+
+func joinLines(lines []string) string {
+	result := ""
+	for i, line := range lines {
+		if i > 0 {
+			result += "\n"
+		}
+		result += line
+	}
+	return result
+}
+
+func truncateWidth(s string, w int) string {
+	if w <= 0 {
+		return ""
+	}
+	result := ""
+	width := 0
+	for _, r := range s {
+		rw := lipgloss.Width(string(r))
+		if width+rw > w {
+			break
+		}
+		result += string(r)
+		width += rw
+	}
+	return result
+}
+
+func substringFromWidth(s string, w int) string {
+	width := 0
+	for i, r := range s {
+		if width >= w {
+			return s[i:]
+		}
+		width += lipgloss.Width(string(r))
+	}
+	return ""
+}

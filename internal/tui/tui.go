@@ -4,11 +4,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+// FocusedPane indicates which pane has focus.
+type FocusedPane int
+
+const (
+	PaneOutput FocusedPane = iota
+	PaneTasks
 )
 
 // Model is the main TUI model for ticker.
@@ -24,6 +33,14 @@ type Model struct {
 	running   bool
 	quitting  bool
 	err       error
+	paused    bool
+	showHelp  bool
+
+	// Focus
+	focusedPane FocusedPane
+
+	// Keys
+	keys KeyMap
 
 	// Budget
 	cost       float64
@@ -69,15 +86,17 @@ func New(cfg Config) Model {
 	prog := progress.New(progress.WithDefaultGradient())
 
 	return Model{
-		epicID:    cfg.EpicID,
-		epicTitle: cfg.EpicTitle,
-		maxCost:   cfg.MaxCost,
-		maxIter:   cfg.MaxIteration,
-		viewport:  vp,
-		tasks:     taskList,
-		progress:  prog,
-		running:   true,
-		startTime: time.Now(),
+		epicID:      cfg.EpicID,
+		epicTitle:   cfg.EpicTitle,
+		maxCost:     cfg.MaxCost,
+		maxIter:     cfg.MaxIteration,
+		viewport:    vp,
+		tasks:       taskList,
+		progress:    prog,
+		keys:        DefaultKeyMap(),
+		focusedPane: PaneOutput,
+		running:     true,
+		startTime:   time.Now(),
 	}
 }
 
@@ -131,10 +150,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
+		// Handle help overlay first
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+
+		switch {
+		case key.Matches(msg, m.keys.Quit):
 			m.quitting = true
 			return m, tea.Quit
+
+		case key.Matches(msg, m.keys.Help):
+			m.showHelp = !m.showHelp
+			return m, nil
+
+		case key.Matches(msg, m.keys.SwitchPane):
+			if m.focusedPane == PaneOutput {
+				m.focusedPane = PaneTasks
+			} else {
+				m.focusedPane = PaneOutput
+			}
+			return m, nil
+
+		case key.Matches(msg, m.keys.ScrollUp):
+			if m.focusedPane == PaneOutput {
+				m.viewport.LineUp(1)
+			}
+		case key.Matches(msg, m.keys.ScrollDown):
+			if m.focusedPane == PaneOutput {
+				m.viewport.LineDown(1)
+			}
+		case key.Matches(msg, m.keys.PageUp):
+			if m.focusedPane == PaneOutput {
+				m.viewport.HalfViewUp()
+			}
+		case key.Matches(msg, m.keys.PageDown):
+			if m.focusedPane == PaneOutput {
+				m.viewport.HalfViewDown()
+			}
+		case key.Matches(msg, m.keys.Top):
+			if m.focusedPane == PaneOutput {
+				m.viewport.GotoTop()
+			}
+		case key.Matches(msg, m.keys.Bottom):
+			if m.focusedPane == PaneOutput {
+				m.viewport.GotoBottom()
+			}
+		case key.Matches(msg, m.keys.Pause):
+			m.paused = !m.paused
+			// Note: actual pause logic handled in pwy task
 		}
 
 	case tea.WindowSizeMsg:
@@ -221,11 +286,18 @@ func (m Model) View() string {
 		return "Goodbye!\n"
 	}
 
-	// Use layout functions to compose the view
-	return lipgloss.JoinVertical(lipgloss.Left,
+	// Main view
+	view := lipgloss.JoinVertical(lipgloss.Left,
 		m.renderHeader(),
 		m.renderStatusBar(),
 		m.renderMainContent(),
 		m.renderFooter(),
 	)
+
+	// Show help overlay if active
+	if m.showHelp {
+		view = m.renderHelpOverlay(view)
+	}
+
+	return view
 }
