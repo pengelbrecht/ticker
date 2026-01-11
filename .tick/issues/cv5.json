@@ -1,0 +1,12 @@
+{
+  "id": "cv5",
+  "title": "Phase 1: Core Engine",
+  "description": "Minimal viable Ralph runner with feature parity to ralph-ticker bash script.\n\nClaude Code only, no TUI, no worktrees - just a solid Go foundation.\n\nExit criteria: Can complete an epic autonomously, equivalent to ralph-ticker.sh\n\nSee SPEC.md ## Roadmap \u003e Phase 1 for full details.",
+  "status": "open",
+  "priority": 1,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T09:30:34.260732433Z",
+  "updated_at": "2026-01-11T09:30:34.260732433Z"
+}

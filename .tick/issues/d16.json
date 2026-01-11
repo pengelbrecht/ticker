@@ -1,0 +1,16 @@
+{
+  "id": "d16",
+  "title": "End-to-end test",
+  "description": "Verify ticker can complete an epic autonomously.\n\nCreate a test epic with 2-3 simple tasks:\n- Create a file\n- Modify the file\n- Add a test\n\nRun: ticker run \u003ctest-epic\u003e --max-iterations 10\n\nVerify:\n- All tasks closed in ticks\n- Files created/modified correctly\n- Commits made with proper format\n- Iteration notes added to epic\n- COMPLETE signal detected\n- Exit code 0\n\nDocument any issues found for follow-up.",
+  "status": "open",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "lzd"
+  ],
+  "parent": "cv5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T09:32:08.724351007Z",
+  "updated_at": "2026-01-11T09:32:29.9534666Z"
+}
