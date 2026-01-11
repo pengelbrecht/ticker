@@ -145,6 +145,19 @@ func tickCmd() tea.Cmd {
 	})
 }
 
+// formatDuration formats a duration for display.
+// Under 1 hour: MM:SS (e.g., '5:23')
+// Over 1 hour: H:MM:SS (e.g., '1:23:45')
+func formatDuration(d time.Duration) string {
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+	}
+	return fmt.Sprintf("%d:%02d", m, s)
+}
+
 // keyMap defines all keybindings for the TUI.
 type keyMap struct {
 	// Navigation
@@ -773,17 +786,8 @@ func (m Model) renderStatusBar() string {
 	if m.startTime.IsZero() {
 		elapsed = 0
 	}
-	var timeStr string
-	hours := int(elapsed.Hours())
-	minutes := int(elapsed.Minutes()) % 60
-	seconds := int(elapsed.Seconds()) % 60
-	if hours > 0 {
-		timeStr = fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
-	} else {
-		timeStr = fmt.Sprintf("%d:%02d", minutes, seconds)
-	}
 	timeLabel := dimStyle.Render("Time:")
-	timeValue := " " + timeStr
+	timeValue := " " + formatDuration(elapsed)
 	progressParts = append(progressParts, timeLabel+timeValue)
 
 	// Cost tracking (current/max)
