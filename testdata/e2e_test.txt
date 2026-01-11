@@ -1,0 +1,2 @@
+Hello from E2E test!
+This file was created by ticker.
