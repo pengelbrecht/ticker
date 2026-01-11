@@ -2,7 +2,7 @@
   "id": "0z6",
   "title": "Handle minimum terminal size gracefully",
   "description": "Add minimum size handling:\n\nMinimum dimensions:\n- Width: 60 characters\n- Height: 12 rows\n\nWhen below minimum:\n1. Show warning message instead of TUI:\n   'Terminal too small. Minimum: 60x12, Current: {w}x{h}'\n   'Please resize your terminal.'\n\n2. Set m.ready = false when below minimum\n3. Re-check on each WindowSizeMsg\n4. Return to normal TUI when size adequate\n\nImplementation in View():\nif m.width \u003c 60 || m.height \u003c 12 {\n    return renderSizeWarning(m.width, m.height)\n}\n\nCenter the warning message in available space.\nUse warning color (orange) for the message.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -15,5 +15,7 @@
   "parent": "4pq",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:12:50.457478Z",
-  "updated_at": "2026-01-11T20:14:00.112944Z"
+  "updated_at": "2026-01-11T21:10:10.457692Z",
+  "closed_at": "2026-01-11T21:10:10.457692Z",
+  "closed_reason": "Added minimum terminal size handling (60x12). Added realWidth/realHeight fields to track actual dimensions, updated WindowSizeMsg handler to set ready=false when below minimum, added renderSizeWarning() with centered orange warning message, updated View() to show warning instead of TUI when too small. Added 7 new tests covering size transitions and warning rendering."
 }

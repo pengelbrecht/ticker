@@ -279,10 +279,12 @@ type Model struct {
 	output       string
 
 	// Layout
-	width     int
-	height    int
-	ready     bool
-	animFrame int
+	width       int // clamped width for rendering (min: minWidth)
+	height      int // clamped height for rendering (min: minHeight)
+	realWidth   int // actual terminal width (may be below minimum)
+	realHeight  int // actual terminal height (may be below minimum)
+	ready       bool
+	animFrame   int
 
 	// Communication
 	pauseChan chan<- bool
@@ -414,11 +416,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// Store new dimensions, clamping to minimum values
-		m.width = msg.Width
-		m.height = msg.Height
+		// Store real dimensions (may be below minimum)
+		m.realWidth = msg.Width
+		m.realHeight = msg.Height
 
 		// Clamp to minimum dimensions for usable display
+		m.width = msg.Width
+		m.height = msg.Height
 		if m.width < minWidth {
 			m.width = minWidth
 		}
@@ -431,10 +435,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update viewport dimensions
 		m.updateViewportSize()
 
-		// Set ready on first resize
-		if !m.ready {
-			m.ready = true
-		}
+		// Set ready only when terminal is large enough
+		m.ready = m.realWidth >= minWidth && m.realHeight >= minHeight
 
 	case tickMsg:
 		// Animation heartbeat - advance frame and schedule next tick
@@ -686,7 +688,7 @@ const (
 	statusBarMinRows = 3  // Header + progress + border separator (4 with progress bar)
 	footerRows       = 1  // Help hints
 	minWidth         = 60 // Minimum terminal width for usable display
-	minHeight        = 10 // Minimum terminal height for usable display
+	minHeight        = 12 // Minimum terminal height for usable display
 )
 
 // -----------------------------------------------------------------------------
@@ -720,8 +722,13 @@ func (m Model) focusHeaderStyle(pane FocusedPane) lipgloss.Style {
 
 // View renders the current model state.
 func (m Model) View() string {
-	if m.width == 0 || m.height == 0 {
+	if m.realWidth == 0 || m.realHeight == 0 {
 		return "Loading...\n"
+	}
+
+	// Check if terminal is below minimum size
+	if m.realWidth < minWidth || m.realHeight < minHeight {
+		return m.renderSizeWarning()
 	}
 
 	// If showing help overlay, render it on top
@@ -1182,6 +1189,44 @@ func (m Model) renderFooter() string {
 	}
 
 	return strings.Repeat(" ", padding) + helpLine
+}
+
+// renderSizeWarning renders a centered warning when terminal is below minimum size.
+// Uses orange (peach) color for visibility.
+func (m Model) renderSizeWarning() string {
+	warningStyle := lipgloss.NewStyle().Foreground(colorPeach).Bold(true)
+	dimTextStyle := dimStyle
+
+	line1 := warningStyle.Render(fmt.Sprintf("Terminal too small. Minimum: %dx%d, Current: %dx%d",
+		minWidth, minHeight, m.realWidth, m.realHeight))
+	line2 := dimTextStyle.Render("Please resize your terminal.")
+
+	// Center content in available space
+	contentWidth := lipgloss.Width(line1) // Use wider line for width
+	contentHeight := 2
+
+	// Calculate centering offsets
+	topPad := (m.realHeight - contentHeight) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+	leftPad := (m.realWidth - contentWidth) / 2
+	if leftPad < 0 {
+		leftPad = 0
+	}
+
+	// Build output with vertical padding
+	var lines []string
+	for i := 0; i < topPad; i++ {
+		lines = append(lines, "")
+	}
+
+	// Add horizontal padding to each content line
+	paddedLine1 := strings.Repeat(" ", leftPad) + line1
+	paddedLine2 := strings.Repeat(" ", leftPad) + line2
+	lines = append(lines, paddedLine1, paddedLine2)
+
+	return strings.Join(lines, "\n")
 }
 
 // renderHelpOverlay renders the full help modal overlay.

@@ -92,8 +92,14 @@ func TestUpdate_WindowResize(t *testing.T) {
 	if m.height != 40 {
 		t.Errorf("expected height 40, got %d", m.height)
 	}
+	if m.realWidth != 120 {
+		t.Errorf("expected realWidth 120, got %d", m.realWidth)
+	}
+	if m.realHeight != 40 {
+		t.Errorf("expected realHeight 40, got %d", m.realHeight)
+	}
 	if !m.ready {
-		t.Error("expected ready to be true after first resize")
+		t.Error("expected ready to be true after first resize with adequate size")
 	}
 
 	// Test minimum dimension clamping
@@ -101,11 +107,56 @@ func TestUpdate_WindowResize(t *testing.T) {
 	newModel, _ = m.Update(msg)
 	m = newModel.(Model)
 
+	// Clamped dimensions for rendering
 	if m.width != minWidth {
 		t.Errorf("expected width to be clamped to %d, got %d", minWidth, m.width)
 	}
 	if m.height != minHeight {
 		t.Errorf("expected height to be clamped to %d, got %d", minHeight, m.height)
+	}
+
+	// Real dimensions preserved
+	if m.realWidth != 20 {
+		t.Errorf("expected realWidth 20, got %d", m.realWidth)
+	}
+	if m.realHeight != 5 {
+		t.Errorf("expected realHeight 5, got %d", m.realHeight)
+	}
+
+	// Ready should be false when below minimum
+	if m.ready {
+		t.Error("expected ready to be false when terminal is below minimum size")
+	}
+}
+
+func TestUpdate_WindowResize_ReadyTransitions(t *testing.T) {
+	m := New(Config{})
+
+	// Start with too-small terminal
+	msg := tea.WindowSizeMsg{Width: 30, Height: 8}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.ready {
+		t.Error("expected ready to be false when terminal is too small")
+	}
+
+	// Resize to adequate size
+	msg = tea.WindowSizeMsg{Width: 80, Height: 24}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if !m.ready {
+		t.Error("expected ready to be true after resizing to adequate size")
+	}
+
+	// Resize back to too small
+	msg = tea.WindowSizeMsg{Width: 50, Height: 10}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.ready {
+		t.Error("expected ready to be false after resizing back to small size")
 	}
 }
 
@@ -870,6 +921,8 @@ func TestView_Normal(t *testing.T) {
 	})
 	m.width = 100
 	m.height = 30
+	m.realWidth = 100
+	m.realHeight = 30
 	m.updateViewportSize()
 
 	output := m.View()
@@ -886,10 +939,119 @@ func TestView_Normal(t *testing.T) {
 	}
 }
 
+func TestView_MinimumSize_TooSmall(t *testing.T) {
+	m := New(Config{})
+	m.width = minWidth
+	m.height = minHeight
+	m.realWidth = 40 // below minWidth (60)
+	m.realHeight = 8 // below minHeight (12)
+
+	output := m.View()
+
+	// Should show size warning instead of normal TUI
+	if !strings.Contains(output, "Terminal too small") {
+		t.Error("expected View to show 'Terminal too small' warning")
+	}
+	if !strings.Contains(output, "Minimum:") {
+		t.Error("expected View to show minimum dimensions")
+	}
+	if !strings.Contains(output, "60x12") {
+		t.Error("expected View to show '60x12' as minimum dimensions")
+	}
+	if !strings.Contains(output, "Current:") {
+		t.Error("expected View to show current dimensions")
+	}
+	if !strings.Contains(output, "40x8") {
+		t.Error("expected View to show '40x8' as current dimensions")
+	}
+	if !strings.Contains(output, "Please resize your terminal") {
+		t.Error("expected View to show resize instruction")
+	}
+
+	// Should NOT contain normal TUI elements
+	if strings.Contains(output, "Tasks") {
+		t.Error("expected View to NOT show 'Tasks' pane when too small")
+	}
+	if strings.Contains(output, "Agent Output") {
+		t.Error("expected View to NOT show 'Agent Output' pane when too small")
+	}
+}
+
+func TestView_MinimumSize_WidthTooSmall(t *testing.T) {
+	m := New(Config{})
+	m.width = minWidth
+	m.height = 30
+	m.realWidth = 50  // below minWidth
+	m.realHeight = 30 // above minHeight
+
+	output := m.View()
+
+	if !strings.Contains(output, "Terminal too small") {
+		t.Error("expected View to show warning when only width is too small")
+	}
+}
+
+func TestView_MinimumSize_HeightTooSmall(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = minHeight
+	m.realWidth = 100 // above minWidth
+	m.realHeight = 10 // below minHeight (12)
+
+	output := m.View()
+
+	if !strings.Contains(output, "Terminal too small") {
+		t.Error("expected View to show warning when only height is too small")
+	}
+}
+
+func TestView_MinimumSize_ExactMinimum(t *testing.T) {
+	m := New(Config{})
+	m.width = minWidth
+	m.height = minHeight
+	m.realWidth = minWidth  // exactly at minimum
+	m.realHeight = minHeight // exactly at minimum
+	m.updateViewportSize()
+
+	output := m.View()
+
+	// Should show normal TUI at exact minimum size
+	if strings.Contains(output, "Terminal too small") {
+		t.Error("expected View to NOT show warning at exact minimum size")
+	}
+	if !strings.Contains(output, "ticker") {
+		t.Error("expected View to show normal TUI at exact minimum size")
+	}
+}
+
+func TestRenderSizeWarning(t *testing.T) {
+	m := New(Config{})
+	m.realWidth = 40
+	m.realHeight = 8
+
+	output := m.renderSizeWarning()
+
+	// Should contain all required information
+	if !strings.Contains(output, "Terminal too small") {
+		t.Error("expected warning to contain 'Terminal too small'")
+	}
+	if !strings.Contains(output, "Minimum: 60x12") {
+		t.Error("expected warning to contain minimum dimensions")
+	}
+	if !strings.Contains(output, "Current: 40x8") {
+		t.Error("expected warning to contain current dimensions")
+	}
+	if !strings.Contains(output, "Please resize your terminal") {
+		t.Error("expected warning to contain resize instruction")
+	}
+}
+
 func TestView_HelpOverlay(t *testing.T) {
 	m := New(Config{})
 	m.width = 100
 	m.height = 30
+	m.realWidth = 100
+	m.realHeight = 30
 	m.showHelp = true
 
 	output := m.View()
@@ -909,6 +1071,8 @@ func TestView_CompleteOverlay(t *testing.T) {
 	m := New(Config{})
 	m.width = 100
 	m.height = 30
+	m.realWidth = 100
+	m.realHeight = 30
 	m.showComplete = true
 	m.completeSignal = "COMPLETE"
 	m.completeReason = "All tasks done"
