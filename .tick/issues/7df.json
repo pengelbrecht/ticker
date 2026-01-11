@@ -1,0 +1,20 @@
+{
+  "id": "7df",
+  "title": "Implement Update() for keyboard input handling",
+  "description": "Handle tea.KeyMsg in Update():\n\nPriority order:\n1. If showComplete: any key except 'q' dismisses, 'q' quits\n2. If showHelp: any key dismisses help\n3. Global keys (always work):\n   - q/ctrl+c: set quitting=true, return tea.Quit\n   - ?: toggle showHelp\n   - p: toggle paused, send to pauseChan\n   - tab: cycle focusedPane (Status-\u003eTasks-\u003eOutput-\u003eStatus)\n\n4. Pane-specific navigation using msg.String():\n   When focusedPane == PaneTasks:\n   - j/down: increment selectedTask (clamp to bounds)\n   - k/up: decrement selectedTask (clamp to bounds)\n   - g: selectedTask = 0\n   - G: selectedTask = len(tasks)-1\n\n   When focusedPane == PaneOutput:\n   - j/down: viewport.LineDown(1)\n   - k/up: viewport.LineUp(1)\n   - ctrl+d/pgdn: viewport.HalfViewDown()\n   - ctrl+u/pgup: viewport.HalfViewUp()\n   - g: viewport.GotoTop()\n   - G: viewport.GotoBottom()\n\nUse msg.String() for reliable key matching (not key.Matches).",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "update"
+  ],
+  "blocked_by": [
+    "uq6",
+    "pul"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:11:31.60508Z",
+  "updated_at": "2026-01-11T20:13:55.962197Z"
+}

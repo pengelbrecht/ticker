@@ -1,0 +1,21 @@
+{
+  "id": "pul",
+  "title": "Implement 3-pane layout structure in View()",
+  "description": "Implement the main View() function with 3-pane layout:\n\nLayout structure (top-to-bottom):\n┌─────────────────────────────────────────┐\n│ Status Bar (1-2 lines)                  │\n├──────────────────┬──────────────────────┤\n│ Task List        │ Output/Details       │\n│ (fixed width)    │ (flexible width)     │\n│                  │                      │\n├──────────────────┴──────────────────────┤\n│ Footer (help hints)                     │\n└─────────────────────────────────────────┘\n\nDimensions:\n- Status bar: full width, 2 lines (title + progress)\n- Task list: fixed 35 chars wide, remaining height\n- Output pane: remaining width, remaining height\n- Footer: full width, 1 line\n\nUse lipgloss.JoinVertical for main layout\nUse lipgloss.JoinHorizontal for left/right panes\n\nCall individual render functions:\n- renderStatusBar()\n- renderTaskPane()\n- renderOutputPane()\n- renderFooter()\n- renderHelpOverlay() if showHelp\n- renderCompleteOverlay() if showComplete",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "layout"
+  ],
+  "blocked_by": [
+    "fkz",
+    "ttw",
+    "l7b"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:10:43.270095Z",
+  "updated_at": "2026-01-11T20:13:51.77165Z"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "ttw",
+  "title": "Define TaskInfo struct and task status types",
+  "description": "Define task data structures:\n\nTaskStatus type (string enum):\n- StatusOpen = 'open'\n- StatusInProgress = 'in_progress'  \n- StatusClosed = 'closed'\n\nTaskInfo struct:\n- ID string\n- Title string\n- Status TaskStatus\n- BlockedBy []string\n- IsCurrent bool (currently executing task)\n\nAdd helper functions:\n- isBlocked() bool - returns len(BlockedBy) \u003e 0\n- statusIcon() string - returns styled icon (○/●/✓/⊘)\n- renderTask() string - formats task line with icon, ID, title\n\nIcon mapping:\n- Open: ○ (gray)\n- InProgress: ● (blue, pulsing)\n- Closed: ✓ (green)\n- Blocked: ⊘ (red) - overrides open",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "model"
+  ],
+  "blocked_by": [
+    "7nj"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:10:07.864683Z",
+  "updated_at": "2026-01-11T20:13:50.515787Z"
+}

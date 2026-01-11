@@ -1,0 +1,20 @@
+{
+  "id": "13o",
+  "title": "Implement New() constructor and Config struct",
+  "description": "Implement TUI initialization:\n\nConfig struct:\ntype Config struct {\n    EpicID       string\n    EpicTitle    string\n    MaxCost      float64\n    MaxIteration int\n    PauseChan    chan\u003c- bool\n}\n\nNew(cfg Config) Model function:\n1. Initialize all state from config\n2. Create viewport.Model with zero dimensions (resized on first WindowSizeMsg)\n3. Create help.Model with custom styles\n4. Initialize empty tasks slice\n5. Set startTime = time.Now()\n6. Set running = true\n7. Return Model\n\nInit() tea.Cmd:\n- Return tickCmd() to start animation ticker\n- Could also return tea.EnterAltScreen if not done by program\n\nExported types for main.go:\n- Model\n- Config\n- TaskInfo, TaskStatus\n- All message types (IterationStartMsg, etc.)\n- EpicInfo (for picker)\n- Picker model",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "integration"
+  ],
+  "blocked_by": [
+    "fkz",
+    "l7b"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:12:01.514677Z",
+  "updated_at": "2026-01-11T20:13:57.463943Z"
+}

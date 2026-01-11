@@ -1,0 +1,19 @@
+{
+  "id": "q1m",
+  "title": "Implement pulsing animation for in-progress tasks",
+  "description": "Implement task pulsing animation:\n\nAnimation cycle (4 frames at 1fps):\nFrame 0: #FAB387 (peach)\nFrame 1: #F9E2AF (yellow)\nFrame 2: #FAB387 (peach)\nFrame 3: #F38BA8 (red-ish)\n\nApply to:\n1. In-progress task icon (●)\n2. Current task marker (▶)\n3. Running status indicator\n\nAnimation driver:\n- tickMsg fires every 1 second\n- Increment m.animFrame on each tick\n- Use animFrame % 4 to select color\n- tickCmd() returns tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })\n\nRender function:\nfunc pulsingStyle(animFrame int) lipgloss.Style {\n    colors := []string{\"#FAB387\", \"#F9E2AF\", \"#FAB387\", \"#F38BA8\"}\n    return lipgloss.NewStyle().Foreground(lipgloss.Color(colors[animFrame % 4]))\n}\n\nOnly animate when m.running is true.\nWhen paused, use static orange color.",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "animation"
+  ],
+  "blocked_by": [
+    "hn8"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:11:59.478807Z",
+  "updated_at": "2026-01-11T20:13:57.368707Z"
+}

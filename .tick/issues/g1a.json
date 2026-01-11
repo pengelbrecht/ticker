@@ -1,0 +1,22 @@
+{
+  "id": "g1a",
+  "title": "Implement completion overlay modal",
+  "description": "Implement renderCompleteOverlay() function:\n\nTriggered when run completes (RunCompleteMsg received)\nModal overlay centered on screen\n\nContent:\n┌─ Run Complete ───────────────────────┐\n│                                      │\n│  ✓ Epic completed successfully       │\n│                                      │\n│  Reason:     All tasks closed        │\n│  Signal:     COMPLETE                │\n│  Iterations: 12                      │\n│  Duration:   5m 23s                  │\n│  Cost:       $2.45                   │\n│  Tasks:      8/8 completed           │\n│                                      │\n│  Press q to quit                     │\n└──────────────────────────────────────┘\n\nDynamic content based on completion reason:\n- COMPLETE: green checkmark, success message\n- EJECT: orange warning, eject reason\n- BLOCKED: red X, blocked info\n- MAX_ITER: yellow, budget info\n- MAX_COST: yellow, cost info\n\nStyling:\n- Dark background\n- Colored icon based on result\n- Labeled values with dim labels, bright values\n- Centered using placeOverlay()",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "layout"
+  ],
+  "blocked_by": [
+    "ks2",
+    "hn8",
+    "g9b",
+    "c4r"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:11:03.356207Z",
+  "updated_at": "2026-01-11T20:13:55.104812Z"
+}

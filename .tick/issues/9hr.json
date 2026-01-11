@@ -1,0 +1,19 @@
+{
+  "id": "9hr",
+  "title": "Implement elapsed time display with live updates",
+  "description": "Implement elapsed time tracking and display:\n\nState:\n- m.startTime time.Time (set when run starts)\n\nCalculation (on each tick):\nelapsed := time.Since(m.startTime)\n\nFormatting:\n- Under 1 hour: MM:SS (e.g., '5:23')\n- Over 1 hour: H:MM:SS (e.g., '1:23:45')\n\nfunc formatDuration(d time.Duration) string {\n    h := int(d.Hours())\n    m := int(d.Minutes()) % 60\n    s := int(d.Seconds()) % 60\n    if h \u003e 0 {\n        return fmt.Sprintf(\"%d:%02d:%02d\", h, m, s)\n    }\n    return fmt.Sprintf(\"%d:%02d\", m, s)\n}\n\nDisplay in status bar:\n'Time: 5:23' with dim label, bright value\n\nUpdates every tick (1 second) automatically via tickMsg.",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "animation"
+  ],
+  "blocked_by": [
+    "ks2"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:12:00.789509Z",
+  "updated_at": "2026-01-11T20:13:57.400014Z"
+}

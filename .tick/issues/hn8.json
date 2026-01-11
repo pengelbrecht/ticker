@@ -1,0 +1,19 @@
+{
+  "id": "hn8",
+  "title": "Implement task list pane (left)",
+  "description": "Implement renderTaskPane() function:\n\nLayout:\n- Fixed width: 35 characters\n- Rounded border (gray when unfocused, blue when focused)\n- Header: 'Tasks' or 'Tasks (3/8)'\n- Scrollable list of tasks\n\nTask line format:\n'▶ ● [id] Task title here...'\n- Selection cursor: ▶ if selected, space otherwise\n- Status icon: ○/●/✓/⊘ with appropriate color\n- ID in brackets\n- Title truncated with ... if too long\n\nVisual states:\n- Selected task: blue bold\n- Unselected: dim lavender\n- Current executing: pulsing indicator\n- Blocked: red icon with 'blocked by: [ids]' below\n\nNavigation:\n- j/k moves selection when pane focused\n- Selection wraps or clamps at bounds\n- Highlight changes trigger detail update\n\nUse ansi.Truncate() for title truncation to preserve ANSI codes.",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "layout"
+  ],
+  "blocked_by": [
+    "pul"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:10:45.365703Z",
+  "updated_at": "2026-01-11T20:13:53.200062Z"
+}

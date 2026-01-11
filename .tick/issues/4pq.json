@@ -1,0 +1,12 @@
+{
+  "id": "4pq",
+  "title": "Rebuild TUI using ticks-style architecture",
+  "description": "Complete rewrite of the ticker TUI to match the ticks TUI patterns. The new TUI needs 3 panes: top status bar, left task list, right detail/output pane. Uses Catppuccin Mocha colors, single-file model.go architecture, and consistent keybindings with ticks.",
+  "status": "open",
+  "priority": 1,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:09:23.914779Z",
+  "updated_at": "2026-01-11T20:09:23.914779Z"
+}
