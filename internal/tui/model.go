@@ -378,6 +378,89 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Auto-scroll to bottom on new content
 		m.viewport.GotoBottom()
 
+	case IterationStartMsg:
+		// Update iteration state
+		m.iteration = msg.Iteration
+		m.taskID = msg.TaskID
+		m.taskTitle = msg.TaskTitle
+
+		// Mark task as current in task list
+		for i := range m.tasks {
+			if m.tasks[i].ID == msg.TaskID {
+				m.tasks[i].IsCurrent = true
+				m.tasks[i].Status = TaskStatusInProgress
+			} else {
+				m.tasks[i].IsCurrent = false
+			}
+		}
+
+		// Clear output buffer for new iteration
+		m.output = ""
+		m.viewport.SetContent("")
+
+	case IterationEndMsg:
+		// Update cost and tokens from iteration metrics
+		m.cost += msg.Cost
+		m.tokens += msg.Tokens
+
+	case SignalMsg:
+		// Store signal and reason for display
+		m.completeSignal = msg.Signal
+		m.completeReason = msg.Reason
+
+		// Certain signals trigger completion overlay
+		switch msg.Signal {
+		case "COMPLETE", "EJECT", "BLOCKED", "MAX_ITER", "MAX_COST":
+			m.showComplete = true
+			m.running = false
+		}
+
+	case ErrorMsg:
+		// Append error to output for visibility
+		if msg.Err != nil {
+			errText := "\n[ERROR] " + msg.Err.Error() + "\n"
+			m.output += errText
+			m.viewport.SetContent(m.output)
+			m.viewport.GotoBottom()
+		}
+
+	case RunCompleteMsg:
+		// Set completion state
+		m.showComplete = true
+		m.completeReason = msg.Reason
+		m.completeSignal = msg.Signal
+		m.running = false
+
+		// Update metrics from the message if provided
+		if msg.Iterations > 0 {
+			m.iteration = msg.Iterations
+		}
+		if msg.Cost > 0 {
+			m.cost = msg.Cost
+		}
+
+	case TasksUpdateMsg:
+		// Replace task list with updated tasks
+		m.tasks = msg.Tasks
+
+		// Clamp selectedTask if out of bounds
+		if m.selectedTask >= len(m.tasks) {
+			m.selectedTask = len(m.tasks) - 1
+		}
+		if m.selectedTask < 0 && len(m.tasks) > 0 {
+			m.selectedTask = 0
+		}
+
+		// Mark current task based on taskID
+		for i := range m.tasks {
+			if m.tasks[i].ID == m.taskID && m.taskID != "" {
+				m.tasks[i].IsCurrent = true
+			}
+		}
+
+		// Update viewport size since task count affects layout
+		m.updateViewportSize()
+
 	case tea.KeyMsg:
 		// Priority 1: If complete overlay is showing, any key except 'q' dismisses, 'q' quits
 		if m.showComplete {
