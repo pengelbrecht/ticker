@@ -133,8 +133,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height - 6 // Reserve space for header/footer
+
+		// Calculate component dimensions
+		availableHeight := msg.Height - 6 // Header + status + footer
+		if availableHeight < minHeight {
+			availableHeight = minHeight
+		}
+
+		outputWidth := msg.Width - taskPanelWidth - 4
+		if outputWidth < 20 {
+			outputWidth = 20
+		}
+
+		// Resize viewport
+		m.viewport.Width = outputWidth - 4
+		m.viewport.Height = availableHeight - 4
+
+		// Resize task list
+		m.tasks.SetSize(taskPanelWidth-4, availableHeight-4)
+
+		// Resize progress bar
+		m.progress.Width = msg.Width - 20
 
 	case IterationStartMsg:
 		m.iteration = msg.Iteration
@@ -165,48 +184,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("205"))
-
-	statusStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
-
-	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
-)
-
 // View implements tea.Model.
 func (m Model) View() string {
 	if m.quitting {
 		return "Goodbye!\n"
 	}
 
-	// Header
-	header := titleStyle.Render(fmt.Sprintf("ticker: %s", m.epicTitle))
-	if m.epicTitle == "" {
-		header = titleStyle.Render(fmt.Sprintf("ticker: %s", m.epicID))
-	}
-
-	// Status line
-	status := statusStyle.Render(fmt.Sprintf(
-		"Iteration %d/%d | Task: [%s] %s | Cost: $%.2f/$%.2f | Tokens: %d",
-		m.iteration, m.maxIter,
-		m.taskID, m.taskTitle,
-		m.cost, m.maxCost,
-		m.tokens,
-	))
-
-	// Footer
-	footer := helpStyle.Render("q: quit | j/k: scroll | g/G: top/bottom")
-
-	// Compose view
-	return fmt.Sprintf("%s\n%s\n\n%s\n\n%s",
-		header,
-		status,
-		m.viewport.View(),
-		footer,
+	// Use layout functions to compose the view
+	return lipgloss.JoinVertical(lipgloss.Left,
+		m.renderHeader(),
+		m.renderStatusBar(),
+		m.renderMainContent(),
+		m.renderFooter(),
 	)
 }

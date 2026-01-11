@@ -2,7 +2,7 @@
   "id": "zme",
   "title": "Dashboard layout",
   "description": "Create main dashboard layout using lipgloss composition.\n\ninternal/tui/layout.go:\n- Header: epic title, iteration count, budget (lipgloss.JoinHorizontal)\n- Left panel: bubbles/list for tasks\n- Right panel: bubbles/viewport for output\n- Footer: keybindings help\n- Use lipgloss.JoinVertical for main layout\n\nVerify: Layout renders correctly, resizes with terminal",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,6 @@
   "parent": "e8g",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T13:03:54.15053914Z",
-  "updated_at": "2026-01-11T13:08:17.023569747Z"
+  "updated_at": "2026-01-11T13:39:47.471287511Z",
+  "closed_at": "2026-01-11T13:39:47.471287511Z"
 }

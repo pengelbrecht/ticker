@@ -1,0 +1,267 @@
+package tui
+
+import (
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Layout constants
+const (
+	taskPanelWidth = 35 // Fixed width for task panel
+	minHeight      = 10
+)
+
+// Color palette
+var (
+	primaryColor   = lipgloss.Color("205") // Pink
+	secondaryColor = lipgloss.Color("86")  // Cyan
+	mutedColor     = lipgloss.Color("241") // Gray
+	successColor   = lipgloss.Color("78")  // Green
+	warningColor   = lipgloss.Color("214") // Orange
+	errorColor     = lipgloss.Color("196") // Red
+)
+
+// Panel styles
+var (
+	// Header styles
+	headerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(primaryColor).
+			Padding(0, 1)
+
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(primaryColor)
+
+	// Status bar styles
+	statusBarStyle = lipgloss.NewStyle().
+			Foreground(mutedColor).
+			Padding(0, 1)
+
+	statusItemStyle = lipgloss.NewStyle().
+			Foreground(secondaryColor)
+
+	statusLabelStyle = lipgloss.NewStyle().
+				Foreground(mutedColor)
+
+	// Panel styles
+	panelStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(mutedColor).
+			Padding(0, 1)
+
+	taskPanelStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(mutedColor)
+
+	outputPanelStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(secondaryColor)
+
+	panelTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(secondaryColor).
+			Padding(0, 1)
+
+	// Footer styles
+	footerStyle = lipgloss.NewStyle().
+			Foreground(mutedColor).
+			Padding(0, 1)
+
+	keyStyle = lipgloss.NewStyle().
+			Foreground(secondaryColor).
+			Bold(true)
+
+	descStyle = lipgloss.NewStyle().
+			Foreground(mutedColor)
+
+	// Progress styles
+	progressLabelStyle = lipgloss.NewStyle().
+				Foreground(mutedColor)
+
+	// Status indicators
+	runningStyle = lipgloss.NewStyle().
+			Foreground(successColor).
+			Bold(true)
+
+	pausedStyle = lipgloss.NewStyle().
+			Foreground(warningColor).
+			Bold(true)
+
+	stoppedStyle = lipgloss.NewStyle().
+			Foreground(errorColor).
+			Bold(true)
+)
+
+// renderHeader renders the header with epic title and status.
+func (m Model) renderHeader() string {
+	title := m.epicTitle
+	if title == "" {
+		title = m.epicID
+	}
+
+	left := titleStyle.Render(fmt.Sprintf("⚡ ticker: %s", title))
+
+	// Status indicator
+	var status string
+	if m.running {
+		status = runningStyle.Render("● RUNNING")
+	} else {
+		status = stoppedStyle.Render("■ STOPPED")
+	}
+
+	// Calculate padding to right-align status
+	padding := m.width - lipgloss.Width(left) - lipgloss.Width(status) - 2
+	if padding < 0 {
+		padding = 0
+	}
+
+	return headerStyle.Width(m.width).Render(
+		left + lipgloss.NewStyle().Width(padding).Render("") + status,
+	)
+}
+
+// renderStatusBar renders the status bar with iteration, cost, and tokens.
+func (m Model) renderStatusBar() string {
+	iteration := fmt.Sprintf("%s %s",
+		statusLabelStyle.Render("Iteration:"),
+		statusItemStyle.Render(fmt.Sprintf("%d/%d", m.iteration, m.maxIter)),
+	)
+
+	task := fmt.Sprintf("%s %s",
+		statusLabelStyle.Render("Task:"),
+		statusItemStyle.Render(fmt.Sprintf("[%s] %s", m.taskID, truncate(m.taskTitle, 30))),
+	)
+
+	cost := fmt.Sprintf("%s %s",
+		statusLabelStyle.Render("Cost:"),
+		statusItemStyle.Render(fmt.Sprintf("$%.2f/$%.2f", m.cost, m.maxCost)),
+	)
+
+	tokens := fmt.Sprintf("%s %s",
+		statusLabelStyle.Render("Tokens:"),
+		statusItemStyle.Render(fmt.Sprintf("%d", m.tokens)),
+	)
+
+	return statusBarStyle.Width(m.width).Render(
+		lipgloss.JoinHorizontal(lipgloss.Center,
+			iteration, "  │  ", task, "  │  ", cost, "  │  ", tokens,
+		),
+	)
+}
+
+// renderMainContent renders the main two-panel layout.
+func (m Model) renderMainContent() string {
+	// Calculate dimensions
+	availableHeight := m.height - 6 // Header + status + footer + borders
+	if availableHeight < minHeight {
+		availableHeight = minHeight
+	}
+
+	outputWidth := m.width - taskPanelWidth - 4 // Account for borders
+	if outputWidth < 20 {
+		outputWidth = 20
+	}
+
+	// Task panel (left)
+	taskPanel := m.renderTaskPanel(availableHeight)
+
+	// Output panel (right)
+	outputPanel := m.renderOutputPanel(outputWidth, availableHeight)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, taskPanel, outputPanel)
+}
+
+// renderTaskPanel renders the task list panel.
+func (m Model) renderTaskPanel(height int) string {
+	title := panelTitleStyle.Render("Tasks")
+
+	// Resize task list to fit
+	m.tasks.SetSize(taskPanelWidth-4, height-4)
+
+	content := m.tasks.View()
+
+	return taskPanelStyle.
+		Width(taskPanelWidth).
+		Height(height).
+		Render(lipgloss.JoinVertical(lipgloss.Left, title, content))
+}
+
+// renderOutputPanel renders the agent output panel.
+func (m Model) renderOutputPanel(width, height int) string {
+	title := panelTitleStyle.Render("Agent Output")
+
+	// Update viewport dimensions
+	m.viewport.Width = width - 4
+	m.viewport.Height = height - 4
+
+	content := m.viewport.View()
+
+	return outputPanelStyle.
+		Width(width).
+		Height(height).
+		Render(lipgloss.JoinVertical(lipgloss.Left, title, content))
+}
+
+// renderFooter renders the footer with keybindings.
+func (m Model) renderFooter() string {
+	keys := []struct {
+		key  string
+		desc string
+	}{
+		{"q", "quit"},
+		{"p", "pause"},
+		{"j/k", "scroll"},
+		{"g/G", "top/bottom"},
+		{"?", "help"},
+	}
+
+	var items []string
+	for _, k := range keys {
+		items = append(items,
+			keyStyle.Render(k.key)+descStyle.Render(":"+k.desc),
+		)
+	}
+
+	return footerStyle.Width(m.width).Render(
+		lipgloss.JoinHorizontal(lipgloss.Center, join(items, "  ")...),
+	)
+}
+
+// renderProgressBar renders the iteration progress bar.
+func (m Model) renderProgressBar() string {
+	if m.maxIter == 0 {
+		return ""
+	}
+
+	percent := float64(m.iteration) / float64(m.maxIter)
+	bar := m.progress.ViewAs(percent)
+
+	return progressLabelStyle.Render(
+		fmt.Sprintf("Progress: %s %d%%", bar, int(percent*100)),
+	)
+}
+
+// Helper functions
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-3] + "..."
+}
+
+func join(items []string, sep string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(items)*2-1)
+	for i, item := range items {
+		if i > 0 {
+			result = append(result, sep)
+		}
+		result = append(result, item)
+	}
+	return result
+}
