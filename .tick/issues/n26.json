@@ -2,11 +2,12 @@
   "id": "n26",
   "title": "Integrate rich agent streaming into TUI",
   "description": "Integrate the new agent streaming data layer (AgentState, StreamParser, RunRecord) into the ticker TUI. This enables real-time display of thinking, output, tool activity, and detailed metrics during agent runs, plus viewing completed tick results.",
+  "notes": "2026-01-11 22:35 - b35 complete: Added agentState *agent.AgentState field to Model struct at line 294. Import added at line 19. The field is nil by default and will need to be populated when engine starts a run. Next tasks should: (1) create AgentStateMsg type to send state updates to TUI, (2) update engine to create AgentState and stream parse to it, (3) update TUI to render from agentState when non-nil. The existing output field still works so backward compatibility is preserved.",
   "status": "open",
   "priority": 1,
   "type": "epic",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:41:52.498415Z",
-  "updated_at": "2026-01-11T20:41:52.498415Z"
+  "updated_at": "2026-01-11T21:35:54.405257Z"
 }

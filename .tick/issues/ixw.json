@@ -2,12 +2,14 @@
   "id": "ixw",
   "title": "Define TUI message types for streaming events",
   "description": "Create new TUI message types that map to AgentState changes: AgentTextMsg (output delta), AgentThinkingMsg (thinking delta), AgentToolStartMsg (tool invocation started), AgentToolEndMsg (tool completed), AgentMetricsMsg (usage update), AgentStatusMsg (status change). These replace or augment OutputMsg.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "n26",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:42:10.492688Z",
-  "updated_at": "2026-01-11T20:42:10.492688Z"
+  "updated_at": "2026-01-11T21:37:10.013493Z",
+  "closed_at": "2026-01-11T21:37:10.013493Z",
+  "closed_reason": "Added 6 new TUI message types (AgentTextMsg, AgentThinkingMsg, AgentToolStartMsg, AgentToolEndMsg, AgentMetricsMsg, AgentStatusMsg) to internal/tui/model.go. These map to agent.RunStatus and agent.ToolActivity for streaming updates. Each type includes doc comments explaining when it's sent."
 }

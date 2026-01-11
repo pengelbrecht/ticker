@@ -144,6 +144,56 @@ type TasksUpdateMsg struct {
 }
 
 // -----------------------------------------------------------------------------
+// Agent Streaming Messages - Rich agent output events
+// These messages map to AgentState changes for real-time TUI updates.
+// -----------------------------------------------------------------------------
+
+// AgentTextMsg contains a delta of agent output text.
+// Sent when the agent writes response text (non-thinking content).
+type AgentTextMsg struct {
+	Text string // Delta text to append to output
+}
+
+// AgentThinkingMsg contains a delta of agent thinking/reasoning content.
+// Sent during extended thinking blocks.
+type AgentThinkingMsg struct {
+	Text string // Delta thinking text to append
+}
+
+// AgentToolStartMsg signals that a tool invocation has started.
+// Sent when a tool_use content block begins.
+type AgentToolStartMsg struct {
+	ID   string // Unique tool invocation ID
+	Name string // Tool name (e.g., "Read", "Edit", "Bash")
+}
+
+// AgentToolEndMsg signals that a tool invocation has completed.
+// Sent when a tool_use content block ends.
+type AgentToolEndMsg struct {
+	ID       string        // Tool invocation ID (matches AgentToolStartMsg.ID)
+	Name     string        // Tool name
+	Duration time.Duration // How long the tool ran
+	IsError  bool          // Whether the tool returned an error
+}
+
+// AgentMetricsMsg contains updated usage metrics.
+// Sent when token counts or cost information is updated.
+type AgentMetricsMsg struct {
+	InputTokens         int     // Total input tokens used
+	OutputTokens        int     // Total output tokens generated
+	CacheReadTokens     int     // Tokens read from cache
+	CacheCreationTokens int     // Tokens used to create cache
+	CostUSD             float64 // Total cost in USD
+}
+
+// AgentStatusMsg signals a change in agent run status.
+// Maps to agent.RunStatus values.
+type AgentStatusMsg struct {
+	Status agent.RunStatus // New status (starting, thinking, writing, tool_use, complete, error)
+	Error  string          // Error message if Status is "error"
+}
+
+// -----------------------------------------------------------------------------
 // Helpers - Utility functions
 // -----------------------------------------------------------------------------
 
