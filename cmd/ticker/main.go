@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 
 	"github.com/spf13/cobra"
 )
@@ -45,6 +47,35 @@ var resumeCmd = &cobra.Command{
 	},
 }
 
+const installScriptURL = "https://raw.githubusercontent.com/pengelbrecht/ticker/main/scripts/install.sh"
+
+var upgradeCmd = &cobra.Command{
+	Use:   "upgrade",
+	Short: "Upgrade ticker to the latest version",
+	Long:  `Downloads and runs the installation script to upgrade ticker in-place.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if runtime.GOOS == "windows" {
+			fmt.Fprintln(os.Stderr, "Error: upgrade command is not supported on Windows")
+			fmt.Fprintln(os.Stderr, "Please download the latest release manually from GitHub")
+			os.Exit(1)
+		}
+
+		fmt.Printf("Current version: %s\n", version)
+		fmt.Println("Checking for updates...")
+
+		// Run install script via curl | sh
+		shellCmd := exec.Command("sh", "-c", fmt.Sprintf("curl -fsSL %s | sh", installScriptURL))
+		shellCmd.Stdout = os.Stdout
+		shellCmd.Stderr = os.Stderr
+		shellCmd.Stdin = os.Stdin
+
+		if err := shellCmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running upgrade: %v\n", err)
+			os.Exit(1)
+		}
+	},
+}
+
 func init() {
 	// Run command flags
 	runCmd.Flags().IntP("max-iterations", "n", 50, "Maximum number of iterations")
@@ -54,6 +85,7 @@ func init() {
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
+	rootCmd.AddCommand(upgradeCmd)
 }
 
 func main() {
