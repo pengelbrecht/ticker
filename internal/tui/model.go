@@ -1152,51 +1152,148 @@ func placeOverlay(fg, bg string, width, height int) string {
 }
 
 // renderCompleteOverlay renders the run complete modal overlay.
+// Layout:
+// ┌─ Run Complete ───────────────────────┐
+// │                                      │
+// │  ✓ Epic completed successfully       │
+// │                                      │
+// │  Reason:     All tasks closed        │
+// │  Signal:     COMPLETE                │
+// │  Iterations: 12                      │
+// │  Duration:   5m 23s                  │
+// │  Cost:       $2.45                   │
+// │  Tasks:      8/8 completed           │
+// │                                      │
+// │  Press q to quit                     │
+// └──────────────────────────────────────┘
 func (m Model) renderCompleteOverlay() string {
-	// Build message based on signal
-	var icon, title string
-	var titleStyle lipgloss.Style
+	// Determine icon, title, message and colors based on signal
+	var icon, title, message string
+	var iconStyle, borderColor lipgloss.Style
 
 	switch m.completeSignal {
 	case "COMPLETE":
 		icon = "✓"
 		title = "Run Complete"
-		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorGreen)
+		message = "Epic completed successfully"
+		iconStyle = lipgloss.NewStyle().Bold(true).Foreground(colorGreen)
+		borderColor = lipgloss.NewStyle().Foreground(colorGreen)
 	case "EJECT":
 		icon = "⚠"
 		title = "Ejected"
-		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorPeach)
+		message = "Agent requested exit"
+		iconStyle = lipgloss.NewStyle().Bold(true).Foreground(colorPeach)
+		borderColor = lipgloss.NewStyle().Foreground(colorPeach)
 	case "BLOCKED":
-		icon = "⊘"
+		icon = "✗"
 		title = "Blocked"
-		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorRed)
+		message = "Cannot proceed"
+		iconStyle = lipgloss.NewStyle().Bold(true).Foreground(colorRed)
+		borderColor = lipgloss.NewStyle().Foreground(colorRed)
+	case "MAX_ITER":
+		icon = "!"
+		title = "Iteration Limit"
+		message = "Maximum iterations reached"
+		iconStyle = lipgloss.NewStyle().Bold(true).Foreground(colorPeach)
+		borderColor = lipgloss.NewStyle().Foreground(colorPeach)
+	case "MAX_COST":
+		icon = "$"
+		title = "Budget Limit"
+		message = "Maximum cost reached"
+		iconStyle = lipgloss.NewStyle().Bold(true).Foreground(colorPeach)
+		borderColor = lipgloss.NewStyle().Foreground(colorPeach)
 	default:
 		icon = "●"
 		title = "Finished"
-		titleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorBlue)
+		message = "Run finished"
+		iconStyle = lipgloss.NewStyle().Bold(true).Foreground(colorBlue)
+		borderColor = lipgloss.NewStyle().Foreground(colorBlue)
 	}
 
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorGray).
-		Padding(1, 2).
-		Width(50)
+	// Calculate task stats
+	completedTasks := 0
+	totalTasks := len(m.tasks)
+	for _, t := range m.tasks {
+		if t.Status == TaskStatusClosed {
+			completedTasks++
+		}
+	}
 
-	titleLine := titleStyle.Render(icon + " " + title)
+	// Calculate duration
+	var durationStr string
+	if !m.startTime.IsZero() {
+		elapsed := time.Since(m.startTime)
+		hours := int(elapsed.Hours())
+		minutes := int(elapsed.Minutes()) % 60
+		seconds := int(elapsed.Seconds()) % 60
+		if hours > 0 {
+			durationStr = fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+		} else if minutes > 0 {
+			durationStr = fmt.Sprintf("%dm %ds", minutes, seconds)
+		} else {
+			durationStr = fmt.Sprintf("%ds", seconds)
+		}
+	} else {
+		durationStr = "0s"
+	}
+
+	// Build content with labeled values
+	labelWidth := 12
+	lblStyle := dimStyle.Width(labelWidth)
+	valStyle := lipgloss.NewStyle().Foreground(colorBlue)
+
+	var lines []string
+
+	// Icon + message line
+	iconLine := iconStyle.Render(icon) + " " + valStyle.Bold(true).Render(message)
+	lines = append(lines, iconLine)
+	lines = append(lines, "")
+
+	// Reason (if provided)
 	reason := m.completeReason
 	if reason == "" {
-		reason = "No additional details"
+		reason = "Run completed"
 	}
+	lines = append(lines, lblStyle.Render("Reason:")+" "+valStyle.Render(reason))
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		titleLine,
-		"",
-		dimStyle.Render(reason),
-		"",
-		footerStyle.Render("Press q to exit"),
-	)
+	// Signal
+	signalStr := m.completeSignal
+	if signalStr == "" {
+		signalStr = "COMPLETE"
+	}
+	lines = append(lines, lblStyle.Render("Signal:")+" "+valStyle.Render(signalStr))
 
-	box := boxStyle.Render(content)
+	// Iterations
+	lines = append(lines, lblStyle.Render("Iterations:")+" "+valStyle.Render(fmt.Sprintf("%d", m.iteration)))
+
+	// Duration
+	lines = append(lines, lblStyle.Render("Duration:")+" "+valStyle.Render(durationStr))
+
+	// Cost
+	lines = append(lines, lblStyle.Render("Cost:")+" "+valStyle.Render(fmt.Sprintf("$%.2f", m.cost)))
+
+	// Tasks
+	tasksStr := fmt.Sprintf("%d/%d completed", completedTasks, totalTasks)
+	lines = append(lines, lblStyle.Render("Tasks:")+" "+valStyle.Render(tasksStr))
+
+	lines = append(lines, "")
+	lines = append(lines, footerStyle.Render("Press q to quit"))
+
+	content := strings.Join(lines, "\n")
+
+	// Create styled box with border color based on result
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor.GetForeground()).
+		Background(colorSurface).
+		Padding(1, 2).
+		Width(42)
+
+	// Title in box
+	titleStyle := headerStyle.Render(title)
+	boxContent := lipgloss.JoinVertical(lipgloss.Left, titleStyle, "", content)
+
+	box := boxStyle.Render(boxContent)
 
 	// Render the base view and place the modal on top
 	baseView := m.renderBaseView()
