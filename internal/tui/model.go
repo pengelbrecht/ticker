@@ -379,10 +379,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 
 	case tea.KeyMsg:
-		// If help overlay is showing, any key closes it (except q/ctrl+c which quit)
+		// Priority 1: If complete overlay is showing, any key except 'q' dismisses, 'q' quits
+		if m.showComplete {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			default:
+				m.showComplete = false
+				return m, nil
+			}
+		}
+
+		// Priority 2: If help overlay is showing, any key closes it (except q/ctrl+c which quit)
 		if m.showHelp {
 			switch msg.String() {
 			case "q", "ctrl+c":
+				m.quitting = true
 				return m, tea.Quit
 			default:
 				m.showHelp = false
@@ -390,8 +403,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Priority 3 & 4: Global keys and pane-specific navigation
 		switch msg.String() {
 		case "q", "ctrl+c":
+			m.quitting = true
 			return m, tea.Quit
 		case "j", "down":
 			// Navigate down in task list when task pane is focused
@@ -462,14 +477,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.showHelp = !m.showHelp
 		case "p":
-			// TODO: toggle pause/resume
+			m.paused = !m.paused
+			// Send pause state to engine if channel is available
+			if m.pauseChan != nil {
+				m.pauseChan <- m.paused
+			}
 		case "tab":
-			// Cycle focus between panes: Tasks -> Output -> Tasks
+			// Cycle focus between panes: Status -> Tasks -> Output -> Status
 			switch m.focusedPane {
+			case PaneStatus:
+				m.focusedPane = PaneTasks
 			case PaneTasks:
 				m.focusedPane = PaneOutput
 			case PaneOutput:
-				m.focusedPane = PaneTasks
+				m.focusedPane = PaneStatus
 			default:
 				m.focusedPane = PaneTasks
 			}

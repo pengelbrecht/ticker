@@ -1,0 +1,12 @@
+{
+  "id": "n26",
+  "title": "Integrate rich agent streaming into TUI",
+  "description": "Integrate the new agent streaming data layer (AgentState, StreamParser, RunRecord) into the ticker TUI. This enables real-time display of thinking, output, tool activity, and detailed metrics during agent runs, plus viewing completed tick results.",
+  "status": "open",
+  "priority": 1,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:41:52.498415Z",
+  "updated_at": "2026-01-11T20:41:52.498415Z"
+}

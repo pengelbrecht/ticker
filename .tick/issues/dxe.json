@@ -1,0 +1,13 @@
+{
+  "id": "dxe",
+  "title": "Update ClaudeAgent to use stream-json format",
+  "description": "Update ClaudeAgent.Run() to use stream-json flags: --output-format stream-json --include-partial-messages --verbose. Parse stdout using StreamParser instead of line-by-line text. Return AgentState.ToRecord() as part of Result for persistence.",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "n26",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:42:45.941015Z",
+  "updated_at": "2026-01-11T20:42:45.941015Z"
+}
