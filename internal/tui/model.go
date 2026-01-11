@@ -344,13 +344,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		// Store new dimensions, clamping to minimum values
 		m.width = msg.Width
 		m.height = msg.Height
-		m.help.Width = msg.Width
+
+		// Clamp to minimum dimensions for usable display
+		if m.width < minWidth {
+			m.width = minWidth
+		}
+		if m.height < minHeight {
+			m.height = minHeight
+		}
+
+		m.help.Width = m.width
 
 		// Update viewport dimensions
 		m.updateViewportSize()
 
+		// Set ready on first resize
 		if !m.ready {
 			m.ready = true
 		}
@@ -500,6 +511,8 @@ const (
 	taskPaneWidth    = 35 // Fixed width for task list pane
 	statusBarMinRows = 3  // Header + progress + border separator (4 with progress bar)
 	footerRows       = 1  // Help hints
+	minWidth         = 60 // Minimum terminal width for usable display
+	minHeight        = 10 // Minimum terminal height for usable display
 )
 
 // View renders the current model state.
