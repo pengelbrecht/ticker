@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1567,5 +1568,372 @@ func TestIterationStartMsg_ClearsThinking(t *testing.T) {
 	}
 	if m.thinking != "" {
 		t.Errorf("expected thinking to be cleared, got '%s'", m.thinking)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Tool Activity Tests
+// -----------------------------------------------------------------------------
+
+func TestUpdate_AgentToolStartMsg(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Send tool start message
+	msg := AgentToolStartMsg{
+		ID:   "tool-123",
+		Name: "Read",
+	}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Active tool should be set
+	if m.activeTool == nil {
+		t.Fatal("expected activeTool to be set")
+	}
+	if m.activeTool.ID != "tool-123" {
+		t.Errorf("expected activeTool.ID 'tool-123', got '%s'", m.activeTool.ID)
+	}
+	if m.activeTool.Name != "Read" {
+		t.Errorf("expected activeTool.Name 'Read', got '%s'", m.activeTool.Name)
+	}
+	if m.activeTool.StartedAt.IsZero() {
+		t.Error("expected activeTool.StartedAt to be set")
+	}
+}
+
+func TestUpdate_AgentToolEndMsg(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// First start a tool
+	startMsg := AgentToolStartMsg{
+		ID:   "tool-123",
+		Name: "Read",
+	}
+	newModel, _ := m.Update(startMsg)
+	m = newModel.(Model)
+
+	// Now end the tool
+	endMsg := AgentToolEndMsg{
+		ID:       "tool-123",
+		Name:     "Read",
+		Duration: 500 * time.Millisecond,
+		IsError:  false,
+	}
+	newModel, _ = m.Update(endMsg)
+	m = newModel.(Model)
+
+	// Active tool should be cleared
+	if m.activeTool != nil {
+		t.Error("expected activeTool to be nil after tool end")
+	}
+
+	// Tool should be in history
+	if len(m.toolHistory) != 1 {
+		t.Fatalf("expected 1 tool in history, got %d", len(m.toolHistory))
+	}
+
+	histTool := m.toolHistory[0]
+	if histTool.ID != "tool-123" {
+		t.Errorf("expected history tool ID 'tool-123', got '%s'", histTool.ID)
+	}
+	if histTool.Name != "Read" {
+		t.Errorf("expected history tool Name 'Read', got '%s'", histTool.Name)
+	}
+	if histTool.Duration != 500*time.Millisecond {
+		t.Errorf("expected history tool Duration 500ms, got %v", histTool.Duration)
+	}
+	if histTool.IsError {
+		t.Error("expected history tool IsError to be false")
+	}
+}
+
+func TestUpdate_AgentToolEndMsg_WithError(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Start and end a tool with error
+	startMsg := AgentToolStartMsg{ID: "tool-err", Name: "Bash"}
+	newModel, _ := m.Update(startMsg)
+	m = newModel.(Model)
+
+	endMsg := AgentToolEndMsg{
+		ID:       "tool-err",
+		Name:     "Bash",
+		Duration: 2 * time.Second,
+		IsError:  true,
+	}
+	newModel, _ = m.Update(endMsg)
+	m = newModel.(Model)
+
+	// Verify error flag is set
+	if len(m.toolHistory) != 1 {
+		t.Fatalf("expected 1 tool in history, got %d", len(m.toolHistory))
+	}
+	if !m.toolHistory[0].IsError {
+		t.Error("expected history tool IsError to be true")
+	}
+}
+
+func TestUpdate_AgentToolEndMsg_WrongID(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Start a tool
+	startMsg := AgentToolStartMsg{ID: "tool-A", Name: "Read"}
+	newModel, _ := m.Update(startMsg)
+	m = newModel.(Model)
+
+	// End with different ID (should be ignored)
+	endMsg := AgentToolEndMsg{ID: "tool-B", Name: "Read", Duration: 100 * time.Millisecond}
+	newModel, _ = m.Update(endMsg)
+	m = newModel.(Model)
+
+	// Active tool should still be set
+	if m.activeTool == nil {
+		t.Error("expected activeTool to still be set when end ID doesn't match")
+	}
+	// History should be empty
+	if len(m.toolHistory) != 0 {
+		t.Errorf("expected empty tool history, got %d", len(m.toolHistory))
+	}
+}
+
+func TestIterationStartMsg_ClearsToolState(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Set up tool state
+	m.activeTool = &ToolActivityInfo{ID: "active", Name: "Read"}
+	m.toolHistory = []ToolActivityInfo{
+		{ID: "hist1", Name: "Edit", Duration: 100 * time.Millisecond},
+		{ID: "hist2", Name: "Bash", Duration: 200 * time.Millisecond},
+	}
+
+	// Start new iteration
+	msg := IterationStartMsg{
+		Iteration: 2,
+		TaskID:    "task2",
+		TaskTitle: "New Task",
+	}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Tool state should be cleared
+	if m.activeTool != nil {
+		t.Error("expected activeTool to be cleared on new iteration")
+	}
+	if len(m.toolHistory) != 0 {
+		t.Errorf("expected toolHistory to be cleared, got %d items", len(m.toolHistory))
+	}
+}
+
+func TestBuildToolActivitySection_NoTools(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.activeTool = nil
+	m.toolHistory = nil
+
+	section := m.buildToolActivitySection(80)
+	if section != "" {
+		t.Errorf("expected empty section with no tools, got '%s'", section)
+	}
+}
+
+func TestBuildToolActivitySection_ActiveToolOnly(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.animFrame = 0
+	m.activeTool = &ToolActivityInfo{
+		ID:        "tool-1",
+		Name:      "Read",
+		StartedAt: time.Now(),
+	}
+	m.toolHistory = nil
+
+	section := m.buildToolActivitySection(80)
+
+	// Should contain tool name
+	if !strings.Contains(section, "Read") {
+		t.Error("expected section to contain tool name 'Read'")
+	}
+	// Should not contain history header (no history)
+	if strings.Contains(section, "Tools (") {
+		t.Error("expected no history header when only active tool exists")
+	}
+}
+
+func TestBuildToolActivitySection_HistoryOnly(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.activeTool = nil
+	m.toolHistory = []ToolActivityInfo{
+		{ID: "h1", Name: "Edit", Duration: 800 * time.Millisecond},
+		{ID: "h2", Name: "Read", Duration: 200 * time.Millisecond},
+	}
+
+	section := m.buildToolActivitySection(80)
+
+	// Should contain history header with count
+	if !strings.Contains(section, "Tools (2)") {
+		t.Error("expected section to contain 'Tools (2)' header")
+	}
+	// Should contain success icons
+	if !strings.Contains(section, "✓") {
+		t.Error("expected section to contain success icons")
+	}
+}
+
+func TestBuildToolActivitySection_BothActiveAndHistory(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.animFrame = 0
+	m.activeTool = &ToolActivityInfo{
+		ID:        "active",
+		Name:      "Bash",
+		StartedAt: time.Now(),
+	}
+	m.toolHistory = []ToolActivityInfo{
+		{ID: "h1", Name: "Read", Duration: 500 * time.Millisecond},
+	}
+
+	section := m.buildToolActivitySection(80)
+
+	// Should contain active tool name
+	if !strings.Contains(section, "Bash") {
+		t.Error("expected section to contain active tool name 'Bash'")
+	}
+	// Should contain history header
+	if !strings.Contains(section, "Tools (1)") {
+		t.Error("expected section to contain 'Tools (1)' header")
+	}
+	// Should contain history entry
+	if !strings.Contains(section, "Read") {
+		t.Error("expected section to contain history tool name 'Read'")
+	}
+}
+
+func TestBuildToolActivitySection_HistoryTruncation(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.activeTool = nil
+
+	// Create 8 tools in history (more than the 5 max shown)
+	for i := 0; i < 8; i++ {
+		m.toolHistory = append(m.toolHistory, ToolActivityInfo{
+			ID:       fmt.Sprintf("tool-%d", i),
+			Name:     "Read",
+			Duration: time.Duration(i*100) * time.Millisecond,
+		})
+	}
+
+	section := m.buildToolActivitySection(80)
+
+	// Should show history header with full count
+	if !strings.Contains(section, "Tools (8)") {
+		t.Error("expected section to contain 'Tools (8)' header")
+	}
+	// Should show truncation indicator
+	if !strings.Contains(section, "and 3 more") {
+		t.Error("expected section to contain '... and 3 more' truncation indicator")
+	}
+}
+
+func TestBuildToolActivitySection_ErrorTool(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.activeTool = nil
+	m.toolHistory = []ToolActivityInfo{
+		{ID: "err", Name: "Bash", Duration: 1 * time.Second, IsError: true},
+	}
+
+	section := m.buildToolActivitySection(80)
+
+	// Should contain error icon
+	if !strings.Contains(section, "✗") {
+		t.Error("expected section to contain error icon '✗'")
+	}
+}
+
+func TestRenderToolHistoryLine_Success(t *testing.T) {
+	m := New(Config{})
+	tool := ToolActivityInfo{
+		ID:       "tool-1",
+		Name:     "Read",
+		Duration: 1500 * time.Millisecond,
+		IsError:  false,
+	}
+
+	line := m.renderToolHistoryLine(tool, 80)
+
+	if !strings.Contains(line, "✓") {
+		t.Error("expected success icon '✓' in line")
+	}
+	if !strings.Contains(line, "Read") {
+		t.Error("expected tool name 'Read' in line")
+	}
+	if !strings.Contains(line, "1.5s") {
+		t.Error("expected duration '1.5s' in line")
+	}
+}
+
+func TestRenderToolHistoryLine_Error(t *testing.T) {
+	m := New(Config{})
+	tool := ToolActivityInfo{
+		ID:       "tool-err",
+		Name:     "Bash",
+		Duration: 2 * time.Second,
+		IsError:  true,
+	}
+
+	line := m.renderToolHistoryLine(tool, 80)
+
+	if !strings.Contains(line, "✗") {
+		t.Error("expected error icon '✗' in line")
+	}
+	if !strings.Contains(line, "Bash") {
+		t.Error("expected tool name 'Bash' in line")
+	}
+	if !strings.Contains(line, "2.0s") {
+		t.Error("expected duration '2.0s' in line")
+	}
+}
+
+func TestBuildOutputContent_WithTools(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.animFrame = 0
+	m.activeTool = &ToolActivityInfo{
+		ID:        "active",
+		Name:      "Read",
+		StartedAt: time.Now(),
+	}
+	m.output = "Some output text"
+
+	content := m.buildOutputContent(80)
+
+	// Should contain tool section
+	if !strings.Contains(content, "Read") {
+		t.Error("expected content to contain active tool 'Read'")
+	}
+	// Should contain output
+	if !strings.Contains(content, "Some output text") {
+		t.Error("expected content to contain output text")
 	}
 }

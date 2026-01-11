@@ -2,7 +2,7 @@
   "id": "j9n",
   "title": "Add tool activity display to output pane",
   "description": "Add tool activity display to output pane. Show active tool with spinner (e.g., '⟳ Read /src/main.go'), and a collapsible history of completed tools with name and duration. Match Claude Code TUI style.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "n26",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:42:23.89142Z",
-  "updated_at": "2026-01-11T20:42:23.89142Z"
+  "updated_at": "2026-01-11T21:44:10.458529Z",
+  "closed_at": "2026-01-11T21:44:10.458529Z",
+  "closed_reason": "Added tool activity display to output pane: ToolActivityInfo struct for tracking tools, AgentToolStartMsg/AgentToolEndMsg handlers, buildToolActivitySection() with spinner and history, renderToolHistoryLine() for completed tools. Active tool shows animated spinner with name and elapsed time. History shows last 5 tools with success/error icons and duration. Comprehensive tests added."
 }

@@ -193,6 +193,17 @@ type AgentStatusMsg struct {
 	Error  string          // Error message if Status is "error"
 }
 
+// ToolActivityInfo represents a tool invocation for display in the TUI.
+// Tracks active and completed tools with timing information.
+type ToolActivityInfo struct {
+	ID        string        // Unique tool invocation ID
+	Name      string        // Tool name (e.g., "Read", "Edit", "Bash")
+	Input     string        // Truncated input summary for display
+	StartedAt time.Time     // When the tool started
+	Duration  time.Duration // How long the tool ran (0 if still active)
+	IsError   bool          // Whether the tool returned an error
+}
+
 // -----------------------------------------------------------------------------
 // Helpers - Utility functions
 // -----------------------------------------------------------------------------
@@ -345,6 +356,11 @@ type Model struct {
 	agentState   *agent.AgentState // live streaming state for rich agent output display
 	taskOutputs  map[string]string // per-task output history
 	viewingTask  string            // task ID being viewed (empty = live output)
+
+	// Tool activity tracking
+	activeTool    *ToolActivityInfo   // currently active tool (nil if none)
+	toolHistory   []ToolActivityInfo  // completed tools (most recent first)
+	showToolHist  bool                // whether to show expanded tool history
 
 	// Layout
 	width       int // clamped width for rendering (min: minWidth)
@@ -553,9 +569,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Clear output and thinking buffers for new iteration
+		// Clear output, thinking, and tool state for new iteration
 		m.output = ""
 		m.thinking = ""
+		m.activeTool = nil
+		m.toolHistory = nil
 		if m.viewingTask == "" {
 			m.viewport.SetContent("")
 		}
@@ -647,6 +665,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Append response text to output buffer
 		m.output += msg.Text
 		// Update viewport if viewing live output
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case AgentToolStartMsg:
+		// Start tracking a new tool invocation
+		m.activeTool = &ToolActivityInfo{
+			ID:        msg.ID,
+			Name:      msg.Name,
+			StartedAt: time.Now(),
+		}
+		// Update viewport to show active tool
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case AgentToolEndMsg:
+		// Complete the active tool and move to history
+		if m.activeTool != nil && m.activeTool.ID == msg.ID {
+			m.activeTool.Duration = msg.Duration
+			m.activeTool.IsError = msg.IsError
+			// Prepend to history (most recent first)
+			m.toolHistory = append([]ToolActivityInfo{*m.activeTool}, m.toolHistory...)
+			m.activeTool = nil
+		}
+		// Update viewport to reflect tool completion
 		if m.viewingTask == "" {
 			m.updateOutputViewport()
 		}
@@ -826,9 +870,16 @@ func (m *Model) updateOutputViewport() {
 }
 
 // buildOutputContent creates the combined content for the output viewport.
-// It includes a collapsible thinking section (when non-empty) and the main output.
+// It includes a collapsible thinking section (when non-empty), tool activity, and the main output.
 func (m *Model) buildOutputContent(width int) string {
 	var sections []string
+
+	// Tool activity section (always shown first when there's tool activity)
+	toolSection := m.buildToolActivitySection(width)
+	if toolSection != "" {
+		sections = append(sections, toolSection)
+		sections = append(sections, "") // Blank line after tools
+	}
 
 	// Thinking section (collapsible - only shown when non-empty)
 	if m.thinking != "" {
@@ -852,6 +903,90 @@ func (m *Model) buildOutputContent(width int) string {
 	}
 
 	return strings.Join(sections, "\n")
+}
+
+// buildToolActivitySection creates the tool activity display section.
+// Shows active tool with spinner, and collapsible history of completed tools.
+// Format:
+//
+//	⟳ Read /src/main.go (active)
+//	─── Tools (3) ───
+//	✓ Edit 0.8s
+//	✓ Read 0.2s
+//	✓ Bash 1.2s
+func (m *Model) buildToolActivitySection(width int) string {
+	// Nothing to show if no tools
+	if m.activeTool == nil && len(m.toolHistory) == 0 {
+		return ""
+	}
+
+	var lines []string
+
+	// Active tool with spinner
+	if m.activeTool != nil {
+		// Spinner frames for active tool
+		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		spinner := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinnerFrames[m.animFrame%len(spinnerFrames)])
+
+		// Tool name in highlight color
+		toolName := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(m.activeTool.Name)
+
+		// Show elapsed time
+		elapsed := time.Since(m.activeTool.StartedAt)
+		elapsedStr := dimStyle.Render(fmt.Sprintf("%.1fs", elapsed.Seconds()))
+
+		activeLine := fmt.Sprintf("%s %s %s", spinner, toolName, elapsedStr)
+		lines = append(lines, activeLine)
+	}
+
+	// Tool history (collapsed by default, showing count)
+	if len(m.toolHistory) > 0 {
+		// History header with count
+		histCount := len(m.toolHistory)
+		histHeader := dimStyle.Render(fmt.Sprintf("─── Tools (%d) ───", histCount))
+		lines = append(lines, histHeader)
+
+		// Show recent tools (limit to last 5 to avoid clutter)
+		maxHistory := 5
+		showCount := histCount
+		if showCount > maxHistory {
+			showCount = maxHistory
+		}
+
+		for i := 0; i < showCount; i++ {
+			tool := m.toolHistory[i]
+			lines = append(lines, m.renderToolHistoryLine(tool, width))
+		}
+
+		// Show truncation indicator if there are more
+		if histCount > maxHistory {
+			moreCount := histCount - maxHistory
+			moreLine := dimStyle.Render(fmt.Sprintf("  ... and %d more", moreCount))
+			lines = append(lines, moreLine)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// renderToolHistoryLine renders a single completed tool entry.
+// Format: "  ✓ Read 0.2s" or "  ✗ Bash 1.2s" (for errors)
+func (m *Model) renderToolHistoryLine(tool ToolActivityInfo, width int) string {
+	// Status icon
+	var icon string
+	if tool.IsError {
+		icon = lipgloss.NewStyle().Foreground(colorRed).Render("✗")
+	} else {
+		icon = lipgloss.NewStyle().Foreground(colorGreen).Render("✓")
+	}
+
+	// Tool name
+	toolName := dimStyle.Render(tool.Name)
+
+	// Duration
+	durationStr := dimStyle.Render(fmt.Sprintf("%.1fs", tool.Duration.Seconds()))
+
+	return fmt.Sprintf("  %s %s %s", icon, toolName, durationStr)
 }
 
 // Layout constants
