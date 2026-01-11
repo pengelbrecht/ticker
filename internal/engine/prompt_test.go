@@ -99,8 +99,8 @@ func TestPromptBuilder_Build_FullContext(t *testing.T) {
 	if !strings.Contains(prompt, "Commit your changes") {
 		t.Error("prompt missing commit instruction")
 	}
-	if !strings.Contains(prompt, "Add notes for next iteration") {
-		t.Error("prompt missing add notes instruction")
+	if !strings.Contains(prompt, "Add epic note") {
+		t.Error("prompt missing add epic note instruction")
 	}
 
 	// Check tk note command includes epic ID

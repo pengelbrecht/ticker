@@ -137,9 +137,9 @@ These notes were left by previous iterations. Read them carefully before startin
 1. **Review epic notes above** - Previous iterations may have left important context.
 2. **Complete the current task** - Implement the required functionality as specified.
 3. **Run tests** - Ensure all existing tests pass and add new tests if appropriate.
-4. **Close the task** - Run ` + "`tk close {{.TaskID}} \"<summary>\"`" + ` when complete.
+4. **Close the task** - Run ` + "`tk close {{.TaskID}} --reason \"<solution summary>\"`" + ` when complete. The reason should summarize HOW you solved the task (approach taken, key changes made, files modified).
 5. **Commit your changes** - Create a commit with the task ID in the message.
-6. **Add notes for next iteration** - Run ` + "`tk note {{.EpicID}} \"<message>\"`" + ` to leave context for the next iteration. Include learnings, gotchas, or anything the next iteration should know.
+6. **Add epic note** - Run ` + "`tk note {{.EpicID}} \"<message>\"`" + ` to leave context for future iterations. Include learnings, gotchas, architectural decisions, or anything the next iteration should know.
 
 ## Rules
 
