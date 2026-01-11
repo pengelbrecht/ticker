@@ -138,23 +138,13 @@ func (m Model) renderStatusBar() string {
 		statusItemStyle.Render(fmt.Sprintf("[%s] %s", m.taskID, truncate(m.taskTitle, 20))),
 	)
 
-	cost := fmt.Sprintf("%s %s",
-		statusLabelStyle.Render("Cost:"),
-		statusItemStyle.Render(fmt.Sprintf("$%.2f/$%.2f", m.cost, m.maxCost)),
-	)
-
-	tokens := fmt.Sprintf("%s %s",
-		statusLabelStyle.Render("Tokens:"),
-		statusItemStyle.Render(fmt.Sprintf("%d", m.tokens)),
-	)
-
 	duration := fmt.Sprintf("%s %s",
 		statusLabelStyle.Render("Time:"),
 		statusItemStyle.Render(formatDuration(time.Since(m.startTime))),
 	)
 
 	statsLine := lipgloss.JoinHorizontal(lipgloss.Center,
-		iteration, " │ ", task, " │ ", cost, " │ ", tokens, " │ ", duration,
+		iteration, " │ ", task, " │ ", duration,
 	)
 
 	// Second line: progress bar
