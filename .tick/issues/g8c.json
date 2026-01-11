@@ -2,7 +2,7 @@
   "id": "g8c",
   "title": "Task list panel",
   "description": "Show epic tasks with status indicators.\n\ninternal/tui/tasks.go:\n- List tasks under epic\n- Status icons: ○ open, ◐ in_progress, ● closed\n- Highlight current task\n- Show blocked_by relationships\n\nRefresh task list after each iteration.\n\nVerify: Tasks update as agent completes them",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,6 @@
   "parent": "e8g",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T13:04:13.209226895Z",
-  "updated_at": "2026-01-11T13:04:13.209226895Z"
+  "updated_at": "2026-01-11T14:16:05.52275985Z",
+  "closed_at": "2026-01-11T14:16:05.52275985Z"
 }

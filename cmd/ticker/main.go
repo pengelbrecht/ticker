@@ -205,6 +205,27 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	// Create engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
 
+	// Helper to refresh task list in TUI
+	refreshTasks := func() {
+		tasks, err := ticksClient.ListTasks(epicID)
+		if err != nil {
+			return // Silently ignore errors
+		}
+		taskInfos := make([]tui.TaskInfo, len(tasks))
+		for i, t := range tasks {
+			taskInfos[i] = tui.TaskInfo{
+				ID:        t.ID,
+				Title:     t.Title,
+				Status:    tui.TaskStatus(t.Status),
+				BlockedBy: t.BlockedBy,
+			}
+		}
+		p.Send(tui.TasksUpdateMsg{Tasks: taskInfos})
+	}
+
+	// Initial task list load
+	go refreshTasks()
+
 	// Wire engine callbacks to send TUI messages
 	eng.OnOutput = func(chunk string) {
 		p.Send(tui.OutputMsg(chunk))
@@ -224,6 +245,8 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 			Cost:      result.Cost,
 			Tokens:    result.TokensIn + result.TokensOut,
 		})
+		// Refresh task list after each iteration
+		go refreshTasks()
 	}
 
 	eng.OnSignal = func(sig engine.Signal, reason string) {

@@ -183,18 +183,32 @@ func TestViewQuitting(t *testing.T) {
 
 func TestTaskItem(t *testing.T) {
 	item := taskItem{
-		id:     "abc",
-		title:  "Test task",
-		status: "open",
+		info: TaskInfo{
+			ID:     "abc",
+			Title:  "Test task",
+			Status: TaskStatusOpen,
+		},
 	}
 
-	if item.Title() != "[abc] Test task" {
-		t.Errorf("expected '[abc] Test task', got '%s'", item.Title())
+	// Title format: "  ○ [abc] Test task" (icon + id + title)
+	title := item.Title()
+	if !contains(title, "[abc]") || !contains(title, "Test task") {
+		t.Errorf("expected title to contain '[abc]' and 'Test task', got '%s'", title)
 	}
-	if item.Description() != "open" {
-		t.Errorf("expected 'open', got '%s'", item.Description())
+	// Description empty when no blockers
+	if item.Description() != "" {
+		t.Errorf("expected empty description, got '%s'", item.Description())
 	}
 	if item.FilterValue() != "Test task" {
 		t.Errorf("expected 'Test task', got '%s'", item.FilterValue())
 	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

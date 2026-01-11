@@ -71,6 +71,25 @@ func (c *Client) GetEpic(epicID string) (*Epic, error) {
 	return &epic, nil
 }
 
+// ListTasks returns all tasks under the given parent epic.
+func (c *Client) ListTasks(epicID string) ([]Task, error) {
+	out, err := c.run("list", "--parent", epicID, "--json")
+	if err != nil {
+		return nil, fmt.Errorf("tk list --parent %s: %w", epicID, err)
+	}
+
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	var tasks []Task
+	if err := json.Unmarshal(out, &tasks); err != nil {
+		return nil, fmt.Errorf("parse tasks JSON: %w", err)
+	}
+	return tasks, nil
+}
+
 // CloseTask closes a task with the given reason.
 func (c *Client) CloseTask(taskID, reason string) error {
 	_, err := c.run("close", taskID, "--reason", reason)

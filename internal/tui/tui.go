@@ -52,17 +52,6 @@ type Config struct {
 	MaxIteration int
 }
 
-// taskItem implements list.Item for task display.
-type taskItem struct {
-	id     string
-	title  string
-	status string
-}
-
-func (t taskItem) Title() string       { return fmt.Sprintf("[%s] %s", t.id, t.title) }
-func (t taskItem) Description() string { return t.status }
-func (t taskItem) FilterValue() string { return t.title }
-
 // New creates a new TUI model.
 func New(cfg Config) Model {
 	// Initialize viewport for output
@@ -173,12 +162,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Resize progress bar
 		m.progress.Width = msg.Width - 20
 
+	case TasksUpdateMsg:
+		m.updateTaskList(msg.Tasks)
+
 	case IterationStartMsg:
 		m.iteration = msg.Iteration
 		m.taskID = msg.TaskID
 		m.taskTitle = msg.TaskTitle
 		m.output = "" // Clear output for new iteration
 		m.viewport.SetContent(m.output)
+		m.markCurrentTask(msg.TaskID)
 
 	case IterationEndMsg:
 		m.cost += msg.Cost
