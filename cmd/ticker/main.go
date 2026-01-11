@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"syscall"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"github.com/pengelbrecht/ticker/internal/agent"
@@ -16,6 +17,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
 	"github.com/pengelbrecht/ticker/internal/engine"
 	"github.com/pengelbrecht/ticker/internal/ticks"
+	"github.com/pengelbrecht/ticker/internal/tui"
 )
 
 var version = "0.1.0"
@@ -126,6 +128,7 @@ func main() {
 
 func runRun(cmd *cobra.Command, args []string) {
 	auto, _ := cmd.Flags().GetBool("auto")
+	headless, _ := cmd.Flags().GetBool("headless")
 	maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 	maxCost, _ := cmd.Flags().GetFloat64("max-cost")
 	checkpointInterval, _ := cmd.Flags().GetInt("checkpoint-interval")
@@ -151,6 +154,45 @@ func runRun(cmd *cobra.Command, args []string) {
 		os.Exit(ExitError)
 	}
 
+	// Get epic info for TUI
+	ticksClient := ticks.NewClient()
+	epic, err := ticksClient.GetEpic(epicID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting epic: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// TUI mode (default)
+	if !headless {
+		runWithTUI(epicID, epic.Title, maxIterations, maxCost, checkpointInterval)
+		return
+	}
+
+	// Headless mode
+	runHeadless(epicID, maxIterations, maxCost, checkpointInterval)
+}
+
+func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval int) {
+	// Create TUI model
+	m := tui.New(tui.Config{
+		EpicID:       epicID,
+		EpicTitle:    epicTitle,
+		MaxCost:      maxCost,
+		MaxIteration: maxIterations,
+	})
+
+	// Create program
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	// Run TUI (blocks until quit)
+	// TODO: Wire up engine to run in background and send messages to TUI
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+		os.Exit(ExitError)
+	}
+}
+
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval int) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
