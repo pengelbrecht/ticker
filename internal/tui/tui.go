@@ -230,42 +230,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		// Navigation keys - handle directly like ticks TUI
-		case key.Matches(msg, m.keys.ScrollDown):
+		}
+
+		// Navigation keys - handle with msg.String() like ticks TUI
+		switch msg.String() {
+		case "j", "down":
 			if m.focusedPane == PaneOutput {
 				m.viewport.LineDown(1)
 			} else {
 				m.tasks.CursorDown()
 			}
 			return m, nil
-
-		case key.Matches(msg, m.keys.ScrollUp):
+		case "k", "up":
 			if m.focusedPane == PaneOutput {
 				m.viewport.LineUp(1)
 			} else {
 				m.tasks.CursorUp()
 			}
 			return m, nil
-
-		case key.Matches(msg, m.keys.PageDown):
+		case "pgdown", "ctrl+d":
 			if m.focusedPane == PaneOutput {
 				m.viewport.HalfViewDown()
 			}
 			return m, nil
-
-		case key.Matches(msg, m.keys.PageUp):
+		case "pgup", "ctrl+u":
 			if m.focusedPane == PaneOutput {
 				m.viewport.HalfViewUp()
 			}
 			return m, nil
-
-		case key.Matches(msg, m.keys.Top):
+		case "g", "home":
 			if m.focusedPane == PaneOutput {
 				m.viewport.GotoTop()
 			}
 			return m, nil
-
-		case key.Matches(msg, m.keys.Bottom):
+		case "G", "end":
 			if m.focusedPane == PaneOutput {
 				m.viewport.GotoBottom()
 			}
