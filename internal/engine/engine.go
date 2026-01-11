@@ -286,9 +286,13 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 
 			switch iterResult.Signal {
 			case SignalComplete:
-				// Close the epic when agent signals complete
-				_ = e.ticks.CloseEpic(config.EpicID, "completed by agent")
-				return state.toResult("epic complete (COMPLETE signal)"), nil
+				// Agent emitted COMPLETE - ignore it and continue loop
+				// Ticker detects completion naturally via tk next returning nil
+				// Log this as a warning since agent shouldn't emit COMPLETE
+				if e.OnOutput != nil {
+					e.OnOutput("\n[Warning: Agent emitted COMPLETE signal - ignoring. Ticker handles completion automatically.]\n")
+				}
+				// Continue to next iteration - don't close epic
 			case SignalEject:
 				return state.toResult(fmt.Sprintf("agent ejected: %s", iterResult.SignalReason)), nil
 			case SignalBlocked:

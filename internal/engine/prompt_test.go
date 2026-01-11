@@ -121,13 +121,9 @@ func TestPromptBuilder_Build_FullContext(t *testing.T) {
 	if !strings.Contains(prompt, "Always leave notes") {
 		t.Error("prompt missing always leave notes rule")
 	}
-	if !strings.Contains(prompt, "Signal protocol") {
-		t.Error("prompt missing signal protocol rule")
-	}
-
-	// Check signal examples
-	if !strings.Contains(prompt, "<promise>COMPLETE</promise>") {
-		t.Error("prompt missing COMPLETE signal example")
+	// Check exit signals (only EJECT and BLOCKED - no COMPLETE)
+	if !strings.Contains(prompt, "Exit signals") {
+		t.Error("prompt missing exit signals section")
 	}
 	if !strings.Contains(prompt, "<promise>EJECT:") {
 		t.Error("prompt missing EJECT signal example")
