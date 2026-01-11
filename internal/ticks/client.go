@@ -40,6 +40,10 @@ func (c *Client) NextTask(epicID string) (*Task, error) {
 	if err := json.Unmarshal(out, &task); err != nil {
 		return nil, fmt.Errorf("parse task JSON: %w", err)
 	}
+	// Guard against empty task (no ready tasks)
+	if task.ID == "" {
+		return nil, nil
+	}
 	return &task, nil
 }
 
@@ -111,6 +115,10 @@ func (c *Client) NextReadyEpic() (*Epic, error) {
 	var epic Epic
 	if err := json.Unmarshal(out, &epic); err != nil {
 		return nil, fmt.Errorf("parse epic JSON: %w", err)
+	}
+	// Guard against empty epic
+	if epic.ID == "" {
+		return nil, nil
 	}
 	return &epic, nil
 }
