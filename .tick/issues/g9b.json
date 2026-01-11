@@ -2,7 +2,7 @@
   "id": "g9b",
   "title": "Implement output/detail pane (right)",
   "description": "Implement renderOutputPane() function:\n\nLayout:\n- Flexible width (total - 35 - borders)\n- Rounded border (gray when unfocused, blue when focused)\n- Header: 'Agent Output' or 'Output (45%)' with scroll percentage\n- Content: viewport.Model for scrollable output\n\nContent modes:\n1. Running mode: Shows streaming agent output\n   - Append new output chunks\n   - Auto-scroll to bottom on new content\n   - Show spinner in header if actively running\n\n2. Detail mode (when paused or viewing history):\n   - Show selected task details\n   - ID, Status, Title\n   - BlockedBy list if any\n   - Recent output for that task\n\nViewport setup:\n- Initialize viewport with calculated dimensions\n- Handle scroll via ctrl+u/ctrl+d when focused\n- Show scroll percentage in header when content overflows\n\nStyling:\n- Monospace output text\n- Dim gray for old output, bright for recent\n- Use viewport.GotoBottom() on new output",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -15,5 +15,7 @@
   "parent": "4pq",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-11T20:10:46.16749Z",
-  "updated_at": "2026-01-11T20:13:53.241045Z"
+  "updated_at": "2026-01-11T20:35:33.934637Z",
+  "closed_at": "2026-01-11T20:35:33.934637Z",
+  "closed_reason": "Implemented renderOutputPane() with full viewport support: header with scroll percentage and spinner animation when running, detail mode showing task info (ID, status, title, blockedBy, recent output) when paused, running mode showing viewport content. Added ctrl+u/ctrl+d half-page scroll, j/k line scroll, g/G top/bottom, pgup/pgdown when output pane focused. Added updateViewportSize() helper, tickMsg and OutputMsg handlers with auto-scroll to bottom. Added renderTaskDetail() helper for detail view."
 }

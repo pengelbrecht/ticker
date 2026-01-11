@@ -339,14 +339,32 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles incoming messages and updates the model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.help.Width = msg.Width
+
+		// Update viewport dimensions
+		m.updateViewportSize()
+
 		if !m.ready {
 			m.ready = true
 		}
+
+	case tickMsg:
+		// Animation heartbeat - advance frame and schedule next tick
+		m.animFrame++
+		cmds = append(cmds, tickCmd())
+
+	case OutputMsg:
+		// Append new output and update viewport
+		m.output += string(msg)
+		m.viewport.SetContent(m.output)
+		// Auto-scroll to bottom on new content
+		m.viewport.GotoBottom()
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -359,6 +377,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selectedTask >= len(m.tasks) {
 					m.selectedTask = len(m.tasks) - 1 // Clamp at bounds
 				}
+			} else if m.focusedPane == PaneOutput {
+				// Scroll down in output pane
+				m.viewport.LineDown(1)
 			}
 		case "k", "up":
 			// Navigate up in task list when task pane is focused
@@ -367,36 +388,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selectedTask < 0 {
 					m.selectedTask = 0 // Clamp at bounds
 				}
+			} else if m.focusedPane == PaneOutput {
+				// Scroll up in output pane
+				m.viewport.LineUp(1)
 			}
 		case "ctrl+d":
-			// TODO: scroll down in detail pane
+			// Half-page scroll down in output pane when focused
+			if m.focusedPane == PaneOutput {
+				m.viewport.HalfViewDown()
+			}
 		case "ctrl+u":
-			// TODO: scroll up in detail pane
+			// Half-page scroll up in output pane when focused
+			if m.focusedPane == PaneOutput {
+				m.viewport.HalfViewUp()
+			}
 		case "g":
-			// Go to top of task list when task pane is focused
+			// Go to top
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
 				m.selectedTask = 0
+			} else if m.focusedPane == PaneOutput {
+				m.viewport.GotoTop()
 			}
 		case "G":
-			// Go to bottom of task list when task pane is focused
+			// Go to bottom
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
 				m.selectedTask = len(m.tasks) - 1
+			} else if m.focusedPane == PaneOutput {
+				m.viewport.GotoBottom()
 			}
 		case "pgup":
-			// Page up in task list (move by 5 items)
+			// Page up
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
 				m.selectedTask -= 5
 				if m.selectedTask < 0 {
 					m.selectedTask = 0
 				}
+			} else if m.focusedPane == PaneOutput {
+				m.viewport.ViewUp()
 			}
 		case "pgdown":
-			// Page down in task list (move by 5 items)
+			// Page down
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
 				m.selectedTask += 5
 				if m.selectedTask >= len(m.tasks) {
 					m.selectedTask = len(m.tasks) - 1
 				}
+			} else if m.focusedPane == PaneOutput {
+				m.viewport.ViewDown()
 			}
 		case "?":
 			m.showHelp = !m.showHelp
@@ -415,7 +453,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	return m, tea.Batch(cmds...)
+}
+
+// updateViewportSize recalculates and sets the viewport dimensions.
+func (m *Model) updateViewportSize() {
+	// Calculate viewport dimensions based on current window size
+	// Status bar height: 3 base + 1 if tasks exist
+	statusBarHeight := statusBarMinRows
+	if len(m.tasks) > 0 {
+		statusBarHeight++
+	}
+	contentHeight := m.height - statusBarHeight - footerRows - 2 // -2 for borders
+
+	// Output pane inner dimensions (minus header and separator)
+	viewportHeight := contentHeight - 3 // -1 for header, -1 for separator, -1 for padding
+	if viewportHeight < 1 {
+		viewportHeight = 1
+	}
+
+	// Output pane width
+	outputWidth := m.width - taskPaneWidth - 4 // -4 for borders/padding
+	viewportWidth := outputWidth - 4           // -2 for border, -2 for padding
+	if viewportWidth < 10 {
+		viewportWidth = 10
+	}
+
+	m.viewport.Width = viewportWidth
+	m.viewport.Height = viewportHeight
 }
 
 // Layout constants
@@ -708,17 +773,57 @@ func (m Model) renderTaskLine(task TaskInfo, selected bool, maxWidth int) string
 }
 
 // renderOutputPane renders the right output/details pane.
+// Modes:
+// - Running mode: Shows streaming agent output with auto-scroll
+// - Detail mode (paused): Shows selected task details
 func (m Model) renderOutputPane(height int) string {
 	// Calculate available width (total - task pane - borders/padding)
 	outputWidth := m.width - taskPaneWidth - 4 // -4 for borders/padding on both panes
+	innerWidth := outputWidth - 4              // -2 for border, -2 for padding
 
-	// Build content
-	var content string
-	if m.output != "" {
-		content = m.output
+	// Calculate inner height for content (height minus header line and separator)
+	innerHeight := height - 3 // -1 for header, -1 for separator, -1 for bottom padding
+
+	// Build header with scroll percentage if content overflows
+	var header string
+	scrollPercent := m.viewport.ScrollPercent()
+	if m.viewport.TotalLineCount() > m.viewport.Height && m.viewport.Height > 0 {
+		// Show scroll percentage when content overflows
+		percentStr := fmt.Sprintf("(%d%%)", int(scrollPercent*100))
+		header = headerStyle.Render("Agent Output") + " " + dimStyle.Render(percentStr)
 	} else {
-		content = dimStyle.Render("Waiting for output...")
+		header = headerStyle.Render("Agent Output")
 	}
+
+	// Add spinner to header if actively running
+	if m.running && !m.paused {
+		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		spinner := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinnerFrames[m.animFrame%len(spinnerFrames)])
+		header = spinner + " " + header
+	}
+
+	// Build content based on mode
+	var contentLines []string
+	contentLines = append(contentLines, header)
+	contentLines = append(contentLines, lipgloss.NewStyle().Foreground(colorGray).Render(strings.Repeat("─", innerWidth)))
+
+	// Determine what to show
+	if m.paused && len(m.tasks) > 0 && m.selectedTask >= 0 && m.selectedTask < len(m.tasks) {
+		// Detail mode: show selected task details
+		task := m.tasks[m.selectedTask]
+		detailContent := m.renderTaskDetail(task, innerWidth, innerHeight)
+		contentLines = append(contentLines, detailContent)
+	} else if m.output != "" {
+		// Running mode: show viewport content (already rendered by viewport)
+		viewportContent := m.viewport.View()
+		contentLines = append(contentLines, viewportContent)
+	} else {
+		// Empty state
+		emptyMsg := dimStyle.Render("Waiting for output...")
+		contentLines = append(contentLines, emptyMsg)
+	}
+
+	content := strings.Join(contentLines, "\n")
 
 	// Create styled panel
 	style := panelStyle.Copy().
@@ -731,6 +836,84 @@ func (m Model) renderOutputPane(height int) string {
 	}
 
 	return style.Render(content)
+}
+
+// renderTaskDetail renders the detail view for a selected task.
+func (m Model) renderTaskDetail(task TaskInfo, width, maxHeight int) string {
+	var lines []string
+
+	// ID and Status line
+	idLabel := labelStyle.Render("ID:")
+	idValue := lipgloss.NewStyle().Foreground(colorLavender).Render(task.ID)
+	lines = append(lines, idLabel+idValue)
+
+	statusLabel := labelStyle.Render("Status:")
+	var statusValue string
+	switch task.Status {
+	case TaskStatusOpen:
+		statusValue = statusOpenStyle.Render("open")
+	case TaskStatusInProgress:
+		statusValue = statusInProgressStyle.Render("in_progress")
+	case TaskStatusClosed:
+		statusValue = statusClosedStyle.Render("closed")
+	default:
+		statusValue = dimStyle.Render(string(task.Status))
+	}
+	lines = append(lines, statusLabel+statusValue)
+
+	// Title (may wrap)
+	titleLabel := labelStyle.Render("Title:")
+	lines = append(lines, titleLabel)
+	// Wrap title text if needed
+	titleStyle := lipgloss.NewStyle().Width(width - 2).Foreground(colorBlue)
+	lines = append(lines, "  "+titleStyle.Render(task.Title))
+
+	// BlockedBy list if any
+	if task.IsBlocked() {
+		lines = append(lines, "")
+		blockedLabel := labelStyle.Render("Blocked By:")
+		lines = append(lines, blockedLabel)
+		for _, blockerID := range task.BlockedBy {
+			blockerStyle := lipgloss.NewStyle().Foreground(colorRed)
+			lines = append(lines, "  • "+blockerStyle.Render(blockerID))
+		}
+	}
+
+	// Show current execution indicator
+	if task.IsCurrent {
+		lines = append(lines, "")
+		currentIndicator := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● Currently Executing")
+		lines = append(lines, currentIndicator)
+	}
+
+	// Add recent output section if we have output
+	if m.output != "" {
+		lines = append(lines, "")
+		outputLabel := headerStyle.Render("Recent Output:")
+		lines = append(lines, outputLabel)
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorGray).Render(strings.Repeat("─", width-2)))
+
+		// Show last few lines of output
+		outputLines := strings.Split(m.output, "\n")
+		maxOutputLines := maxHeight - len(lines) - 1
+		if maxOutputLines < 3 {
+			maxOutputLines = 3
+		}
+		startIdx := len(outputLines) - maxOutputLines
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		recentOutput := outputLines[startIdx:]
+		for _, line := range recentOutput {
+			// Truncate long lines
+			if len(line) > width-2 {
+				line = ansi.Truncate(line, width-2, "…")
+			}
+			lines = append(lines, dimStyle.Render(line))
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // renderFooter renders the bottom help hints line.
