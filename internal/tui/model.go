@@ -2,9 +2,11 @@ package tui
 
 import (
 	"os"
+	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -12,6 +14,32 @@ import (
 func init() {
 	// Force TrueColor for terminals that misreport capabilities (e.g., TERM=screen in tmux)
 	os.Setenv("COLORTERM", "truecolor")
+}
+
+// FocusedPane represents which pane currently has focus.
+type FocusedPane int
+
+const (
+	PaneStatus FocusedPane = iota
+	PaneTasks
+	PaneOutput
+)
+
+// TaskStatus represents the status of a task.
+type TaskStatus string
+
+const (
+	TaskStatusOpen       TaskStatus = "open"
+	TaskStatusInProgress TaskStatus = "in-progress"
+	TaskStatusClosed     TaskStatus = "closed"
+)
+
+// TaskInfo represents a task in the task list.
+type TaskInfo struct {
+	ID        string
+	Title     string
+	Status    TaskStatus
+	BlockedBy []string
 }
 
 // keyMap defines all keybindings for the TUI.
@@ -103,11 +131,48 @@ var defaultKeyMap = keyMap{
 
 // Model is the main Bubble Tea model for the ticker TUI.
 type Model struct {
-	width  int
-	height int
-	ready  bool
-	keys   keyMap
-	help   help.Model
+	// Epic/Run state
+	epicID    string
+	epicTitle string
+	iteration int
+	taskID    string
+	taskTitle string
+	running   bool
+	paused    bool
+	quitting  bool
+	startTime time.Time
+
+	// Budget tracking
+	cost          float64
+	maxCost       float64
+	tokens        int
+	maxIterations int
+
+	// UI state
+	focusedPane    FocusedPane
+	showHelp       bool
+	showComplete   bool
+	completeReason string
+	completeSignal string
+
+	// Components
+	viewport     viewport.Model
+	tasks        []TaskInfo
+	selectedTask int
+	output       string
+
+	// Layout
+	width     int
+	height    int
+	ready     bool
+	animFrame int
+
+	// Communication
+	pauseChan chan<- bool
+
+	// Internal
+	keys keyMap
+	help help.Model
 }
 
 // Catppuccin Mocha color palette
