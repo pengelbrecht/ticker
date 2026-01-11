@@ -619,6 +619,35 @@ const (
 	minHeight        = 10 // Minimum terminal height for usable display
 )
 
+// -----------------------------------------------------------------------------
+// Focus management helpers
+// -----------------------------------------------------------------------------
+
+// isFocused returns true if the given pane currently has focus.
+func (m Model) isFocused(pane FocusedPane) bool {
+	return m.focusedPane == pane
+}
+
+// focusBorderColor returns the border color for a pane based on its focus state.
+// Focused pane: blue border (#89DCEB)
+// Unfocused pane: gray border (#6C7086)
+func (m Model) focusBorderColor(pane FocusedPane) lipgloss.Color {
+	if m.isFocused(pane) {
+		return colorBlue
+	}
+	return colorGray
+}
+
+// focusHeaderStyle returns the header style for a pane based on its focus state.
+// Focused pane: bold header
+// Unfocused pane: normal header
+func (m Model) focusHeaderStyle(pane FocusedPane) lipgloss.Style {
+	if m.isFocused(pane) {
+		return headerStyle.Bold(true)
+	}
+	return headerStyle
+}
+
 // View renders the current model state.
 func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
@@ -789,9 +818,11 @@ func (m Model) renderTaskPane(height int) string {
 	innerWidth := taskPaneWidth - 4 // -2 for border, -2 for padding
 
 	// Build header: 'Tasks' or 'Tasks (3/8)' showing completed/total
+	// Use focus-aware header style
+	hdrStyle := m.focusHeaderStyle(PaneTasks)
 	var header string
 	if len(m.tasks) == 0 {
-		header = headerStyle.Render("Tasks")
+		header = hdrStyle.Render("Tasks")
 	} else {
 		completed := 0
 		for _, t := range m.tasks {
@@ -799,7 +830,7 @@ func (m Model) renderTaskPane(height int) string {
 				completed++
 			}
 		}
-		header = headerStyle.Render(fmt.Sprintf("Tasks (%d/%d)", completed, len(m.tasks)))
+		header = hdrStyle.Render(fmt.Sprintf("Tasks (%d/%d)", completed, len(m.tasks)))
 	}
 
 	// Build task list content
@@ -828,15 +859,11 @@ func (m Model) renderTaskPane(height int) string {
 
 	content := strings.Join(lines, "\n")
 
-	// Create styled panel
+	// Create styled panel with focus-aware border
 	style := panelStyle.Copy().
 		Width(taskPaneWidth).
-		Height(height)
-
-	// Add focus indicator
-	if m.focusedPane == PaneTasks {
-		style = style.BorderForeground(colorBlue)
-	}
+		Height(height).
+		BorderForeground(m.focusBorderColor(PaneTasks))
 
 	return style.Render(content)
 }
@@ -914,14 +941,16 @@ func (m Model) renderOutputPane(height int) string {
 	innerHeight := height - 3 // -1 for header, -1 for separator, -1 for bottom padding
 
 	// Build header with scroll percentage if content overflows
+	// Use focus-aware header style
+	hdrStyle := m.focusHeaderStyle(PaneOutput)
 	var header string
 	scrollPercent := m.viewport.ScrollPercent()
 	if m.viewport.TotalLineCount() > m.viewport.Height && m.viewport.Height > 0 {
 		// Show scroll percentage when content overflows
 		percentStr := fmt.Sprintf("(%d%%)", int(scrollPercent*100))
-		header = headerStyle.Render("Agent Output") + " " + dimStyle.Render(percentStr)
+		header = hdrStyle.Render("Agent Output") + " " + dimStyle.Render(percentStr)
 	} else {
-		header = headerStyle.Render("Agent Output")
+		header = hdrStyle.Render("Agent Output")
 	}
 
 	// Add spinner to header if actively running
@@ -954,15 +983,11 @@ func (m Model) renderOutputPane(height int) string {
 
 	content := strings.Join(contentLines, "\n")
 
-	// Create styled panel
+	// Create styled panel with focus-aware border
 	style := panelStyle.Copy().
 		Width(outputWidth).
-		Height(height)
-
-	// Add focus indicator
-	if m.focusedPane == PaneOutput {
-		style = style.BorderForeground(colorBlue)
-	}
+		Height(height).
+		BorderForeground(m.focusBorderColor(PaneOutput))
 
 	return style.Render(content)
 }
