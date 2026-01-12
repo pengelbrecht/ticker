@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/budget"
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
 	"github.com/pengelbrecht/ticker/internal/ticks"
+	"github.com/pengelbrecht/ticker/internal/verify"
 )
 
 // mockAgent implements agent.Agent for testing.
@@ -452,5 +454,215 @@ func TestIterationResult_IsTimeout(t *testing.T) {
 	}
 	if result.Output != "partial output" {
 		t.Errorf("Output = %q, want %q", result.Output, "partial output")
+	}
+}
+
+func TestSetVerifyRunner(t *testing.T) {
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+	mockAg := &mockAgent{name: "test", available: true}
+
+	e := &Engine{
+		agent:      mockAg,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+	}
+
+	// Initially nil
+	if e.verifyRunner != nil {
+		t.Error("verifyRunner should be nil initially")
+	}
+
+	// Set a runner
+	runner := verify.NewRunner(dir)
+	e.SetVerifyRunner(runner)
+
+	if e.verifyRunner == nil {
+		t.Error("verifyRunner should be set")
+	}
+	if e.verifyRunner != runner {
+		t.Error("verifyRunner should match the set runner")
+	}
+}
+
+func TestEngine_VerificationCallbacks(t *testing.T) {
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+	mockAg := &mockAgent{name: "test", available: true}
+
+	verifyStartCalled := false
+	verifyEndCalled := false
+	var verifyStartTaskID string
+	var verifyEndTaskID string
+	var verifyEndResults *verify.Results
+
+	e := &Engine{
+		agent:      mockAg,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+		OnVerificationStart: func(taskID string) {
+			verifyStartCalled = true
+			verifyStartTaskID = taskID
+		},
+		OnVerificationEnd: func(taskID string, results *verify.Results) {
+			verifyEndCalled = true
+			verifyEndTaskID = taskID
+			verifyEndResults = results
+		},
+	}
+
+	// Verify callbacks are set
+	if e.OnVerificationStart == nil {
+		t.Error("OnVerificationStart not set")
+	}
+	if e.OnVerificationEnd == nil {
+		t.Error("OnVerificationEnd not set")
+	}
+
+	// Call the callbacks directly to verify they work
+	e.OnVerificationStart("task-123")
+	testResults := verify.NewResults([]*verify.Result{
+		{Verifier: "test", Passed: true},
+	})
+	e.OnVerificationEnd("task-123", testResults)
+
+	if !verifyStartCalled {
+		t.Error("OnVerificationStart was not called")
+	}
+	if verifyStartTaskID != "task-123" {
+		t.Errorf("OnVerificationStart taskID = %q, want %q", verifyStartTaskID, "task-123")
+	}
+	if !verifyEndCalled {
+		t.Error("OnVerificationEnd was not called")
+	}
+	if verifyEndTaskID != "task-123" {
+		t.Errorf("OnVerificationEnd taskID = %q, want %q", verifyEndTaskID, "task-123")
+	}
+	if verifyEndResults == nil {
+		t.Error("OnVerificationEnd results should not be nil")
+	}
+}
+
+func TestBuildVerificationFailureNote(t *testing.T) {
+	tests := []struct {
+		name         string
+		iteration    int
+		taskID       string
+		results      *verify.Results
+		wantContains []string
+	}{
+		{
+			name:      "single verifier failure",
+			iteration: 3,
+			taskID:    "abc123",
+			results: verify.NewResults([]*verify.Result{
+				{
+					Verifier: "git",
+					Passed:   false,
+					Output:   "M  file1.go\nM  file2.go",
+				},
+			}),
+			wantContains: []string{
+				"Iteration 3",
+				"task abc123",
+				"[git]",
+				"file1.go",
+				"file2.go",
+				"Please fix and close the task again",
+			},
+		},
+		{
+			name:      "multiple verifier failures",
+			iteration: 5,
+			taskID:    "def456",
+			results: verify.NewResults([]*verify.Result{
+				{
+					Verifier: "git",
+					Passed:   false,
+					Output:   "M  modified.go",
+				},
+				{
+					Verifier: "test",
+					Passed:   false,
+					Output:   "FAIL: TestSomething",
+				},
+			}),
+			wantContains: []string{
+				"Iteration 5",
+				"task def456",
+				"[git]",
+				"modified.go",
+				"[test]",
+				"FAIL",
+			},
+		},
+		{
+			name:      "long output truncated",
+			iteration: 1,
+			taskID:    "xyz789",
+			results: verify.NewResults([]*verify.Result{
+				{
+					Verifier: "git",
+					Passed:   false,
+					Output:   strings.Repeat("M  file.go\n", 100), // Very long output
+				},
+			}),
+			wantContains: []string{
+				"Iteration 1",
+				"task xyz789",
+				"[git]",
+				"...", // truncation indicator
+			},
+		},
+		{
+			name:      "no output",
+			iteration: 2,
+			taskID:    "task1",
+			results: verify.NewResults([]*verify.Result{
+				{
+					Verifier: "git",
+					Passed:   false,
+					Output:   "",
+				},
+			}),
+			wantContains: []string{
+				"Iteration 2",
+				"task task1",
+				"[git]",
+				"Please fix",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			note := buildVerificationFailureNote(tt.iteration, tt.taskID, tt.results)
+			for _, want := range tt.wantContains {
+				if !strings.Contains(note, want) {
+					t.Errorf("buildVerificationFailureNote() = %q, want to contain %q", note, want)
+				}
+			}
+		})
+	}
+}
+
+func TestRunConfig_SkipVerify(t *testing.T) {
+	// Test that SkipVerify field exists and defaults to false
+	config := RunConfig{
+		EpicID: "test-epic",
+	}
+
+	if config.SkipVerify {
+		t.Error("SkipVerify should default to false")
+	}
+
+	// Test that it can be set to true
+	config.SkipVerify = true
+	if !config.SkipVerify {
+		t.Error("SkipVerify should be true after being set")
 	}
 }

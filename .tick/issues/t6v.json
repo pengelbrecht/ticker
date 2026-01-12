@@ -1,0 +1,20 @@
+{
+  "id": "t6v",
+  "title": "Integrate verification into engine iteration loop",
+  "description": "Integrate the verification system into the engine's main iteration loop.\n\n## Overview\n\nVerification runs AFTER an agent completes an iteration that closes a task. If verification fails, the task closure is \"rolled back\" (reopened) and failure details are added as an epic note for the next iteration.\n\n## Files to Modify\n\n### internal/engine/engine.go\n\nAdd verification to the main loop:\n\n1. **Detect task closure in agent output** - Check if agent ran `tk close`\n2. **Run verification** - If task was closed, run GitVerifier\n3. **Handle failure** - If verification fails:\n   - Reopen the task (`tk reopen \u003cid\u003e`)\n   - Add epic note with verification failure details\n   - Continue to next iteration (agent will see the failure in notes)\n4. **Handle success** - If verification passes, proceed normally\n\n### internal/engine/engine.go - New fields\n\n```go\ntype Engine struct {\n    // ... existing fields ...\n    verifyRunner *verify.Runner\n}\n\ntype RunConfig struct {\n    // ... existing fields ...\n    SkipVerify bool // --skip-verify flag\n}\n```\n\n### Verification Flow\n\n```\niteration completes\n    ↓\ndid agent close a task? ──no──→ continue loop\n    ↓ yes\nis verification enabled? ──no──→ continue loop\n    ↓ yes\nrun GitVerifier\n    ↓\npassed? ──yes──→ continue loop\n    ↓ no\nreopen task (tk reopen \u003cid\u003e)\nadd epic note with failure details\ncontinue loop (agent sees failure in notes)\n```\n\n## Implementation Notes\n\n- Use `tk reopen \u003cid\u003e` to undo task closure\n- Check for task closure by monitoring ticks client calls or parsing agent output for `tk close`\n- Alternative: Track task status before/after iteration\n- Verification failure note should include:\n  - Which verifier failed\n  - Verification output (truncated if long)\n  - Clear instruction: \"Please fix and close the task again\"\n- Add OnVerificationStart/OnVerificationEnd callbacks for TUI\n\n### internal/engine/engine_test.go\n- Test verification runs after task close\n- Test verification skip when config disabled\n- Test verification skip with --skip-verify\n- Test task reopened on verification failure\n- Test epic note added on failure",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "kvd",
+    "3nt"
+  ],
+  "parent": "t99",
+  "acceptance_criteria": "1. GitVerifier runs automatically after agent closes a task\n2. Verification is skipped when config.Enabled=false\n3. Verification is skipped when RunConfig.SkipVerify=true\n4. Verification failure reopens the task (tk reopen)\n5. Verification failure adds descriptive note to epic\n6. Verification success allows normal loop continuation\n7. OnVerificationStart/OnVerificationEnd callbacks fire appropriately\n8. All unit tests pass\n9. Integration test: agent closes task → verification fails → task reopened → agent sees failure note",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T09:03:07.093099Z",
+  "updated_at": "2026-01-12T09:15:26.864819Z",
+  "closed_at": "2026-01-12T09:15:26.864819Z",
+  "closed_reason": "Integrated verification into engine: added verifyRunner field to Engine, SkipVerify to RunConfig, OnVerificationStart/OnVerificationEnd callbacks, wasTaskClosed() and runVerification() helpers, buildVerificationFailureNote() for epic notes, and ReopenTask to ticks client. Verification runs after agent closes a task - on failure, reopens task and adds epic note for next iteration."
+}

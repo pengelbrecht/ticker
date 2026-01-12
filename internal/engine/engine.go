@@ -11,6 +11,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/budget"
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
 	"github.com/pengelbrecht/ticker/internal/ticks"
+	"github.com/pengelbrecht/ticker/internal/verify"
 )
 
 // Engine orchestrates the Ralph iteration loop.
@@ -21,11 +22,18 @@ type Engine struct {
 	checkpoint *checkpoint.Manager
 	prompt     *PromptBuilder
 
+	// Verification runner (optional - created via SetVerifyRunner)
+	verifyRunner *verify.Runner
+
 	// Callbacks for TUI integration (optional)
 	OnIterationStart func(ctx IterationContext)
 	OnIterationEnd   func(result *IterationResult)
 	OnOutput         func(chunk string)
 	OnSignal         func(signal Signal, reason string)
+
+	// Verification callbacks for TUI status display (optional)
+	OnVerificationStart func(taskID string)
+	OnVerificationEnd   func(taskID string, results *verify.Results)
 
 	// Rich streaming callback for real-time agent state updates.
 	// Called whenever agent state changes (text, thinking, tools, metrics).
@@ -62,6 +70,9 @@ type RunConfig struct {
 
 	// MaxTaskRetries is the maximum iterations on the same task before assuming stuck (0 = 3 default).
 	MaxTaskRetries int
+
+	// SkipVerify disables verification even if configured (--skip-verify flag).
+	SkipVerify bool
 }
 
 // Defaults for RunConfig.
@@ -152,6 +163,12 @@ func NewEngine(a agent.Agent, t *ticks.Client, b *budget.Tracker, c *checkpoint.
 		checkpoint: c,
 		prompt:     NewPromptBuilder(),
 	}
+}
+
+// SetVerifyRunner sets the verification runner for the engine.
+// If set, verification runs after the agent closes a task.
+func (e *Engine) SetVerifyRunner(runner *verify.Runner) {
+	e.verifyRunner = runner
 }
 
 // Run executes the engine loop until completion, signal, or budget exceeded.
@@ -292,6 +309,31 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			// Add note about the error for next iteration
 			_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Iteration %d error: %v", state.iteration, iterResult.Error))
 			continue // Try next iteration
+		}
+
+		// Check if task was closed by the agent - run verification if so
+		if !config.SkipVerify && e.verifyRunner != nil {
+			taskClosed, err := e.wasTaskClosed(task.ID)
+			if err != nil {
+				// Log but don't fail on status check error
+				_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not check task status: %v", err))
+			} else if taskClosed {
+				// Run verification
+				verifyResult := e.runVerification(ctx, task.ID, iterResult.Output, config.EpicID)
+				if verifyResult != nil && !verifyResult.AllPassed {
+					// Verification failed - reopen task and add note
+					if err := e.ticks.ReopenTask(task.ID); err != nil {
+						_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not reopen task %s: %v", task.ID, err))
+					}
+					// Add epic note with failure details
+					note := buildVerificationFailureNote(state.iteration, task.ID, verifyResult)
+					_ = e.ticks.AddNote(config.EpicID, note)
+					// Continue to next iteration - agent will see the failure in notes
+					continue
+				}
+				// Verification passed - track as completed
+				state.completedTasks = append(state.completedTasks, task.ID)
+			}
 		}
 
 		// Handle signals
@@ -509,4 +551,63 @@ func buildTimeoutNote(iteration int, taskID string, timeout time.Duration, parti
 	}
 
 	return note
+}
+
+// wasTaskClosed checks if a task was closed by the agent.
+func (e *Engine) wasTaskClosed(taskID string) (bool, error) {
+	task, err := e.ticks.GetTask(taskID)
+	if err != nil {
+		return false, err
+	}
+	return task.Status == "closed", nil
+}
+
+// runVerification executes verification for a completed task.
+// Returns nil if no verification runner is configured.
+func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput string, epicID string) *verify.Results {
+	if e.verifyRunner == nil {
+		return nil
+	}
+
+	// Call start callback
+	if e.OnVerificationStart != nil {
+		e.OnVerificationStart(taskID)
+	}
+
+	// Run verification
+	results := e.verifyRunner.Run(ctx, taskID, agentOutput)
+
+	// Call end callback
+	if e.OnVerificationEnd != nil {
+		e.OnVerificationEnd(taskID, results)
+	}
+
+	return results
+}
+
+// buildVerificationFailureNote creates a note about verification failure.
+// Includes iteration, task ID, and truncated verification output.
+func buildVerificationFailureNote(iteration int, taskID string, results *verify.Results) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Iteration %d: Verification failed for task %s.", iteration, taskID))
+
+	// Add details from failed verifiers
+	for _, r := range results.FailedResults() {
+		sb.WriteString(fmt.Sprintf(" [%s] ", r.Verifier))
+		if r.Output != "" {
+			// Truncate output if too long
+			output := r.Output
+			const maxLen = 300
+			if len(output) > maxLen {
+				output = output[:maxLen] + "..."
+			}
+			// Clean up for single-line note
+			output = strings.ReplaceAll(output, "\n", " | ")
+			output = strings.Join(strings.Fields(output), " ")
+			sb.WriteString(output)
+		}
+	}
+
+	sb.WriteString(" Please fix and close the task again.")
+	return sb.String()
 }

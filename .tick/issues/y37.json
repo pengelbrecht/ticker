@@ -1,0 +1,17 @@
+{
+  "id": "y37",
+  "title": "Add TUI verification status display",
+  "description": "Update the TUI to display verification status during and after verification runs.\n\n## Overview\n\nWhen verification runs, the TUI should show:\n1. \"Verifying...\" status while verification is in progress\n2. Pass/fail result with relevant output\n3. Verification outcome in completion summary\n\n## Files to Modify\n\n### internal/tui/model.go\n\nAdd new message types and state:\n\n```go\n// VerifyStartMsg signals verification has started.\ntype VerifyStartMsg struct{}\n\n// VerifyResultMsg contains verification results.\ntype VerifyResultMsg struct {\n    Passed  bool\n    Summary string // Human-readable summary\n}\n\n// Add to Model struct:\ntype Model struct {\n    // ... existing fields ...\n    verifying      bool   // true while verification is running\n    verifyResult   string // pass/fail summary\n    verifyPassed   bool   // last verification result\n}\n```\n\n### Display Updates\n\n1. **Status line** - Show \"Verifying...\" when verifying=true (similar to \"Running iteration...\")\n\n2. **Output pane** - Show verification output when received:\n   ```\n   [Verification] Running git status check...\n   [Verification] ✓ Working tree clean\n   ```\n   or on failure:\n   ```\n   [Verification] Running git status check...\n   [Verification] ✗ Uncommitted changes detected:\n    M internal/engine/engine.go\n   ?? internal/verify/\n   [Verification] Task reopened - please commit your changes\n   ```\n\n3. **Completion overlay** - Include verification info if verification ran\n\n## Engine Callbacks\n\nEngine needs to call TUI callbacks:\n- OnVerificationStart() → sends VerifyStartMsg\n- OnVerificationEnd(result) → sends VerifyResultMsg\n\nWire these in the TUI's engine setup (where other callbacks are configured).\n\n## Implementation Notes\n\n- Verification output goes to the same output pane as agent output\n- Prefix lines with \"[Verification]\" for clarity\n- Use green ✓ for pass, red ✗ for fail (match existing color scheme)\n- Keep it simple - just status display, no interaction needed",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "t6v"
+  ],
+  "parent": "t99",
+  "acceptance_criteria": "1. TUI shows 'Verifying...' status during verification\n2. Verification output appears in output pane with [Verification] prefix\n3. Pass result shows green checkmark\n4. Fail result shows red X with failure details\n5. Verification result visible in completion overlay\n6. Engine callbacks (OnVerificationStart/End) wire to TUI correctly\n7. All TUI tests pass",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T09:04:18.291898Z",
+  "updated_at": "2026-01-12T09:04:18.291898Z"
+}

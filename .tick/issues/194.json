@@ -1,0 +1,111 @@
+{
+  "acceptance_criteria": "1. internal/verify/ package exists and compiles\n2. Verifier interface defined with Name() and Verify() methods\n3. Result struct captures verifier name, pass/fail, output, duration, error\n4. Results.Summary() produces readable output\n5. go test ./internal/verify/... passes\n6. No circular dependencies with engine/ticks packages\n7. Doc.go explains GitVerifier-only design decision",
+  "closed_at": "2026-01-12T09:06:55.618712Z",
+  "closed_reason": "Created internal/verify package with Verifier interface, Result/Results types, and helper methods (Summary, FailedResults, NewResults). Includes comprehensive unit tests.",
+  "created_at": "2026-01-12T08:59:34.638666Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Create the foundational `internal/verify/` package with the Verifier interface and supporting types.\n\n## Design Decision\n\nThis implementation uses **GitVerifier only**. The agent is already instructed to run tests before closing tasks (see prompt.go line 139). Verification catches what the agent can't self-verify: uncommitted changes.\n\nTest/Build/Script verifiers were considered but rejected to avoid double work and slow verification cycles. See epic notes for rationale.\n\n## Files to Create\n\n### internal/verify/doc.go\n\nPackage documentation explaining:\n- Verification runs after agent closes a task\n- Currently only GitVerifier (checks uncommitted changes)\n- Agent handles its own testing per prompt instructions\n\n### internal/verify/verify.go\n\n```go\n// Verifier defines the interface for task verification.\n// Currently only GitVerifier is implemented - agent handles testing.\ntype Verifier interface {\n    // Name returns a human-readable name (e.g., \"git\").\n    Name() string\n    \n    // Verify checks if the task was completed correctly.\n    // Returns Result with Passed=true if verification passes.\n    // The taskID and output params provide context about what was just completed.\n    Verify(ctx context.Context, taskID string, agentOutput string) *Result\n}\n\n// Result contains the outcome of a verification run.\ntype Result struct {\n    Verifier   string        // Name of the verifier (e.g., \"git\")\n    Passed     bool          // Whether verification passed\n    Output     string        // Output from verification (e.g., git status)\n    Duration   time.Duration // How long verification took\n    Error      error         // Underlying error if failed\n}\n\n// Results aggregates multiple verification results.\n// Currently only one verifier (git), but structure supports future extension.\ntype Results struct {\n    Results   []*Result\n    AllPassed bool\n}\n\n// Summary returns a human-readable summary of all results.\nfunc (r *Results) Summary() string\n```\n\n### internal/verify/verify_test.go\nUnit tests for Result methods (Summary, etc.).\n\n## Implementation Notes\n\n- Keep interface minimal\n- NO TestVerifier, BuildVerifier, ScriptVerifier (agent tests itself)\n- Result should be useful for both logging and TUI display\n- Don't import engine or ticks packages (avoid circular deps)",
+  "id": "194",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "t99",
+  "priority": 1,
+  "run": {
+    "session_id": "8d369042-9ce8-49c4-8d9a-095cadad3825",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-12T10:05:25.971796+01:00",
+    "ended_at": "2026-01-12T10:07:20.059778+01:00",
+    "output": "I'll implement the `internal/verify/` package with the Verifier interface and supporting types. Let me start by understanding the existing codebase structure.\n\nLet me look at some existing package structures to follow the same conventions.\n\nNow let me look at an existing test file for the pattern used.\n\nNow I have a good understanding of the patterns used in this codebase. Let me create the verify package with the three files.\n\nNow let me run all tests to make sure nothing is broken.\n\nAll tests pass. Now let me close the task and commit the changes.\n\nTask 194 is complete. I created the `internal/verify/` package with:\n\n1. **doc.go** - Package documentation explaining verification runs after agent closes task, and that GitVerifier is the only verifier (agent handles its own testing)\n\n2. **verify.go** - Contains:\n   - `Verifier` interface with `Name()` and `Verify(ctx, taskID, agentOutput)` methods\n   - `Result` struct with Verifier name, Passed bool, Output, Duration, and Error fields\n   - `Results` struct aggregating multiple results with `AllPassed` computed field\n   - `NewResults()` constructor that computes AllPassed\n   - `Summary()` method for human-readable output (shows pass/fail counts and failed output)\n   - `FailedResults()` helper to filter only failed verifications\n   - `Result.String()` for individual result formatting\n\n3. **verify_test.go** - Comprehensive unit tests for Result.String(), NewResults(), Results.Summary(), and Results.FailedResults()",
+    "tools": [
+      {
+        "name": "Glob",
+        "duration_ms": 162
+      },
+      {
+        "name": "Read",
+        "duration_ms": 506
+      },
+      {
+        "name": "Read",
+        "duration_ms": 574
+      },
+      {
+        "name": "Read",
+        "duration_ms": 228
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1029
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2902
+      },
+      {
+        "name": "Write",
+        "duration_ms": 5459
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1639
+      },
+      {
+        "name": "Write",
+        "duration_ms": 13834
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1792
+      },
+      {
+        "name": "Write",
+        "duration_ms": 18256
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1716
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 869
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 442
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1601
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1433
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3014
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2803
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1811
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5864,
+      "cache_read_tokens": 585699,
+      "cache_creation_tokens": 25232,
+      "cost_usd": 0.7499022500000002,
+      "duration_ms": 113636
+    },
+    "success": true,
+    "num_turns": 20
+  },
+  "status": "closed",
+  "title": "Create verify package with Verifier interface",
+  "type": "task",
+  "updated_at": "2026-01-12T09:06:55.618712Z"
+}

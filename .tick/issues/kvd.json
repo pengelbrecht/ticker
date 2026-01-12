@@ -1,0 +1,111 @@
+{
+  "acceptance_criteria": "1. Runner.Run() executes all verifiers in order\n2. Results aggregates all individual Result objects\n3. Results.AllPassed is true only if all verifiers passed\n4. Context cancellation stops remaining verifiers\n5. Empty verifier list returns empty Results with AllPassed=true\n6. All unit tests pass",
+  "blocked_by": [
+    "194",
+    "mph"
+  ],
+  "closed_at": "2026-01-12T09:11:56.750378Z",
+  "closed_reason": "Created Runner struct with NewRunner constructor and Run method. Run executes verifiers sequentially, collects all results (no short-circuit on failure), and respects context cancellation by checking before each verifier and passing ctx to verifiers. Tests cover: no verifiers, all passing, some failing, context cancellation (pre-cancelled and mid-run), and order preservation.",
+  "created_at": "2026-01-12T09:02:48.362883Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Create a VerificationRunner that orchestrates running verifiers and aggregating results.\n\n## Files to Create\n\n### internal/verify/runner.go\n\n```go\n// Runner orchestrates verification execution.\ntype Runner struct {\n    verifiers []Verifier\n    dir       string\n}\n\n// NewRunner creates a runner with the given verifiers.\nfunc NewRunner(dir string, verifiers ...Verifier) *Runner\n\n// Run executes all verifiers and returns aggregated results.\n// Runs verifiers sequentially (order matters for meaningful output).\n// Respects context cancellation - stops on cancel, returns partial results.\n// Never returns error - all failures captured in Results.\nfunc (r *Runner) Run(ctx context.Context, taskID string, agentOutput string) *Results\n```\n\n## Implementation Notes\n\n- Verifiers run sequentially for predictable ordering\n- Collect all results even if some fail (don't short-circuit)\n- Context cancellation stops remaining verifiers\n- Empty verifiers slice = empty Results with AllPassed=true\n- Each verifier gets the same taskID and agentOutput context\n\n### internal/verify/runner_test.go\n- Test with no verifiers (returns success)\n- Test with all passing verifiers\n- Test with some failing verifiers (all results collected)\n- Test context cancellation (partial results)\n- Test ordering is preserved",
+  "id": "kvd",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "t99",
+  "priority": 2,
+  "run": {
+    "session_id": "f7412421-1440-4f55-ad3a-99d38cab5bc0",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-12T10:10:46.441632+01:00",
+    "ended_at": "2026-01-12T10:12:23.443642+01:00",
+    "output": "I'll start by reviewing the existing code to understand the verification system structure, then implement the VerificationRunner.\n\nLet me find the actual verification files:\n\nNow I understand the structure. I need to create a `Runner` that orchestrates running verifiers. Let me also check the existing tests to follow the pattern:\n\nNow I have a clear understanding of the structure. Let me create the runner implementation:\n\nNow let me create the test file:\n\nNow let me run the tests to make sure everything works:\n\nAll tests pass. Let me also run the full test suite to make sure nothing is broken:\n\nAll tests pass. Now let me close the task:\n\nNow let me commit the changes:\n\nNow let me add an epic note for the next iteration:\n\nTask complete. I implemented the VerificationRunner with:\n\n1. **runner.go** - `Runner` struct with `NewRunner(dir, verifiers...)` constructor and `Run(ctx, taskID, agentOutput)` method that:\n   - Executes verifiers sequentially for predictable ordering\n   - Collects all results without short-circuiting on failure\n   - Respects context cancellation before each verifier\n   - Returns `*Results` (using existing `NewResults` helper)\n\n2. **runner_test.go** - Comprehensive tests covering:\n   - No verifiers (returns empty results with AllPassed=true)\n   - All passing verifiers\n   - Some failing verifiers (all results collected)\n   - Pre-cancelled context (returns immediately)\n   - Mid-run cancellation (returns partial results)\n   - Order preservation\n   - Context passed to verifiers",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 385
+      },
+      {
+        "name": "Read",
+        "duration_ms": 414
+      },
+      {
+        "name": "Read",
+        "duration_ms": 364
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 350
+      },
+      {
+        "name": "Read",
+        "duration_ms": 366
+      },
+      {
+        "name": "Read",
+        "duration_ms": 715
+      },
+      {
+        "name": "Read",
+        "duration_ms": 391
+      },
+      {
+        "name": "Write",
+        "duration_ms": 6688
+      },
+      {
+        "name": "Write",
+        "duration_ms": 24198
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 718
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 595
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2925
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1297
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 479
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 857
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 104
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2589
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3237
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 4446,
+      "cache_read_tokens": 437312,
+      "cache_creation_tokens": 19924,
+      "cost_usd": 0.5410307499999999,
+      "duration_ms": 96041
+    },
+    "success": true,
+    "num_turns": 19
+  },
+  "status": "closed",
+  "title": "Create VerificationRunner to orchestrate verification",
+  "type": "task",
+  "updated_at": "2026-01-12T09:11:56.750378Z"
+}

@@ -172,6 +172,15 @@ func (c *Client) CloseTask(taskID, reason string) error {
 	return nil
 }
 
+// ReopenTask reopens a closed task.
+func (c *Client) ReopenTask(taskID string) error {
+	_, err := c.run("reopen", taskID)
+	if err != nil {
+		return fmt.Errorf("tk reopen %s: %w", taskID, err)
+	}
+	return nil
+}
+
 // CloseEpic closes an epic with the given reason.
 func (c *Client) CloseEpic(epicID, reason string) error {
 	return c.CloseTask(epicID, reason)
