@@ -135,6 +135,7 @@ func init() {
 	runCmd.Flags().Int("max-task-retries", 3, "Maximum iterations on same task before assuming stuck")
 	runCmd.Flags().Bool("auto", false, "Auto-select next ready epic")
 	runCmd.Flags().Bool("headless", false, "Run without TUI (stdout/stderr only)")
+	runCmd.Flags().Bool("jsonl", false, "Output JSON Lines format (requires --headless)")
 	runCmd.Flags().Bool("skip-verify", false, "Skip verification after task completion")
 	runCmd.Flags().Bool("verify-only", false, "Run verification without the agent (for debugging)")
 	runCmd.Flags().Bool("worktree", false, "Run epic(s) in isolated git worktree")
@@ -156,6 +157,7 @@ func main() {
 func runRun(cmd *cobra.Command, args []string) {
 	auto, _ := cmd.Flags().GetBool("auto")
 	headless, _ := cmd.Flags().GetBool("headless")
+	jsonl, _ := cmd.Flags().GetBool("jsonl")
 	maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 	maxCost, _ := cmd.Flags().GetFloat64("max-cost")
 	checkpointInterval, _ := cmd.Flags().GetInt("checkpoint-interval")
@@ -168,6 +170,12 @@ func runRun(cmd *cobra.Command, args []string) {
 	// Check mutual exclusivity
 	if skipVerify && verifyOnly {
 		fmt.Fprintln(os.Stderr, "Error: --skip-verify and --verify-only are mutually exclusive")
+		os.Exit(ExitError)
+	}
+
+	// --jsonl requires --headless
+	if jsonl && !headless {
+		fmt.Fprintln(os.Stderr, "Error: --jsonl requires --headless")
 		os.Exit(ExitError)
 	}
 
@@ -254,7 +262,7 @@ func runRun(cmd *cobra.Command, args []string) {
 		if !headless {
 			runParallelWithTUI(epicIDs, epicTitles, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, maxParallel)
 		} else {
-			runParallelHeadless(epicIDs, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, maxParallel)
+			runParallelHeadless(epicIDs, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, maxParallel, jsonl)
 		}
 		return
 	}
@@ -270,7 +278,7 @@ func runRun(cmd *cobra.Command, args []string) {
 	}
 
 	// Headless mode
-	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree)
+	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, jsonl)
 }
 
 // validateEpicIDs checks that all epic IDs exist, are open, and are unique.
@@ -438,37 +446,46 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 	cancel()
 }
 
-func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool, maxParallel int) {
+func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool, maxParallel int, jsonl bool) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Create a headless output formatter per epic (for prefixed output)
+	outputs := make(map[string]*engine.HeadlessOutput)
+	for _, id := range epicIDs {
+		outputs[id] = engine.NewHeadlessOutput(jsonl, id)
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		fmt.Fprintln(os.Stderr, "\nInterrupted, shutting down...")
+		// Signal interruption for all epics
+		for _, out := range outputs {
+			out.Interrupted()
+		}
 		cancel()
 	}()
 
 	// Get current working directory for worktree manager
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error getting current directory: %v\n", err)
 		os.Exit(ExitError)
 	}
 
 	// Initialize worktree manager
 	wtManager, err := worktree.NewManager(cwd)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing worktree manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error initializing worktree manager: %v\n", err)
 		os.Exit(ExitError)
 	}
 
 	// Initialize merge manager
 	mergeManager, err := worktree.NewMergeManager(cwd)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing merge manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] Error initializing merge manager: %v\n", err)
 		os.Exit(ExitError)
 	}
 
@@ -481,7 +498,7 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 	// Check claude availability
 	claudeAgent := agent.NewClaudeAgent()
 	if !claudeAgent.Available() {
-		fmt.Fprintln(os.Stderr, "Error: claude CLI not found. Please install Claude Code.")
+		fmt.Fprintf(os.Stderr, "[ERROR] claude CLI not found - please install Claude Code\n")
 		os.Exit(ExitError)
 	}
 
@@ -523,55 +540,100 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 
 	runner := parallel.NewRunner(runnerConfig)
 
-	// Set up callbacks for headless output
+	// Set up callbacks for headless output with [PREFIX] format
 	runner.SetCallbacks(parallel.RunnerCallbacks{
 		OnEpicStart: func(epicID string) {
-			fmt.Printf("[%s] Starting epic\n", epicID)
+			if jsonl {
+				out := outputs[epicID]
+				if out != nil {
+					epic, _ := ticksClient.GetEpic(epicID)
+					if epic != nil {
+						out.Start(epic, maxIterations, maxCost)
+					}
+				}
+			} else {
+				fmt.Printf("[%s] [START] Epic starting\n", epicID)
+			}
 		},
 		OnEpicComplete: func(epicID string, result *engine.RunResult) {
-			fmt.Printf("[%s] Epic completed\n", epicID)
+			if jsonl {
+				out := outputs[epicID]
+				if out != nil && result != nil {
+					out.Complete(result)
+				}
+			} else {
+				fmt.Printf("[%s] [COMPLETE] Epic finished\n", epicID)
+			}
 		},
 		OnEpicFailed: func(epicID string, err error) {
-			fmt.Printf("[%s] Epic failed: %v\n", epicID, err)
+			out := outputs[epicID]
+			if out != nil {
+				out.Error(err)
+			} else {
+				fmt.Printf("[%s] [ERROR] %v\n", epicID, err)
+			}
 		},
 		OnEpicConflict: func(epicID string, conflict *parallel.ConflictState) {
-			fmt.Printf("[%s] Merge conflict in: %v\n", epicID, conflict.Files)
+			if jsonl {
+				// Conflict as JSON
+				fmt.Printf(`{"type":"conflict","epic_id":"%s","files":%q}`+"\n", epicID, conflict.Files)
+			} else {
+				fmt.Printf("[%s] [CONFLICT] Merge conflict in: %v\n", epicID, conflict.Files)
+			}
 		},
 	})
 
-	fmt.Printf("Starting parallel run for %d epics (max %d concurrent)\n", len(epicIDs), maxParallel)
-	fmt.Printf("Budget: max %d iterations total, $%.2f\n", maxIterations*len(epicIDs), maxCost)
-	fmt.Println()
+	// Output start message
+	if jsonl {
+		fmt.Printf(`{"type":"parallel_start","epics":%d,"max_parallel":%d,"max_iterations":%d,"max_cost":%.2f}`+"\n",
+			len(epicIDs), maxParallel, maxIterations*len(epicIDs), maxCost)
+	} else {
+		fmt.Printf("[START] Parallel run: %d epics (max %d concurrent)\n", len(epicIDs), maxParallel)
+		fmt.Printf("[START] Budget: max %d iterations total, $%.2f\n", maxIterations*len(epicIDs), maxCost)
+	}
 
 	result, err := runner.Run(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 		os.Exit(ExitError)
 	}
 
 	// Print summary
-	fmt.Println()
-	fmt.Println("=== Parallel Run Complete ===")
-	fmt.Printf("Duration: %v\n", result.Duration.Round(1000000000))
-	fmt.Printf("Total cost: $%.4f\n", result.TotalCost)
-	fmt.Printf("Total tokens: %d\n", result.TotalTokens)
-	fmt.Println()
+	if jsonl {
+		fmt.Printf(`{"type":"parallel_complete","duration_ms":%d,"total_cost":%.4f,"total_tokens":%d}`+"\n",
+			result.Duration.Milliseconds(), result.TotalCost, result.TotalTokens)
+	} else {
+		fmt.Println()
+		fmt.Printf("[COMPLETE] Parallel run finished\n")
+		fmt.Printf("[COMPLETE] Duration: %v, Cost: $%.4f, Tokens: %d\n",
+			result.Duration.Round(1000000000), result.TotalCost, result.TotalTokens)
+	}
 
 	// Print per-epic results
 	allSuccess := true
 	for _, status := range result.Statuses {
-		icon := "✓"
 		if status.Status != "completed" {
-			icon = "✗"
 			allSuccess = false
 		}
-		fmt.Printf("%s [%s] %s\n", icon, status.EpicID, status.Status)
-		if status.Error != nil {
-			fmt.Printf("    Error: %v\n", status.Error)
-		}
-		if status.Conflict != nil {
-			fmt.Printf("    Conflict in: %v\n", status.Conflict.Files)
-			fmt.Printf("    Worktree: %s\n", status.Conflict.Worktree)
+		if jsonl {
+			errStr := ""
+			if status.Error != nil {
+				errStr = status.Error.Error()
+			}
+			fmt.Printf(`{"type":"epic_status","epic_id":"%s","status":"%s","error":"%s"}`+"\n",
+				status.EpicID, status.Status, errStr)
+		} else {
+			icon := "+"
+			if status.Status != "completed" {
+				icon = "-"
+			}
+			fmt.Printf("[COMPLETE] %s %s: %s\n", icon, status.EpicID, status.Status)
+			if status.Error != nil {
+				fmt.Printf("[COMPLETE]   Error: %v\n", status.Error)
+			}
+			if status.Conflict != nil {
+				fmt.Printf("[COMPLETE]   Conflict: %v\n", status.Conflict.Files)
+			}
 		}
 	}
 
@@ -812,23 +874,26 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	cancel()
 }
 
-func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree bool) {
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, jsonl bool) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Create headless output formatter (empty epicID = single epic mode)
+	out := engine.NewHeadlessOutput(jsonl, "")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		fmt.Fprintln(os.Stderr, "\nInterrupted, shutting down...")
+		out.Interrupted()
 		cancel()
 	}()
 
 	// Initialize components
 	claudeAgent := agent.NewClaudeAgent()
 	if !claudeAgent.Available() {
-		fmt.Fprintln(os.Stderr, "Error: claude CLI not found. Please install Claude Code.")
+		out.Error(fmt.Errorf("claude CLI not found - please install Claude Code"))
 		os.Exit(ExitError)
 	}
 
@@ -838,6 +903,13 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		MaxCost:       maxCost,
 	})
 	checkpointMgr := checkpoint.NewManager()
+
+	// Get epic info for start message
+	epic, err := ticksClient.GetEpic(epicID)
+	if err != nil {
+		out.Error(fmt.Errorf("failed to get epic %s: %w", epicID, err))
+		os.Exit(ExitError)
+	}
 
 	// Create and configure engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
@@ -849,44 +921,45 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		}
 	}
 
+	// Track verification pass status for task_complete output
+	var verifyPassed bool = true
+
 	// Set up output callback for headless mode
 	eng.OnOutput = func(chunk string) {
-		fmt.Print(chunk)
+		out.Output(chunk)
 	}
 
-	eng.OnIterationStart = func(ctx engine.IterationContext) {
-		fmt.Printf("\n=== Iteration %d: [%s] %s ===\n", ctx.Iteration, ctx.Task.ID, ctx.Task.Title)
+	eng.OnIterationStart = func(iterCtx engine.IterationContext) {
+		verifyPassed = true // Reset for new task
+		out.Task(iterCtx.Task, iterCtx.Iteration)
 	}
 
 	eng.OnIterationEnd = func(result *engine.IterationResult) {
-		fmt.Printf("\n--- Iteration %d complete (tokens: %d, cost: $%.4f) ---\n",
-			result.Iteration, result.TokensIn+result.TokensOut, result.Cost)
+		// Token counts are only in final summary, not per iteration
 	}
 
 	eng.OnSignal = func(sig engine.Signal, reason string) {
-		if reason != "" {
-			fmt.Printf("\nSignal: %s - %s\n", sig, reason)
-		} else {
-			fmt.Printf("\nSignal: %s\n", sig)
-		}
+		out.Signal(sig, reason)
 	}
 
 	// Verification callbacks for headless mode
 	eng.OnVerificationStart = func(taskID string) {
-		fmt.Printf("\n[Verification] Running verification checks for task %s...\n", taskID)
+		out.VerifyStart(taskID)
 	}
 
 	eng.OnVerificationEnd = func(taskID string, results *verify.Results) {
-		if results == nil {
-			return
+		if results != nil {
+			verifyPassed = results.AllPassed
+			out.VerifyEnd(taskID, results)
 		}
-		if results.AllPassed {
-			fmt.Println("[Verification] ✓ All checks passed")
-		} else {
-			fmt.Println("[Verification] ✗ Verification failed:")
-			fmt.Println(results.Summary())
-			fmt.Println("[Verification] Task reopened - please address the issues above")
-		}
+		// Output task complete after verification
+		out.TaskComplete(taskID, verifyPassed)
+	}
+
+	// Output start
+	out.Start(epic, maxIterations, maxCost)
+	if useWorktree && !jsonl {
+		fmt.Println("[START] Running in isolated worktree")
 	}
 
 	// Run
@@ -899,26 +972,14 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		UseWorktree:     useWorktree,
 	}
 
-	fmt.Printf("Starting ticker run for epic %s\n", epicID)
-	if useWorktree {
-		fmt.Println("Running in isolated worktree")
-	}
-	fmt.Printf("Budget: max %d iterations, $%.2f\n", maxIterations, maxCost)
-	fmt.Println()
-
 	result, err := eng.Run(ctx, config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		out.Error(err)
 		os.Exit(ExitError)
 	}
 
-	// Print summary
-	fmt.Println()
-	fmt.Println("=== Run Complete ===")
-	fmt.Printf("Epic: %s\n", result.EpicID)
-	fmt.Printf("Iterations: %d\n", result.Iterations)
-	fmt.Printf("Duration: %v\n", result.Duration.Round(1000000000))
-	fmt.Printf("Exit reason: %s\n", result.ExitReason)
+	// Output final summary
+	out.Complete(result)
 
 	// Exit with appropriate code
 	switch result.Signal {
