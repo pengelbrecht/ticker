@@ -2,7 +2,7 @@
   "id": "qos",
   "title": "Add .gitignore handling for worktree directory",
   "description": "Ensure the .worktrees/ directory is properly gitignored to prevent tracking worktree contents.\n\n## Overview\n\nWhen worktrees are created, we need to ensure `.worktrees/` is in `.gitignore` so the worktree directories aren't accidentally committed to the main repo.\n\n## Files to Modify\n\n### internal/worktree/gitignore.go\n\n```go\n// EnsureGitignore checks if .worktrees/ is in .gitignore and adds it if not.\n// Creates .gitignore if it doesn't exist.\n// Returns true if .gitignore was modified.\nfunc EnsureGitignore(repoRoot string) (bool, error)\n\n// isIgnored checks if a path is covered by .gitignore.\nfunc isIgnored(repoRoot, path string) (bool, error)\n```\n\n## Implementation Notes\n\n- Check using `git check-ignore .worktrees` (exit 0 = ignored, exit 1 = not ignored)\n- If not ignored, append `.worktrees/` to `.gitignore`\n- Handle missing .gitignore (create it)\n- Handle .gitignore without trailing newline\n- Call EnsureGitignore in Manager.Create() before creating first worktree\n- Also add `.worktrees/` entry - covers the directory and all contents\n\n### Pattern to add\n\n```\n# Ticker worktrees\n.worktrees/\n```\n\n### Integrate into Manager\n\nModify Manager.Create() to call EnsureGitignore on first worktree creation:\n\n```go\nfunc (m *Manager) Create(epicID string) (*Worktree, error) {\n    // Ensure .worktrees/ is gitignored before creating any worktrees\n    if _, err := EnsureGitignore(m.repoRoot); err != nil {\n        return nil, fmt.Errorf(\"ensuring gitignore: %w\", err)\n    }\n    // ... rest of create logic\n}\n```\n\n### internal/worktree/gitignore_test.go\n- Test adds entry to existing .gitignore\n- Test creates .gitignore if missing\n- Test handles .gitignore without trailing newline\n- Test idempotent (doesn't add duplicate)\n- Test detects existing coverage (e.g., if user already has .worktrees/ or * pattern)",
-  "status": "closed",
+  "status": "in_progress",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -13,7 +13,5 @@
   "acceptance_criteria": "1. EnsureGitignore adds .worktrees/ to .gitignore if not present\n2. EnsureGitignore creates .gitignore if file doesn't exist\n3. EnsureGitignore is idempotent (no duplicates)\n4. EnsureGitignore handles missing trailing newline\n5. Uses git check-ignore to detect existing coverage\n6. Manager.Create() calls EnsureGitignore automatically\n7. All unit tests pass",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:00:40.999382Z",
-  "updated_at": "2026-01-12T10:21:38.503647Z",
-  "closed_at": "2026-01-12T10:21:38.503647Z",
-  "closed_reason": "Added gitignore.go with EnsureGitignore() and isIgnored() functions. EnsureGitignore uses git check-ignore with trailing slash to detect existing coverage, then appends .worktrees/ with comment to .gitignore if needed. Integrated into Manager.Create() to ensure gitignore is set before creating worktrees. Added comprehensive tests for idempotency, missing .gitignore, no trailing newline, and wildcard pattern detection."
+  "updated_at": "2026-01-12T12:00:03.206716Z"
 }

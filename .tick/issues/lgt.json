@@ -10,7 +10,6 @@
   "acceptance_criteria": "1. internal/worktree/ package exists and compiles\n2. Manager.Create() creates worktree at .worktrees/\u003cepic-id\u003e/\n3. Manager.Create() creates branch ticker/\u003cepic-id\u003e from HEAD\n4. Manager.Remove() deletes worktree and branch\n5. Manager.List() returns all ticker/* worktrees\n6. Manager.Get() returns specific worktree or nil\n7. Manager.Exists() correctly detects worktree presence\n8. All operations handle edge cases (existing branch, missing worktree)\n9. All unit tests pass with isolated temp repos",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:00:24.352047Z",
-  "updated_at": "2026-01-12T10:14:39.876277Z",
-  "closed_at": "2026-01-12T10:14:39.876277Z",
-  "closed_reason": "WorktreeManager implementation complete - internal/worktree/ package with Create, Remove, Get, List, Exists methods. Uses ticker/\u003cepic-id\u003e branch naming. All 8 test cases pass."
+  "updated_at": "2026-01-12T10:17:50.628787Z",
+  "closed_at": "2026-01-12T10:17:50.628787Z"
 }
