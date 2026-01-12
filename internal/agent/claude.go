@@ -84,10 +84,22 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts RunOpts) (*Re
 
 	duration := time.Since(start)
 
-	// Handle errors
+	// Handle errors - but capture partial output for timeouts
 	if waitErr != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("claude timed out after %v", opts.Timeout)
+			// Return partial result with timeout error
+			snap := state.Snapshot()
+			record := state.ToRecord()
+			record.Success = false
+			record.ErrorMsg = fmt.Sprintf("timed out after %v", opts.Timeout)
+			return &Result{
+				Output:    snap.Output,
+				TokensIn:  snap.Metrics.InputTokens,
+				TokensOut: snap.Metrics.OutputTokens,
+				Cost:      snap.Metrics.CostUSD,
+				Duration:  duration,
+				Record:    &record,
+			}, ErrTimeout
 		}
 		if ctx.Err() == context.Canceled {
 			return nil, fmt.Errorf("claude cancelled")

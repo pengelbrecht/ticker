@@ -145,3 +145,13 @@ func TestResult_Fields(t *testing.T) {
 		t.Errorf("Duration = %v, want %v", result.Duration, 5*time.Second)
 	}
 }
+
+func TestErrTimeout(t *testing.T) {
+	// Verify ErrTimeout is a sentinel error
+	if ErrTimeout == nil {
+		t.Fatal("ErrTimeout should not be nil")
+	}
+	if ErrTimeout.Error() != "agent timed out" {
+		t.Errorf("ErrTimeout.Error() = %q, want %q", ErrTimeout.Error(), "agent timed out")
+	}
+}

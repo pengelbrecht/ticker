@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pengelbrecht/ticker/internal/agent"
@@ -135,6 +137,10 @@ type IterationResult struct {
 
 	// Error is any error that occurred.
 	Error error
+
+	// IsTimeout indicates the iteration was terminated due to timeout.
+	// When true, Output may contain partial output captured before timeout.
+	IsTimeout bool
 }
 
 // NewEngine creates a new engine with the given dependencies.
@@ -274,6 +280,13 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Call callback
 		if e.OnIterationEnd != nil {
 			e.OnIterationEnd(iterResult)
+		}
+
+		// Handle timeout specially - add detailed note for recovery
+		if iterResult.IsTimeout {
+			note := buildTimeoutNote(state.iteration, iterResult.TaskID, config.AgentTimeout, iterResult.Output)
+			_ = e.ticks.AddNote(config.EpicID, note)
+			continue // Try next iteration
 		}
 
 		// Handle iteration error
@@ -436,6 +449,23 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 
 	result.Duration = time.Since(startTime)
 
+	// Handle timeout specially - capture partial output
+	if errors.Is(err, agent.ErrTimeout) {
+		result.IsTimeout = true
+		// agentResult contains partial output on timeout
+		if agentResult != nil {
+			result.Output = agentResult.Output
+			result.TokensIn = agentResult.TokensIn
+			result.TokensOut = agentResult.TokensOut
+			result.Cost = agentResult.Cost
+			// Still persist the partial RunRecord
+			if agentResult.Record != nil {
+				_ = e.ticks.SetRunRecord(task.ID, agentResult.Record)
+			}
+		}
+		return result
+	}
+
 	if err != nil {
 		result.Error = fmt.Errorf("agent run: %w", err)
 		return result
@@ -458,4 +488,27 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 	result.Signal, result.SignalReason = ParseSignals(agentResult.Output)
 
 	return result
+}
+
+// buildTimeoutNote creates a detailed note about a timeout for recovery.
+// Includes iteration number, task ID, timeout duration, and partial output summary.
+func buildTimeoutNote(iteration int, taskID string, timeout time.Duration, partialOutput string) string {
+	note := fmt.Sprintf("Iteration %d timed out after %v on task %s.", iteration, timeout, taskID)
+
+	if partialOutput != "" {
+		// Truncate partial output for the note (keep last portion as most relevant)
+		const maxOutputLen = 500
+		outputSummary := partialOutput
+		if len(outputSummary) > maxOutputLen {
+			outputSummary = "..." + outputSummary[len(outputSummary)-maxOutputLen:]
+		}
+		// Clean up for note format (replace newlines with spaces for readability)
+		outputSummary = strings.ReplaceAll(outputSummary, "\n", " ")
+		outputSummary = strings.Join(strings.Fields(outputSummary), " ") // normalize whitespace
+		note += fmt.Sprintf(" Partial output: %s", outputSummary)
+	} else {
+		note += " No output captured before timeout."
+	}
+
+	return note
 }

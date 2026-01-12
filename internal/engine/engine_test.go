@@ -357,3 +357,100 @@ func TestDefaultConstants(t *testing.T) {
 		t.Errorf("DefaultAgentTimeout = %v, want 30m", DefaultAgentTimeout)
 	}
 }
+
+func TestBuildTimeoutNote(t *testing.T) {
+	tests := []struct {
+		name          string
+		iteration     int
+		taskID        string
+		timeout       time.Duration
+		partialOutput string
+		wantContains  []string
+	}{
+		{
+			name:          "with partial output",
+			iteration:     3,
+			taskID:        "abc123",
+			timeout:       30 * time.Minute,
+			partialOutput: "Started working on the task...\nPartial progress made.",
+			wantContains: []string{
+				"Iteration 3",
+				"timed out",
+				"30m0s",
+				"task abc123",
+				"Partial output:",
+				"Started working on the task",
+			},
+		},
+		{
+			name:          "no partial output",
+			iteration:     5,
+			taskID:        "xyz789",
+			timeout:       10 * time.Minute,
+			partialOutput: "",
+			wantContains: []string{
+				"Iteration 5",
+				"timed out",
+				"10m0s",
+				"task xyz789",
+				"No output captured before timeout",
+			},
+		},
+		{
+			name:          "long output truncated",
+			iteration:     1,
+			taskID:        "def456",
+			timeout:       5 * time.Minute,
+			partialOutput: string(make([]byte, 1000)), // 1000 bytes of nulls
+			wantContains: []string{
+				"Iteration 1",
+				"task def456",
+				"...", // truncation indicator
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			note := buildTimeoutNote(tt.iteration, tt.taskID, tt.timeout, tt.partialOutput)
+			for _, want := range tt.wantContains {
+				if !contains(note, want) {
+					t.Errorf("buildTimeoutNote() = %q, want to contain %q", note, want)
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func TestIterationResult_IsTimeout(t *testing.T) {
+	result := &IterationResult{
+		Iteration: 1,
+		TaskID:    "test-1",
+		IsTimeout: true,
+		Output:    "partial output",
+	}
+
+	if !result.IsTimeout {
+		t.Error("IsTimeout should be true")
+	}
+	if result.Error != nil {
+		t.Error("Error should be nil for timeout (timeout is not an error)")
+	}
+	if result.Output != "partial output" {
+		t.Errorf("Output = %q, want %q", result.Output, "partial output")
+	}
+}

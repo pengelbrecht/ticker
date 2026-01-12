@@ -2,8 +2,13 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrTimeout is returned when an agent run times out.
+// The Result will contain partial output captured before the timeout.
+var ErrTimeout = errors.New("agent timed out")
 
 // Agent defines the interface for AI coding agents.
 type Agent interface {

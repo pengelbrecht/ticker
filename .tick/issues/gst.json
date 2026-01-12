@@ -2,12 +2,14 @@
   "id": "gst",
   "title": "Add graceful timeout handling with notes",
   "description": "When an iteration times out, Claude doesn't get a chance to save progress. The orchestrator should:\n\n1. Add a note to the epic/task on timeout explaining what happened\n2. Include iteration number and task ID\n3. Ideally capture any partial output that was produced\n\nThis helps the next iteration understand what happened and potentially resume from where it left off.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "2os",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T07:44:28.321566Z",
-  "updated_at": "2026-01-12T07:44:28.321566Z"
+  "updated_at": "2026-01-12T08:26:48.616443Z",
+  "closed_at": "2026-01-12T08:26:48.616443Z",
+  "closed_reason": "Implemented graceful timeout handling: (1) Added ErrTimeout sentinel error to agent package, (2) Modified ClaudeAgent.Run to return partial Result with ErrTimeout on timeout, (3) Added IsTimeout field to IterationResult, (4) Engine now detects timeouts and calls buildTimeoutNote() to create detailed notes with iteration number, task ID, timeout duration, and truncated partial output. Key files: internal/agent/agent.go, internal/agent/claude.go, internal/engine/engine.go"
 }
