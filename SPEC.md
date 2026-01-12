@@ -15,7 +15,7 @@ Ticker is a Go implementation of the Ralph Wiggum technique - running AI agents 
 
 ## Roadmap
 
-### Phase 1: Core Engine (Claude Code Only)
+### Phase 1: Core Engine (Claude Code Only) ✅
 
 Minimal viable Ralph runner with feature parity to ralph-ticker bash script. No TUI, no worktrees - just a solid Go foundation.
 
@@ -36,18 +36,11 @@ ticker run --auto  # auto-select next ready epic
 ticker resume <checkpoint-id>
 ```
 
-**Non-goals for Phase 1:**
-- No TUI (stdout/stderr only)
-- No worktrees (runs in current directory)
-- No parallel epics
-- No other agents (Claude Code only)
-- No permission management beyond `--dangerously-skip-permissions`
-
 **Exit criteria:** Can complete an epic autonomously, equivalent to ralph-ticker.sh
 
 ---
 
-### Phase 2: TUI
+### Phase 2: TUI ✅
 
 Add Bubbletea-based terminal UI while maintaining headless mode.
 
@@ -57,7 +50,6 @@ Add Bubbletea-based terminal UI while maintaining headless mode.
 - Progress visualization
 - Log history panel
 - Pause/resume controls
-- Dependency graph view
 - Interactive epic selection (`ticker` with no args)
 - Keyboard navigation
 
@@ -72,43 +64,32 @@ ticker run <epic-id> --headless  # Disable TUI
 
 ---
 
-### Phase 3: Verification System
+### Phase 3: Verification System ✅
 
 Add automated verification to ensure tasks are actually complete before moving on.
 
-**Scope:**
-- Verification runner integrated into iteration loop
-- Config-based commands (`.ticker/config.json`)
-- Auto-detection fallback for common project types
-- Graceful skip when not configured/detected
-- Verification failure handling (add to epic notes, retry)
+**Design Decision: GitVerifier Only**
 
-**Detection hierarchy:**
-1. Check `.ticker/config.json` for explicit commands
-2. Auto-detect from project files:
-   - `go.mod` → `go test ./...`, `go build ./...`
-   - `package.json` (with test script) → `npm test`
-   - `pyproject.toml` / `setup.py` → `pytest`
-   - `Cargo.toml` → `cargo test`
-   - `Makefile` (with test target) → `make test`
-3. Skip verification if nothing configured/detected
+After analysis, we implemented GitVerifier only:
+- **Agent already tests** - The prompt instructs agents to run tests before closing tasks
+- **Avoid double work** - Running test suites twice wastes time, especially for slow suites
+- **GitVerifier catches what agent can't** - Uncommitted changes are the one thing the agent can't self-verify
+
+**Scope (implemented):**
+- GitVerifier checks for uncommitted changes after agent closes task
+- Verification runner integrated into iteration loop
+- Config-based enable/disable (`.ticker/config.json`)
+- On failure: reopen task, add failure details to epic notes
+- TUI shows verification status
 
 **Config example:**
 ```json
 {
   "verification": {
-    "test_command": "npm test",
-    "build_command": "npm run build",
-    "custom_scripts": ["./scripts/lint.sh"]
+    "enabled": true
   }
 }
 ```
-
-**Behavior:**
-- Run verifiers after each iteration (before considering task complete)
-- On failure: add failure output to epic notes, don't close task, retry
-- Configurable failure threshold before giving up on task
-- TUI shows verification status (running/pass/fail)
 
 **CLI:**
 ```bash
@@ -116,7 +97,7 @@ ticker run <epic-id> --skip-verify     # Disable verification
 ticker run <epic-id> --verify-only     # Run verify without agent (debug)
 ```
 
-**Exit criteria:** Verification runs automatically for Go/Node/Python/Rust projects, failures cause retry.
+**Exit criteria:** GitVerifier runs automatically, uncommitted changes cause task reopen with notes.
 
 ---
 
@@ -526,20 +507,27 @@ that should persist across iterations. Epic notes replace the scratchpad concept
 ```go
 type Verifier interface {
     Name() string
-    Verify(ctx context.Context, task *ticks.Task, output string) error
+    Verify(ctx context.Context, taskID string, agentOutput string) *Result
+}
+
+type Result struct {
+    Verifier   string
+    Passed     bool
+    Output     string
+    Duration   time.Duration
+    Error      error
 }
 ```
 
-Built-in verifiers:
-- **TestVerifier**: Runs test suite (auto-detected or configured command)
-- **BuildVerifier**: Checks project builds (auto-detected or configured)
-- **GitVerifier**: Ensures changes were committed
-- **TickVerifier**: Confirms task was closed in Ticks
-- **ScriptVerifier**: Custom verification scripts from config
+Built-in verifier:
+- **GitVerifier**: Checks for uncommitted changes via `git status --porcelain`
 
-Detection priority: config → auto-detect → skip. See Phase 3 in Roadmap for details.
+Design rationale: Agent is instructed to run tests before closing tasks (see prompt.go). GitVerifier catches the one thing the agent can't self-verify: uncommitted changes.
 
-Verification failures are added as epic notes (via `tk note`) for the next iteration to review.
+On verification failure:
+1. Task is reopened (`tk reopen`)
+2. Failure details added as epic note
+3. Next iteration sees the failure and can fix it
 
 ## Agent Interface
 
