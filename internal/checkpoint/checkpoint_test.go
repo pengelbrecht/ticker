@@ -2,6 +2,7 @@ package checkpoint
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -330,5 +331,251 @@ func TestGetGitCommit(t *testing.T) {
 	// In the ticker repo, we should get a commit
 	if commit == "" {
 		t.Log("Warning: GetGitCommit() returned empty string (may not be in git repo)")
+	}
+}
+
+func TestNewCheckpointWithWorktree(t *testing.T) {
+	cp := NewCheckpointWithWorktree("abc", 5, 10000, 1.50, []string{"task1"}, "/path/to/worktree", "ticker/abc")
+
+	if cp.ID != "abc-5" {
+		t.Errorf("ID = %q, want %q", cp.ID, "abc-5")
+	}
+	if cp.WorktreePath != "/path/to/worktree" {
+		t.Errorf("WorktreePath = %q, want %q", cp.WorktreePath, "/path/to/worktree")
+	}
+	if cp.WorktreeBranch != "ticker/abc" {
+		t.Errorf("WorktreeBranch = %q, want %q", cp.WorktreeBranch, "ticker/abc")
+	}
+}
+
+func TestManager_SaveAndLoad_WithWorktree(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManagerWithDir(dir)
+
+	cp := &Checkpoint{
+		ID:             "abc-5",
+		Timestamp:      time.Now().Truncate(time.Second),
+		EpicID:         "abc",
+		Iteration:      5,
+		TotalTokens:    10000,
+		TotalCost:      1.50,
+		CompletedTasks: []string{"task1", "task2"},
+		GitCommit:      "abc123def456",
+		WorktreePath:   "/home/test/.worktrees/abc",
+		WorktreeBranch: "ticker/abc",
+	}
+
+	// Save
+	if err := m.Save(cp); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Load
+	loaded, err := m.Load("abc-5")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// Verify worktree fields
+	if loaded.WorktreePath != cp.WorktreePath {
+		t.Errorf("WorktreePath = %q, want %q", loaded.WorktreePath, cp.WorktreePath)
+	}
+	if loaded.WorktreeBranch != cp.WorktreeBranch {
+		t.Errorf("WorktreeBranch = %q, want %q", loaded.WorktreeBranch, cp.WorktreeBranch)
+	}
+}
+
+func TestPrepareResume_NormalMode(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManagerWithDir(dir)
+
+	cp := &Checkpoint{
+		ID:     "abc-5",
+		EpicID: "abc",
+		// No worktree fields - normal mode
+	}
+
+	workDir, err := m.PrepareResume(cp, "/some/repo")
+	if err != nil {
+		t.Fatalf("PrepareResume() error = %v", err)
+	}
+	if workDir != "." {
+		t.Errorf("workDir = %q, want %q", workDir, ".")
+	}
+}
+
+func TestPrepareResume_WorktreeExists(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManagerWithDir(dir)
+
+	// Create a directory to simulate existing worktree
+	worktreePath := filepath.Join(dir, "worktrees", "abc")
+	if err := os.MkdirAll(worktreePath, 0755); err != nil {
+		t.Fatalf("creating worktree dir: %v", err)
+	}
+
+	cp := &Checkpoint{
+		ID:             "abc-5",
+		EpicID:         "abc",
+		WorktreePath:   worktreePath,
+		WorktreeBranch: "ticker/abc",
+	}
+
+	workDir, err := m.PrepareResume(cp, dir)
+	if err != nil {
+		t.Fatalf("PrepareResume() error = %v", err)
+	}
+	if workDir != worktreePath {
+		t.Errorf("workDir = %q, want %q", workDir, worktreePath)
+	}
+}
+
+func TestPrepareResume_WorktreeGone_NoBranch(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManagerWithDir(dir)
+
+	cp := &Checkpoint{
+		ID:             "abc-5",
+		EpicID:         "abc",
+		WorktreePath:   "/nonexistent/path", // Doesn't exist
+		WorktreeBranch: "",                  // No branch to recreate from
+	}
+
+	_, err := m.PrepareResume(cp, dir)
+	if err != ErrWorktreeGone {
+		t.Errorf("PrepareResume() error = %v, want ErrWorktreeGone", err)
+	}
+}
+
+func TestPrepareResume_RecreatesWorktreeFromBranch(t *testing.T) {
+	// Create a temporary git repository
+	repoDir := t.TempDir()
+
+	// Initialize git repo
+	initCmd := exec.Command("git", "init")
+	initCmd.Dir = repoDir
+	if output, err := initCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %s: %v", output, err)
+	}
+
+	// Configure git user for commits
+	configCmds := [][]string{
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+	}
+	for _, args := range configCmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoDir
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s failed: %s: %v", args, output, err)
+		}
+	}
+
+	// Create initial commit
+	testFile := filepath.Join(repoDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+	addCmd := exec.Command("git", "add", ".")
+	addCmd.Dir = repoDir
+	if output, err := addCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %s: %v", output, err)
+	}
+	commitCmd := exec.Command("git", "commit", "-m", "initial")
+	commitCmd.Dir = repoDir
+	if output, err := commitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %s: %v", output, err)
+	}
+
+	// Create a branch that we can recreate the worktree from
+	branchCmd := exec.Command("git", "branch", "ticker/abc")
+	branchCmd.Dir = repoDir
+	if output, err := branchCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git branch failed: %s: %v", output, err)
+	}
+
+	// Create checkpoint pointing to non-existent worktree but valid branch
+	m := NewManagerWithDir(t.TempDir())
+	cp := &Checkpoint{
+		ID:             "abc-5",
+		EpicID:         "abc",
+		WorktreePath:   filepath.Join(repoDir, ".worktrees", "old-path"), // Doesn't exist
+		WorktreeBranch: "ticker/abc",
+	}
+
+	// PrepareResume should recreate the worktree from the branch
+	workDir, err := m.PrepareResume(cp, repoDir)
+	if err != nil {
+		t.Fatalf("PrepareResume() error = %v", err)
+	}
+
+	expectedPath := filepath.Join(repoDir, ".worktrees", "abc")
+	if workDir != expectedPath {
+		t.Errorf("workDir = %q, want %q", workDir, expectedPath)
+	}
+
+	// Verify worktree was actually created
+	if _, err := os.Stat(workDir); os.IsNotExist(err) {
+		t.Error("worktree directory was not created")
+	}
+
+	// Cleanup worktree
+	cleanupCmd := exec.Command("git", "worktree", "remove", workDir, "--force")
+	cleanupCmd.Dir = repoDir
+	_ = cleanupCmd.Run()
+}
+
+func TestPrepareResume_BranchGone(t *testing.T) {
+	// Create a temporary git repository
+	repoDir := t.TempDir()
+
+	// Initialize git repo
+	initCmd := exec.Command("git", "init")
+	initCmd.Dir = repoDir
+	if output, err := initCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %s: %v", output, err)
+	}
+
+	// Configure git user for commits
+	configCmds := [][]string{
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+	}
+	for _, args := range configCmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoDir
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s failed: %s: %v", args, output, err)
+		}
+	}
+
+	// Create initial commit
+	testFile := filepath.Join(repoDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+	addCmd := exec.Command("git", "add", ".")
+	addCmd.Dir = repoDir
+	if output, err := addCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %s: %v", output, err)
+	}
+	commitCmd := exec.Command("git", "commit", "-m", "initial")
+	commitCmd.Dir = repoDir
+	if output, err := commitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %s: %v", output, err)
+	}
+
+	// Create checkpoint pointing to non-existent worktree AND non-existent branch
+	m := NewManagerWithDir(t.TempDir())
+	cp := &Checkpoint{
+		ID:             "abc-5",
+		EpicID:         "abc",
+		WorktreePath:   filepath.Join(repoDir, ".worktrees", "abc"), // Doesn't exist
+		WorktreeBranch: "ticker/abc",                                // Branch doesn't exist either
+	}
+
+	_, err := m.PrepareResume(cp, repoDir)
+	if err != ErrWorktreeGone {
+		t.Errorf("PrepareResume() error = %v, want ErrWorktreeGone", err)
 	}
 }

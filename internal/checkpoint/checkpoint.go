@@ -36,6 +36,14 @@ type Checkpoint struct {
 
 	// GitCommit is the commit SHA at checkpoint time for potential rollback.
 	GitCommit string `json:"git_commit"`
+
+	// WorktreePath is the path to the worktree if running in worktree mode.
+	// Empty if running in normal mode (main repo).
+	WorktreePath string `json:"worktree_path,omitempty"`
+
+	// WorktreeBranch is the branch name for the worktree.
+	// Used to recreate worktree if it was cleaned up.
+	WorktreeBranch string `json:"worktree_branch,omitempty"`
 }
 
 // Manager handles saving, loading, and listing checkpoints.
@@ -211,4 +219,78 @@ func NewCheckpoint(epicID string, iteration int, tokens int, cost float64, compl
 		CompletedTasks: completedTasks,
 		GitCommit:      GetGitCommit(),
 	}
+}
+
+// NewCheckpointWithWorktree creates a checkpoint with worktree information.
+// Use this when running in worktree mode to enable resuming in the correct worktree.
+func NewCheckpointWithWorktree(epicID string, iteration int, tokens int, cost float64, completedTasks []string, worktreePath, worktreeBranch string) *Checkpoint {
+	cp := NewCheckpoint(epicID, iteration, tokens, cost, completedTasks)
+	cp.WorktreePath = worktreePath
+	cp.WorktreeBranch = worktreeBranch
+	return cp
+}
+
+// ErrWorktreeGone is returned when a worktree cannot be restored because
+// both the worktree path and branch no longer exist.
+var ErrWorktreeGone = fmt.Errorf("cannot resume: worktree and branch both gone")
+
+// PrepareResume prepares the working directory for resuming from a checkpoint.
+// For non-worktree checkpoints, it returns "." (current directory).
+// For worktree checkpoints, it returns the existing worktree path or recreates it from the branch.
+// The repoRoot parameter is used for recreating worktrees and should point to the main repository.
+func (m *Manager) PrepareResume(cp *Checkpoint, repoRoot string) (workDir string, err error) {
+	if cp.WorktreePath == "" {
+		return ".", nil // Normal mode, use current dir
+	}
+
+	// Check if worktree exists at saved path
+	if _, err := os.Stat(cp.WorktreePath); err == nil {
+		return cp.WorktreePath, nil
+	}
+
+	// Worktree gone - try to recreate from branch
+	if cp.WorktreeBranch == "" {
+		return "", ErrWorktreeGone
+	}
+
+	// Check if the branch still exists
+	if !branchExists(cp.WorktreeBranch, repoRoot) {
+		return "", ErrWorktreeGone
+	}
+
+	// Recreate the worktree from the branch
+	newPath, err := recreateWorktreeFromBranch(cp.EpicID, cp.WorktreeBranch, repoRoot)
+	if err != nil {
+		return "", fmt.Errorf("recreating worktree: %w", err)
+	}
+
+	return newPath, nil
+}
+
+// branchExists checks if a branch exists in the repository.
+func branchExists(branch, repoRoot string) bool {
+	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	cmd.Dir = repoRoot
+	return cmd.Run() == nil
+}
+
+// recreateWorktreeFromBranch creates a worktree at the standard location for an epic
+// using an existing branch.
+func recreateWorktreeFromBranch(epicID, branch, repoRoot string) (string, error) {
+	worktreePath := filepath.Join(repoRoot, ".worktrees", epicID)
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
+		return "", fmt.Errorf("creating worktree directory: %w", err)
+	}
+
+	// Create worktree from existing branch
+	cmd := exec.Command("git", "worktree", "add", worktreePath, branch)
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git worktree add: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+
+	return worktreePath, nil
 }
