@@ -17,6 +17,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/tui"
 	"github.com/pengelbrecht/ticker/internal/update"
+	"github.com/pengelbrecht/ticker/internal/verify"
 )
 
 // Version is set at build time via ldflags
@@ -124,6 +125,8 @@ func init() {
 	runCmd.Flags().Int("max-task-retries", 3, "Maximum iterations on same task before assuming stuck")
 	runCmd.Flags().Bool("auto", false, "Auto-select next ready epic")
 	runCmd.Flags().Bool("headless", false, "Run without TUI (stdout/stderr only)")
+	runCmd.Flags().Bool("skip-verify", false, "Skip verification after task completion")
+	runCmd.Flags().Bool("verify-only", false, "Run verification without the agent (for debugging)")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
@@ -145,6 +148,20 @@ func runRun(cmd *cobra.Command, args []string) {
 	maxCost, _ := cmd.Flags().GetFloat64("max-cost")
 	checkpointInterval, _ := cmd.Flags().GetInt("checkpoint-interval")
 	maxTaskRetries, _ := cmd.Flags().GetInt("max-task-retries")
+	skipVerify, _ := cmd.Flags().GetBool("skip-verify")
+	verifyOnly, _ := cmd.Flags().GetBool("verify-only")
+
+	// Check mutual exclusivity
+	if skipVerify && verifyOnly {
+		fmt.Fprintln(os.Stderr, "Error: --skip-verify and --verify-only are mutually exclusive")
+		os.Exit(ExitError)
+	}
+
+	// Handle --verify-only mode (no epic required, runs in current directory)
+	if verifyOnly {
+		runVerifyOnly()
+		return
+	}
 
 	var epicID string
 	var epicTitle string
@@ -190,15 +207,15 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	// TUI mode (default)
 	if !headless {
-		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries)
+		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify)
 		return
 	}
 
 	// Headless mode
-	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries)
+	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify)
 }
 
-func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int) {
+func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool) {
 	// Create pause channel for TUI <-> engine communication
 	pauseChan := make(chan bool, 1)
 
@@ -234,6 +251,13 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 
 	// Create engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
+
+	// Set up verification runner (unless --skip-verify)
+	if !skipVerify {
+		if runner := createVerifyRunner(); runner != nil {
+			eng.SetVerifyRunner(runner)
+		}
+	}
 
 	// Helper to refresh task list in TUI
 	refreshTasks := func() {
@@ -399,7 +423,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	cancel()
 }
 
-func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int) {
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -428,6 +452,13 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 
 	// Create and configure engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
+
+	// Set up verification runner (unless --skip-verify)
+	if !skipVerify {
+		if runner := createVerifyRunner(); runner != nil {
+			eng.SetVerifyRunner(runner)
+		}
+	}
 
 	// Set up output callback for headless mode
 	eng.OnOutput = func(chunk string) {
@@ -677,4 +708,77 @@ func runPicker() *tui.EpicInfo {
 
 	picker := model.(tui.Picker)
 	return picker.Selected()
+}
+
+// createVerifyRunner creates a verification runner for the current directory.
+// Returns nil if verification is disabled via config or not in a git repo.
+func createVerifyRunner() *verify.Runner {
+	dir, err := os.Getwd()
+	if err != nil {
+		return nil
+	}
+
+	// Check config
+	config, err := verify.LoadConfig(dir)
+	if err != nil {
+		// Config error - log but continue without verification
+		fmt.Fprintf(os.Stderr, "Warning: error loading verification config: %v\n", err)
+		return nil
+	}
+	if !config.IsEnabled() {
+		return nil
+	}
+
+	// Create GitVerifier (returns nil if not in git repo)
+	gitVerifier := verify.NewGitVerifier(dir)
+	if gitVerifier == nil {
+		return nil
+	}
+
+	return verify.NewRunner(dir, gitVerifier)
+}
+
+// runVerifyOnly runs verification without the agent (--verify-only mode).
+// Useful for debugging verification setup.
+func runVerifyOnly() {
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	fmt.Println("Running verification (--verify-only mode)")
+	fmt.Println()
+
+	// Check config
+	config, err := verify.LoadConfig(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading verification config: %v\n", err)
+		os.Exit(ExitError)
+	}
+	if !config.IsEnabled() {
+		fmt.Println("Verification is disabled in .ticker/config.json")
+		os.Exit(ExitSuccess)
+	}
+
+	// Create GitVerifier
+	gitVerifier := verify.NewGitVerifier(dir)
+	if gitVerifier == nil {
+		fmt.Println("Not a git repository - GitVerifier not available")
+		os.Exit(ExitSuccess)
+	}
+
+	// Create runner and run verification
+	runner := verify.NewRunner(dir, gitVerifier)
+	ctx := context.Background()
+	results := runner.Run(ctx, "", "") // Empty task ID and output for verify-only
+
+	// Output results
+	fmt.Println(results.Summary())
+
+	// Exit with appropriate code
+	if results.AllPassed {
+		os.Exit(ExitSuccess)
+	}
+	os.Exit(1) // Exit code 1 for verification failure
 }
