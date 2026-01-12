@@ -13,7 +13,7 @@
   "acceptance_criteria": "1. MergeManager.Merge() successfully merges worktree branch to main\n2. Merge uses --no-ff for clear history\n3. Merge commit message includes epic ID\n4. Conflicts detected and returned in MergeResult.Conflicts\n5. AbortMerge cleans up conflict state\n6. HasConflict accurately detects in-progress merge\n7. Auto-detects main/master branch name\n8. All tests pass including conflict scenarios",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:01:39.305486Z",
-  "updated_at": "2026-01-12T12:31:43.352554185Z",
-  "closed_at": "2026-01-12T12:31:43.352554185Z",
-  "closed_reason": "Implemented MergeManager with Merge(), AbortMerge(), HasConflict() methods. Auto-detects main branch (main/master), uses --no-ff for merge commits, detects conflicts via git status --porcelain (UU/AA/DD markers). All 6 merge tests + 22 existing worktree tests pass."
+  "updated_at": "2026-01-12T12:32:42.251898787Z",
+  "closed_at": "2026-01-12T12:32:42.251898787Z",
+  "closed_reason": "MergeManager implemented at internal/worktree/merge.go with Merge(), AbortMerge(), HasConflict() methods. Auto-detects main/master branch via git show-ref, uses --no-ff for merge commits, detects conflicts via git status --porcelain (UU/AA/DD markers). All 28 worktree tests pass including 6 merge-specific tests."
 }
