@@ -259,33 +259,80 @@ func TestFilterExcludedPaths(t *testing.T) {
 }
 
 func TestGitVerifier_IgnoresTickerMetadata(t *testing.T) {
-	dir := createTempGitRepo(t)
-	v := NewGitVerifier(dir)
-	if v == nil {
-		t.Fatal("NewGitVerifier returned nil")
-	}
+	t.Run("ignores untracked .tick and .ticker files", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		v := NewGitVerifier(dir)
+		if v == nil {
+			t.Fatal("NewGitVerifier returned nil")
+		}
 
-	// Create .tick and .ticker directories with files
-	tickDir := filepath.Join(dir, ".tick", "issues")
-	if err := os.MkdirAll(tickDir, 0755); err != nil {
-		t.Fatalf("failed to create .tick dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(tickDir, "abc.json"), []byte("{}"), 0644); err != nil {
-		t.Fatalf("failed to create tick file: %v", err)
-	}
+		// Create .tick and .ticker directories with files
+		tickDir := filepath.Join(dir, ".tick", "issues")
+		if err := os.MkdirAll(tickDir, 0755); err != nil {
+			t.Fatalf("failed to create .tick dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tickDir, "abc.json"), []byte("{}"), 0644); err != nil {
+			t.Fatalf("failed to create tick file: %v", err)
+		}
 
-	tickerDir := filepath.Join(dir, ".ticker", "checkpoints")
-	if err := os.MkdirAll(tickerDir, 0755); err != nil {
-		t.Fatalf("failed to create .ticker dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(tickerDir, "cp.json"), []byte("{}"), 0644); err != nil {
-		t.Fatalf("failed to create checkpoint file: %v", err)
-	}
+		tickerDir := filepath.Join(dir, ".ticker", "checkpoints")
+		if err := os.MkdirAll(tickerDir, 0755); err != nil {
+			t.Fatalf("failed to create .ticker dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tickerDir, "cp.json"), []byte("{}"), 0644); err != nil {
+			t.Fatalf("failed to create checkpoint file: %v", err)
+		}
 
-	// Verify should pass because .tick/ and .ticker/ are excluded
-	result := v.Verify(context.Background(), "test-task", "")
+		// Verify should pass because .tick/ and .ticker/ are excluded
+		result := v.Verify(context.Background(), "test-task", "")
 
-	if !result.Passed {
-		t.Errorf("Verify() should pass when only .tick/ and .ticker/ have changes, got output: %s", result.Output)
-	}
+		if !result.Passed {
+			t.Errorf("Verify() should pass when only .tick/ and .ticker/ have changes, got output: %s", result.Output)
+		}
+	})
+
+	t.Run("ignores modified .tick files", func(t *testing.T) {
+		// This test specifically checks that MODIFIED .tick/ files are excluded.
+		// Git status format for modified files is " M path" (space, M, space, path).
+		// The leading space is significant for parsing.
+		dir := createTempGitRepo(t)
+		v := NewGitVerifier(dir)
+		if v == nil {
+			t.Fatal("NewGitVerifier returned nil")
+		}
+
+		// Create and commit a .tick file first
+		tickDir := filepath.Join(dir, ".tick", "issues")
+		if err := os.MkdirAll(tickDir, 0755); err != nil {
+			t.Fatalf("failed to create .tick dir: %v", err)
+		}
+		tickFile := filepath.Join(tickDir, "task.json")
+		if err := os.WriteFile(tickFile, []byte(`{"status":"open"}`), 0644); err != nil {
+			t.Fatalf("failed to create tick file: %v", err)
+		}
+
+		// Stage and commit the .tick file
+		cmd := exec.Command("git", "add", ".tick/issues/task.json")
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to stage .tick file: %v", err)
+		}
+		cmd = exec.Command("git", "commit", "-m", "Add tick file")
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to commit .tick file: %v", err)
+		}
+
+		// Now modify the file (this will show as " M .tick/issues/task.json")
+		if err := os.WriteFile(tickFile, []byte(`{"status":"closed"}`), 0644); err != nil {
+			t.Fatalf("failed to modify tick file: %v", err)
+		}
+
+		// Verify should pass because modified .tick/ files are excluded
+		result := v.Verify(context.Background(), "test-task", "")
+
+		if !result.Passed {
+			t.Errorf("Verify() should pass when only modified .tick/ files exist, got output: %s", result.Output)
+		}
+	})
 }

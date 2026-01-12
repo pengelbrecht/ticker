@@ -170,6 +170,137 @@ type VerifyResultMsg struct {
 }
 
 // -----------------------------------------------------------------------------
+// Multi-Epic Tab Messages - Tab management for parallel epic execution
+// -----------------------------------------------------------------------------
+
+// EpicTabStatus represents the status of an epic tab.
+type EpicTabStatus string
+
+const (
+	EpicTabStatusRunning  EpicTabStatus = "running"
+	EpicTabStatusComplete EpicTabStatus = "completed"
+	EpicTabStatusFailed   EpicTabStatus = "failed"
+	EpicTabStatusConflict EpicTabStatus = "conflict"
+)
+
+// EpicTab holds state for a single epic tab in multi-epic mode.
+// Each tab maintains isolated state for its epic's tasks, output, and status.
+type EpicTab struct {
+	EpicID    string        // The epic ID
+	Title     string        // Epic title for display
+	Status    EpicTabStatus // Current status (running, completed, failed, conflict)
+
+	// Per-tab state (mirrors single-epic Model fields)
+	Tasks          []TaskInfo
+	SelectedTask   int
+	TaskExecOrder  map[string]int
+	NextExecOrder  int
+	Output         string
+	Thinking       string
+	LastThought    string
+	TaskOutputs    map[string]string
+	TaskRunRecords map[string]*agent.RunRecord
+	ViewingTask    string
+	ViewingRunRecord bool
+
+	// Per-tab metrics
+	Iteration      int
+	TaskID         string   // Current task ID
+	TaskTitle      string   // Current task title
+	Cost           float64
+	Tokens         int
+
+	// Per-tab token tracking
+	LiveInputTokens         int
+	LiveOutputTokens        int
+	LiveCacheReadTokens     int
+	LiveCacheCreationTokens int
+	TotalInputTokens        int
+	TotalOutputTokens       int
+	TotalCacheReadTokens    int
+	TotalCacheCreationTokens int
+	LiveModel               string
+	LiveStatus              agent.RunStatus
+	LiveActiveToolName      string
+
+	// Per-tab tool tracking
+	ActiveTool  *ToolActivityInfo
+	ToolHistory []ToolActivityInfo
+
+	// Per-tab verification state
+	Verifying     bool
+	VerifyTaskID  string
+	VerifyPassed  bool
+	VerifySummary string
+}
+
+// NewEpicTab creates a new EpicTab with initialized maps.
+func NewEpicTab(epicID, title string) EpicTab {
+	return EpicTab{
+		EpicID:         epicID,
+		Title:          title,
+		Status:         EpicTabStatusRunning,
+		TaskExecOrder:  make(map[string]int),
+		TaskOutputs:    make(map[string]string),
+		TaskRunRecords: make(map[string]*agent.RunRecord),
+	}
+}
+
+// EpicAddedMsg signals a new epic tab was added.
+type EpicAddedMsg struct {
+	EpicID string
+	Title  string
+}
+
+// EpicStatusMsg updates an epic's tab status.
+type EpicStatusMsg struct {
+	EpicID string
+	Status EpicTabStatus
+}
+
+// SwitchTabMsg requests switching to a different tab.
+type SwitchTabMsg struct {
+	TabIndex int
+}
+
+// EpicIterationStartMsg signals iteration start for a specific epic (multi-epic mode).
+type EpicIterationStartMsg struct {
+	EpicID    string
+	Iteration int
+	TaskID    string
+	TaskTitle string
+}
+
+// EpicIterationEndMsg signals iteration end for a specific epic (multi-epic mode).
+type EpicIterationEndMsg struct {
+	EpicID    string
+	Iteration int
+	Cost      float64
+	Tokens    int
+}
+
+// EpicOutputMsg contains output for a specific epic (multi-epic mode).
+type EpicOutputMsg struct {
+	EpicID string
+	Text   string
+}
+
+// EpicTasksUpdateMsg contains updated tasks for a specific epic (multi-epic mode).
+type EpicTasksUpdateMsg struct {
+	EpicID string
+	Tasks  []TaskInfo
+}
+
+// EpicRunCompleteMsg signals run completion for a specific epic (multi-epic mode).
+type EpicRunCompleteMsg struct {
+	EpicID     string
+	Reason     string
+	Signal     string
+	Iterations int
+	Cost       float64
+}
+
+// -----------------------------------------------------------------------------
 // Agent Streaming Messages - Rich agent output events
 // These messages map to AgentState changes for real-time TUI updates.
 // -----------------------------------------------------------------------------
@@ -506,6 +637,11 @@ type Model struct {
 
 	// Markdown renderer for output pane
 	mdRenderer *glamour.TermRenderer
+
+	// Multi-epic mode state
+	multiEpic bool       // True when running multiple epics
+	epicTabs  []EpicTab  // Tab state for each epic (empty in single-epic mode)
+	activeTab int        // Currently selected tab index
 }
 
 // -----------------------------------------------------------------------------
@@ -1383,6 +1519,216 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewingRunRecord = false
 				m.updateOutputViewport()
 			}
+		case "[":
+			// Previous tab in multi-epic mode
+			if m.multiEpic && len(m.epicTabs) > 1 {
+				m.syncToActiveTab()
+				m.prevTab()
+			}
+		case "]":
+			// Next tab in multi-epic mode
+			if m.multiEpic && len(m.epicTabs) > 1 {
+				m.syncToActiveTab()
+				m.nextTab()
+			}
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+			// Switch to specific tab by number (1-9)
+			if m.multiEpic && len(m.epicTabs) > 0 {
+				tabIndex := int(msg.String()[0] - '1') // '1' -> 0, '2' -> 1, etc.
+				if tabIndex < len(m.epicTabs) {
+					m.syncToActiveTab()
+					m.switchTab(tabIndex)
+				}
+			}
+		}
+
+	// Multi-epic messages
+	case EpicAddedMsg:
+		// Add a new tab for this epic
+		m.addEpicTab(msg.EpicID, msg.Title)
+		// If this is the first epic, sync to it
+		if len(m.epicTabs) == 1 {
+			m.syncFromActiveTab()
+		}
+
+	case EpicStatusMsg:
+		// Update the status of a specific epic's tab
+		m.updateTabStatus(msg.EpicID, msg.Status)
+
+	case SwitchTabMsg:
+		// Switch to a specific tab
+		if m.multiEpic && msg.TabIndex >= 0 && msg.TabIndex < len(m.epicTabs) {
+			m.syncToActiveTab()
+			m.switchTab(msg.TabIndex)
+		}
+
+	case EpicIterationStartMsg:
+		// Update iteration for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+
+			// Save output for the previous task before clearing
+			if tab.TaskID != "" && tab.Output != "" {
+				tab.TaskOutputs[tab.TaskID] = tab.Output
+			}
+
+			// Update iteration state
+			tab.Iteration = msg.Iteration
+			tab.TaskID = msg.TaskID
+			tab.TaskTitle = msg.TaskTitle
+
+			// Mark task as current in task list
+			for i := range tab.Tasks {
+				if tab.Tasks[i].ID == msg.TaskID {
+					tab.Tasks[i].IsCurrent = true
+					tab.Tasks[i].Status = TaskStatusInProgress
+				} else {
+					tab.Tasks[i].IsCurrent = false
+				}
+			}
+
+			// Track execution order
+			if msg.TaskID != "" {
+				if _, exists := tab.TaskExecOrder[msg.TaskID]; !exists {
+					tab.TaskExecOrder[msg.TaskID] = tab.NextExecOrder
+					tab.NextExecOrder++
+				}
+			}
+
+			// Accumulate live token metrics to totals before clearing
+			tab.TotalInputTokens += tab.LiveInputTokens
+			tab.TotalOutputTokens += tab.LiveOutputTokens
+			tab.TotalCacheReadTokens += tab.LiveCacheReadTokens
+			tab.TotalCacheCreationTokens += tab.LiveCacheCreationTokens
+
+			// Clear for new iteration
+			tab.Output = ""
+			tab.Thinking = ""
+			tab.LastThought = ""
+			tab.ActiveTool = nil
+			tab.ToolHistory = nil
+			tab.LiveInputTokens = 0
+			tab.LiveOutputTokens = 0
+			tab.LiveCacheReadTokens = 0
+			tab.LiveCacheCreationTokens = 0
+			tab.LiveModel = ""
+			tab.LiveStatus = ""
+			tab.LiveActiveToolName = ""
+
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.syncFromActiveTab()
+			}
+		}
+
+	case EpicIterationEndMsg:
+		// Update cost/tokens for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.Cost += msg.Cost
+			tab.Tokens += msg.Tokens
+
+			// Save output for the completed task
+			if tab.TaskID != "" {
+				tab.TaskOutputs[tab.TaskID] = tab.Output
+			}
+
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.cost = tab.Cost
+				m.tokens = tab.Tokens
+			}
+		}
+
+	case EpicOutputMsg:
+		// Append output for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			m.epicTabs[idx].Output += msg.Text
+
+			// Update display if this is the active tab
+			if idx == m.activeTab {
+				m.output = m.epicTabs[idx].Output
+				if m.viewingTask == "" {
+					m.updateOutputViewport()
+				}
+			}
+		}
+
+	case EpicTasksUpdateMsg:
+		// Update tasks for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.Tasks = msg.Tasks
+
+			// Mark current task
+			for i := range tab.Tasks {
+				if tab.Tasks[i].ID == tab.TaskID && tab.TaskID != "" {
+					tab.Tasks[i].IsCurrent = true
+				}
+			}
+
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.tasks = tab.Tasks
+				m.updateViewportSize()
+			}
+		}
+
+	case EpicRunCompleteMsg:
+		// Handle run completion for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+
+			// Accumulate final iteration's token metrics
+			tab.TotalInputTokens += tab.LiveInputTokens
+			tab.TotalOutputTokens += tab.LiveOutputTokens
+			tab.TotalCacheReadTokens += tab.LiveCacheReadTokens
+			tab.TotalCacheCreationTokens += tab.LiveCacheCreationTokens
+
+			// Save output for the final task
+			if tab.TaskID != "" && tab.Output != "" {
+				tab.TaskOutputs[tab.TaskID] = tab.Output
+			}
+
+			// Update status based on signal
+			switch msg.Signal {
+			case "COMPLETE":
+				tab.Status = EpicTabStatusComplete
+			case "BLOCKED", "MAX_ITER", "MAX_COST":
+				tab.Status = EpicTabStatusFailed
+			default:
+				tab.Status = EpicTabStatusFailed
+			}
+
+			// Update iteration count
+			if msg.Iterations > 0 {
+				tab.Iteration = msg.Iterations
+			}
+
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.syncFromActiveTab()
+			}
+
+			// Check if all epics are complete
+			allComplete := true
+			for _, t := range m.epicTabs {
+				if t.Status == EpicTabStatusRunning {
+					allComplete = false
+					break
+				}
+			}
+			if allComplete {
+				m.showComplete = true
+				m.completeReason = "All epics finished"
+				m.running = false
+				m.endTime = time.Now()
+			}
 		}
 	}
 
@@ -1981,7 +2327,16 @@ func (m Model) View() string {
 	if len(m.tasks) > 0 {
 		statusBarHeight++ // Add progress bar row
 	}
-	contentHeight := m.height - statusBarHeight - footerRows - 2 // -2 for borders
+
+	// Add tab bar height in multi-epic mode
+	tabBarHeight := 0
+	var tabBar string
+	if m.multiEpic && len(m.epicTabs) > 0 {
+		tabBar = m.renderTabBar()
+		tabBarHeight = tabHeaderHeight
+	}
+
+	contentHeight := m.height - statusBarHeight - footerRows - tabBarHeight - 2 // -2 for borders
 
 	// Render task and output panes
 	taskPane := m.renderTaskPane(contentHeight)
@@ -1990,7 +2345,10 @@ func (m Model) View() string {
 	// Join task and output panes horizontally
 	panes := lipgloss.JoinHorizontal(lipgloss.Top, taskPane, outputPane)
 
-	// Join everything vertically
+	// Join everything vertically (with tab bar if in multi-epic mode)
+	if tabBarHeight > 0 {
+		return lipgloss.JoinVertical(lipgloss.Left, statusBar, tabBar, panes, footer)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, panes, footer)
 }
 
@@ -2466,6 +2824,9 @@ func (m Model) renderFooter() string {
 			hints = append(hints, keyStyle.Render("esc")+descStyle.Render(":live"))
 		}
 		hints = append(hints, keyStyle.Render("tab")+descStyle.Render(":pane"))
+		// Tab switching hints in multi-epic mode
+		tabHints := m.getTabHints()
+		hints = append(hints, tabHints...)
 		hints = append(hints, keyStyle.Render("^d/u")+descStyle.Render(":scroll"))
 		hints = append(hints, keyStyle.Render("?")+descStyle.Render(":help"))
 	}
@@ -2751,7 +3112,16 @@ func (m Model) renderBaseView() string {
 	if len(m.tasks) > 0 {
 		statusBarHeight++
 	}
-	contentHeight := m.height - statusBarHeight - footerRows - 2
+
+	// Add tab bar height in multi-epic mode
+	tabBarHeight := 0
+	var tabBar string
+	if m.multiEpic && len(m.epicTabs) > 0 {
+		tabBar = m.renderTabBar()
+		tabBarHeight = tabHeaderHeight
+	}
+
+	contentHeight := m.height - statusBarHeight - footerRows - tabBarHeight - 2
 
 	// Render task and output panes
 	taskPane := m.renderTaskPane(contentHeight)
@@ -2760,7 +3130,10 @@ func (m Model) renderBaseView() string {
 	// Join task and output panes horizontally
 	panes := lipgloss.JoinHorizontal(lipgloss.Top, taskPane, outputPane)
 
-	// Join everything vertically
+	// Join everything vertically (with tab bar if in multi-epic mode)
+	if tabBarHeight > 0 {
+		return lipgloss.JoinVertical(lipgloss.Left, statusBar, tabBar, panes, footer)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, statusBar, panes, footer)
 }
 

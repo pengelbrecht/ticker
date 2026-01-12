@@ -3525,3 +3525,368 @@ func TestRenderStatusIndicator_NotVerifying(t *testing.T) {
 		t.Errorf("expected 'writing' in status indicator, got '%s'", plainText)
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Multi-Epic Tab tests
+// -----------------------------------------------------------------------------
+
+func TestEpicAddedMsg_CreatesTab(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Initially no tabs
+	if m.multiEpic {
+		t.Error("expected multiEpic to be false initially")
+	}
+	if len(m.epicTabs) != 0 {
+		t.Errorf("expected 0 tabs, got %d", len(m.epicTabs))
+	}
+
+	// Add first epic tab
+	newModel, _ := m.Update(EpicAddedMsg{EpicID: "abc", Title: "Epic ABC"})
+	m = newModel.(Model)
+
+	if !m.multiEpic {
+		t.Error("expected multiEpic to be true after adding tab")
+	}
+	if len(m.epicTabs) != 1 {
+		t.Errorf("expected 1 tab, got %d", len(m.epicTabs))
+	}
+	if m.epicTabs[0].EpicID != "abc" {
+		t.Errorf("expected epicID 'abc', got '%s'", m.epicTabs[0].EpicID)
+	}
+	if m.epicTabs[0].Title != "Epic ABC" {
+		t.Errorf("expected title 'Epic ABC', got '%s'", m.epicTabs[0].Title)
+	}
+	if m.epicTabs[0].Status != EpicTabStatusRunning {
+		t.Errorf("expected status 'running', got '%s'", m.epicTabs[0].Status)
+	}
+
+	// Add second epic tab
+	newModel, _ = m.Update(EpicAddedMsg{EpicID: "def", Title: "Epic DEF"})
+	m = newModel.(Model)
+
+	if len(m.epicTabs) != 2 {
+		t.Errorf("expected 2 tabs, got %d", len(m.epicTabs))
+	}
+	if m.epicTabs[1].EpicID != "def" {
+		t.Errorf("expected epicID 'def', got '%s'", m.epicTabs[1].EpicID)
+	}
+}
+
+func TestTabSwitching_NumberKeys(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Add three tabs
+	newModel, _ := m.Update(EpicAddedMsg{EpicID: "epic1", Title: "Epic 1"})
+	m = newModel.(Model)
+	newModel, _ = m.Update(EpicAddedMsg{EpicID: "epic2", Title: "Epic 2"})
+	m = newModel.(Model)
+	newModel, _ = m.Update(EpicAddedMsg{EpicID: "epic3", Title: "Epic 3"})
+	m = newModel.(Model)
+
+	// Start on tab 0
+	if m.activeTab != 0 {
+		t.Errorf("expected activeTab 0, got %d", m.activeTab)
+	}
+
+	// Press '2' to switch to tab 1
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.activeTab != 1 {
+		t.Errorf("expected activeTab 1 after pressing '2', got %d", m.activeTab)
+	}
+
+	// Press '3' to switch to tab 2
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.activeTab != 2 {
+		t.Errorf("expected activeTab 2 after pressing '3', got %d", m.activeTab)
+	}
+
+	// Press '1' to switch back to tab 0
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.activeTab != 0 {
+		t.Errorf("expected activeTab 0 after pressing '1', got %d", m.activeTab)
+	}
+}
+
+func TestTabSwitching_BracketKeys(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Add three tabs
+	newModel, _ := m.Update(EpicAddedMsg{EpicID: "epic1", Title: "Epic 1"})
+	m = newModel.(Model)
+	newModel, _ = m.Update(EpicAddedMsg{EpicID: "epic2", Title: "Epic 2"})
+	m = newModel.(Model)
+	newModel, _ = m.Update(EpicAddedMsg{EpicID: "epic3", Title: "Epic 3"})
+	m = newModel.(Model)
+
+	// Start on tab 0
+	if m.activeTab != 0 {
+		t.Errorf("expected activeTab 0, got %d", m.activeTab)
+	}
+
+	// Press ']' to go to next tab
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.activeTab != 1 {
+		t.Errorf("expected activeTab 1 after pressing ']', got %d", m.activeTab)
+	}
+
+	// Press ']' again to go to tab 2
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.activeTab != 2 {
+		t.Errorf("expected activeTab 2 after pressing ']' again, got %d", m.activeTab)
+	}
+
+	// Press ']' again to wrap around to tab 0
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.activeTab != 0 {
+		t.Errorf("expected activeTab 0 after wrapping around, got %d", m.activeTab)
+	}
+
+	// Press '[' to go to previous (wrap to tab 2)
+	msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.activeTab != 2 {
+		t.Errorf("expected activeTab 2 after pressing '[', got %d", m.activeTab)
+	}
+}
+
+func TestEpicStatusMsg_UpdatesStatus(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Add a tab
+	newModel, _ := m.Update(EpicAddedMsg{EpicID: "abc", Title: "Epic ABC"})
+	m = newModel.(Model)
+
+	// Initially running
+	if m.epicTabs[0].Status != EpicTabStatusRunning {
+		t.Errorf("expected status 'running', got '%s'", m.epicTabs[0].Status)
+	}
+
+	// Update status to complete
+	newModel, _ = m.Update(EpicStatusMsg{EpicID: "abc", Status: EpicTabStatusComplete})
+	m = newModel.(Model)
+
+	if m.epicTabs[0].Status != EpicTabStatusComplete {
+		t.Errorf("expected status 'completed', got '%s'", m.epicTabs[0].Status)
+	}
+
+	// Update status to conflict
+	newModel, _ = m.Update(EpicStatusMsg{EpicID: "abc", Status: EpicTabStatusConflict})
+	m = newModel.(Model)
+
+	if m.epicTabs[0].Status != EpicTabStatusConflict {
+		t.Errorf("expected status 'conflict', got '%s'", m.epicTabs[0].Status)
+	}
+}
+
+func TestSingleEpicMode_NoTabs(t *testing.T) {
+	m := New(Config{EpicID: "single", EpicTitle: "Single Epic"})
+	m.width = 100
+	m.height = 30
+
+	// Should not be in multi-epic mode
+	if m.multiEpic {
+		t.Error("expected multiEpic to be false in single-epic mode")
+	}
+	if len(m.epicTabs) != 0 {
+		t.Errorf("expected 0 tabs in single-epic mode, got %d", len(m.epicTabs))
+	}
+
+	// Number keys should not affect anything in single-epic mode
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Should still be single-epic mode
+	if m.multiEpic {
+		t.Error("expected multiEpic to still be false after pressing number key")
+	}
+}
+
+func TestRenderTabBar_NoTabs(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// No tabs - should return empty string
+	tabBar := m.renderTabBar()
+	if tabBar != "" {
+		t.Errorf("expected empty tab bar when no tabs, got '%s'", tabBar)
+	}
+}
+
+func TestRenderTabBar_WithTabs(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Add tabs
+	newModel, _ := m.Update(EpicAddedMsg{EpicID: "abc", Title: "Epic ABC"})
+	m = newModel.(Model)
+	newModel, _ = m.Update(EpicAddedMsg{EpicID: "def", Title: "Epic DEF"})
+	m = newModel.(Model)
+
+	// Render tab bar
+	tabBar := m.renderTabBar()
+	plainText := ansi.Strip(tabBar)
+
+	// Should contain tab numbers and epic IDs
+	if !strings.Contains(plainText, "1:abc") {
+		t.Errorf("expected '1:abc' in tab bar, got '%s'", plainText)
+	}
+	if !strings.Contains(plainText, "2:def") {
+		t.Errorf("expected '2:def' in tab bar, got '%s'", plainText)
+	}
+}
+
+func TestEpicTab_NewEpicTab(t *testing.T) {
+	tab := NewEpicTab("test123", "Test Epic")
+
+	if tab.EpicID != "test123" {
+		t.Errorf("expected epicID 'test123', got '%s'", tab.EpicID)
+	}
+	if tab.Title != "Test Epic" {
+		t.Errorf("expected title 'Test Epic', got '%s'", tab.Title)
+	}
+	if tab.Status != EpicTabStatusRunning {
+		t.Errorf("expected status 'running', got '%s'", tab.Status)
+	}
+	if tab.TaskExecOrder == nil {
+		t.Error("expected TaskExecOrder to be initialized")
+	}
+	if tab.TaskOutputs == nil {
+		t.Error("expected TaskOutputs to be initialized")
+	}
+	if tab.TaskRunRecords == nil {
+		t.Error("expected TaskRunRecords to be initialized")
+	}
+}
+
+func TestTabHelpers(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Add tabs
+	m.addEpicTab("abc", "Epic ABC")
+	m.addEpicTab("def", "Epic DEF")
+	m.addEpicTab("ghi", "Epic GHI")
+
+	// Test findTabByEpicID
+	idx := m.findTabByEpicID("def")
+	if idx != 1 {
+		t.Errorf("expected index 1 for 'def', got %d", idx)
+	}
+
+	idx = m.findTabByEpicID("nonexistent")
+	if idx != -1 {
+		t.Errorf("expected index -1 for nonexistent epic, got %d", idx)
+	}
+
+	// Test isMultiEpicMode
+	if !m.isMultiEpicMode() {
+		t.Error("expected isMultiEpicMode to be true")
+	}
+
+	// Test getActiveEpicID
+	epicID := m.getActiveEpicID()
+	if epicID != "abc" {
+		t.Errorf("expected active epicID 'abc', got '%s'", epicID)
+	}
+
+	// Test updateTabStatus
+	m.updateTabStatus("def", EpicTabStatusFailed)
+	if m.epicTabs[1].Status != EpicTabStatusFailed {
+		t.Errorf("expected status 'failed', got '%s'", m.epicTabs[1].Status)
+	}
+
+	// Test getTabHints
+	hints := m.getTabHints()
+	if len(hints) != 2 {
+		t.Errorf("expected 2 tab hints, got %d", len(hints))
+	}
+}
+
+func TestTabStateSynchronization(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Add two tabs
+	newModel, _ := m.Update(EpicAddedMsg{EpicID: "epic1", Title: "Epic 1"})
+	m = newModel.(Model)
+	newModel, _ = m.Update(EpicAddedMsg{EpicID: "epic2", Title: "Epic 2"})
+	m = newModel.(Model)
+
+	// Set some state on the active tab (epic1)
+	m.output = "Output for epic1"
+	m.iteration = 5
+	m.cost = 1.25
+
+	// Sync to active tab
+	m.syncToActiveTab()
+
+	// Verify state was synced
+	if m.epicTabs[0].Output != "Output for epic1" {
+		t.Errorf("expected output 'Output for epic1', got '%s'", m.epicTabs[0].Output)
+	}
+	if m.epicTabs[0].Iteration != 5 {
+		t.Errorf("expected iteration 5, got %d", m.epicTabs[0].Iteration)
+	}
+	if m.epicTabs[0].Cost != 1.25 {
+		t.Errorf("expected cost 1.25, got %f", m.epicTabs[0].Cost)
+	}
+
+	// Switch to tab 2
+	m.switchTab(1)
+
+	// Model should now reflect tab 2 state (which is empty)
+	if m.output != "" {
+		t.Errorf("expected empty output after switching to epic2, got '%s'", m.output)
+	}
+	if m.iteration != 0 {
+		t.Errorf("expected iteration 0 after switching to epic2, got %d", m.iteration)
+	}
+
+	// Set state on epic2
+	m.output = "Output for epic2"
+	m.iteration = 3
+	m.syncToActiveTab()
+
+	// Switch back to tab 1
+	m.switchTab(0)
+
+	// Model should now reflect tab 1 state
+	if m.output != "Output for epic1" {
+		t.Errorf("expected output 'Output for epic1' after switching back, got '%s'", m.output)
+	}
+	if m.iteration != 5 {
+		t.Errorf("expected iteration 5 after switching back, got %d", m.iteration)
+	}
+}

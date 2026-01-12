@@ -71,7 +71,9 @@ func (v *GitVerifier) Verify(ctx context.Context, taskID string, agentOutput str
 	}
 
 	// Filter out excluded paths (ticker metadata)
-	outputStr := filterExcludedPaths(strings.TrimSpace(string(output)))
+	// Note: Don't TrimSpace before filtering - it removes the leading space from
+	// git status format " M path" which breaks path extraction.
+	outputStr := strings.TrimSpace(filterExcludedPaths(string(output)))
 
 	// Empty output means clean working tree
 	if outputStr == "" {
