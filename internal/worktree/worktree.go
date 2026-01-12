@@ -74,6 +74,11 @@ func (m *Manager) Create(epicID string) (*Worktree, error) {
 		return nil, ErrWorktreeExists
 	}
 
+	// Ensure .worktrees/ is gitignored before creating any worktrees
+	if _, err := EnsureGitignore(m.repoRoot); err != nil {
+		return nil, fmt.Errorf("ensuring gitignore: %w", err)
+	}
+
 	// Ensure worktree directory exists
 	if err := os.MkdirAll(m.worktreeDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create worktree directory: %w", err)
