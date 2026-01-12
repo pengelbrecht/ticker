@@ -14,10 +14,12 @@ import (
 	"github.com/pengelbrecht/ticker/internal/budget"
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
 	"github.com/pengelbrecht/ticker/internal/engine"
+	"github.com/pengelbrecht/ticker/internal/parallel"
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/tui"
 	"github.com/pengelbrecht/ticker/internal/update"
 	"github.com/pengelbrecht/ticker/internal/verify"
+	"github.com/pengelbrecht/ticker/internal/worktree"
 )
 
 // Version is set at build time via ldflags
@@ -48,19 +50,27 @@ and orchestrates coding agents to autonomously complete epics.`,
 }
 
 var runCmd = &cobra.Command{
-	Use:   "run [epic-id]",
-	Short: "Run an epic with the AI agent",
-	Long: `Run starts the Ralph loop for the specified epic. The agent will iterate
+	Use:   "run <epic-id> [epic-id...]",
+	Short: "Run one or more epics with the AI agent",
+	Long: `Run starts the Ralph loop for the specified epic(s). The agent will iterate
 through tasks until completion, ejection, or budget limits are reached.
 
+When multiple epics are provided, they run in parallel in isolated git worktrees.
+Use --parallel to control concurrency (default: number of epics).
+
 Exit codes:
-  0 - Success (epic completed)
+  0 - Success (all epics completed)
   1 - Max iterations reached
   2 - Agent ejected
   3 - Agent blocked
-  4 - Error`,
-	Args: cobra.MaximumNArgs(1),
-	Run:  runRun,
+  4 - Error
+
+Examples:
+  ticker run abc123                      # Single epic with TUI
+  ticker run abc123 --worktree           # Single epic in worktree
+  ticker run abc def ghi                 # Three epics in parallel
+  ticker run abc def ghi --parallel 2    # Three epics, max 2 at a time`,
+	Run: runRun,
 }
 
 var resumeCmd = &cobra.Command{
@@ -127,7 +137,8 @@ func init() {
 	runCmd.Flags().Bool("headless", false, "Run without TUI (stdout/stderr only)")
 	runCmd.Flags().Bool("skip-verify", false, "Skip verification after task completion")
 	runCmd.Flags().Bool("verify-only", false, "Run verification without the agent (for debugging)")
-	runCmd.Flags().Bool("worktree", false, "Run epic in isolated git worktree")
+	runCmd.Flags().Bool("worktree", false, "Run epic(s) in isolated git worktree")
+	runCmd.Flags().Int("parallel", 0, "Max parallel epics (default: number of epics)")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
@@ -152,6 +163,7 @@ func runRun(cmd *cobra.Command, args []string) {
 	skipVerify, _ := cmd.Flags().GetBool("skip-verify")
 	verifyOnly, _ := cmd.Flags().GetBool("verify-only")
 	useWorktree, _ := cmd.Flags().GetBool("worktree")
+	maxParallel, _ := cmd.Flags().GetInt("parallel")
 
 	// Check mutual exclusivity
 	if skipVerify && verifyOnly {
@@ -165,11 +177,17 @@ func runRun(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	var epicID string
-	var epicTitle string
+	// Validate --parallel flag
+	if maxParallel < 0 {
+		fmt.Fprintln(os.Stderr, "Error: --parallel must be >= 0")
+		os.Exit(ExitError)
+	}
+
+	var epicIDs []string
+	var epicTitles []string
 
 	if len(args) > 0 {
-		epicID = args[0]
+		epicIDs = args
 	} else if auto {
 		// Auto-select: use tk to find a ready epic
 		selected, err := autoSelectEpic()
@@ -181,31 +199,69 @@ func runRun(cmd *cobra.Command, args []string) {
 			fmt.Fprintln(os.Stderr, "No ready epics found")
 			os.Exit(ExitError)
 		}
-		epicID = selected
-		fmt.Printf("Auto-selected epic: %s\n", epicID)
+		epicIDs = []string{selected}
+		fmt.Printf("Auto-selected epic: %s\n", selected)
 	} else if !headless {
 		// Interactive mode: show epic picker
 		selected := runPicker()
 		if selected == nil {
 			os.Exit(0) // User quit without selecting
 		}
-		epicID = selected.ID
-		epicTitle = selected.Title
+		epicIDs = []string{selected.ID}
+		epicTitles = []string{selected.Title}
 	} else {
 		fmt.Fprintln(os.Stderr, "Error: either provide an epic-id or use --auto")
 		os.Exit(ExitError)
 	}
 
-	// Get epic info for TUI (if not already from picker)
-	if epicTitle == "" {
-		ticksClient := ticks.NewClient()
-		epic, err := ticksClient.GetEpic(epicID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting epic: %v\n", err)
-			os.Exit(ExitError)
-		}
-		epicTitle = epic.Title
+	// Validate epic IDs: exist, open, unique
+	ticksClient := ticks.NewClient()
+	if err := validateEpicIDs(ticksClient, epicIDs); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(ExitError)
 	}
+
+	// Get epic titles (if not already from picker)
+	if len(epicTitles) == 0 {
+		epicTitles = make([]string, len(epicIDs))
+		for i, id := range epicIDs {
+			epic, err := ticksClient.GetEpic(id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error getting epic %s: %v\n", id, err)
+				os.Exit(ExitError)
+			}
+			epicTitles[i] = epic.Title
+		}
+	}
+
+	// Multiple epics implies --worktree
+	if len(epicIDs) > 1 {
+		useWorktree = true
+	}
+
+	// Warn if --parallel specified with single epic
+	if maxParallel > 0 && len(epicIDs) == 1 {
+		fmt.Fprintln(os.Stderr, "Warning: --parallel ignored with single epic")
+		maxParallel = 0
+	}
+
+	// Handle multiple epics
+	if len(epicIDs) > 1 {
+		// Multiple epics - use ParallelRunner
+		if maxParallel == 0 {
+			maxParallel = len(epicIDs)
+		}
+		if !headless {
+			runParallelWithTUI(epicIDs, epicTitles, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, maxParallel)
+		} else {
+			runParallelHeadless(epicIDs, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, maxParallel)
+		}
+		return
+	}
+
+	// Single epic - use existing Engine
+	epicID := epicIDs[0]
+	epicTitle := epicTitles[0]
 
 	// TUI mode (default)
 	if !headless {
@@ -215,6 +271,314 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	// Headless mode
 	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree)
+}
+
+// validateEpicIDs checks that all epic IDs exist, are open, and are unique.
+func validateEpicIDs(client *ticks.Client, epicIDs []string) error {
+	seen := make(map[string]bool)
+	for _, id := range epicIDs {
+		// Check for duplicates
+		if seen[id] {
+			return fmt.Errorf("duplicate epic ID: %s", id)
+		}
+		seen[id] = true
+
+		// Check existence and status
+		epic, err := client.GetEpic(id)
+		if err != nil {
+			return fmt.Errorf("epic %s not found: %w", id, err)
+		}
+		if !epic.IsOpen() {
+			return fmt.Errorf("epic %s is not open (status: %s)", id, epic.Status)
+		}
+	}
+	return nil
+}
+
+func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool, maxParallel int) {
+	// Create context with signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		cancel()
+	}()
+
+	// Get current working directory for worktree manager
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Initialize worktree manager
+	wtManager, err := worktree.NewManager(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing worktree manager: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Initialize merge manager
+	mergeManager, err := worktree.NewMergeManager(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing merge manager: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Create shared budget tracker
+	sharedBudget := budget.NewTracker(budget.Limits{
+		MaxIterations: maxIterations * len(epicIDs), // Total across all epics
+		MaxCost:       maxCost,                       // Shared cost limit
+	})
+
+	// Create TUI model with first epic as initial
+	pauseChan := make(chan bool, 1)
+	m := tui.New(tui.Config{
+		EpicID:       epicIDs[0],
+		EpicTitle:    epicTitles[0],
+		MaxCost:      maxCost,
+		MaxIteration: maxIterations,
+		PauseChan:    pauseChan,
+	})
+
+	// Create program
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	// Add tabs for all epics by sending messages
+	for i, id := range epicIDs {
+		p.Send(tui.EpicAddedMsg{EpicID: id, Title: epicTitles[i]})
+	}
+
+	// Check claude availability
+	claudeAgent := agent.NewClaudeAgent()
+	if !claudeAgent.Available() {
+		fmt.Fprintln(os.Stderr, "Error: claude CLI not found. Please install Claude Code.")
+		os.Exit(ExitError)
+	}
+
+	// Engine factory creates a new engine for each epic
+	ticksClient := ticks.NewClient()
+	checkpointMgr := checkpoint.NewManager()
+
+	engineFactory := func() *engine.Engine {
+		eng := engine.NewEngine(
+			agent.NewClaudeAgent(),
+			ticksClient,
+			sharedBudget,
+			checkpointMgr,
+		)
+		if !skipVerify {
+			if runner := createVerifyRunner(); runner != nil {
+				eng.SetVerifyRunner(runner)
+			}
+		}
+		return eng
+	}
+
+	// Create parallel runner config
+	runnerConfig := parallel.RunnerConfig{
+		EpicIDs:         epicIDs,
+		MaxParallel:     maxParallel,
+		SharedBudget:    sharedBudget,
+		WorktreeManager: wtManager,
+		MergeManager:    mergeManager,
+		EngineFactory:   engineFactory,
+		EngineConfig: engine.RunConfig{
+			MaxIterations:   maxIterations,
+			MaxCost:         maxCost,
+			CheckpointEvery: checkpointInterval,
+			MaxTaskRetries:  maxTaskRetries,
+			UseWorktree:     true,
+		},
+	}
+
+	runner := parallel.NewRunner(runnerConfig)
+
+	// Set up callbacks to send messages to TUI
+	runner.SetCallbacks(parallel.RunnerCallbacks{
+		OnEpicStart: func(epicID string) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusRunning})
+		},
+		OnEpicComplete: func(epicID string, result *engine.RunResult) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusComplete})
+		},
+		OnEpicFailed: func(epicID string, err error) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusFailed})
+		},
+		OnEpicConflict: func(epicID string, conflict *parallel.ConflictState) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusConflict})
+		},
+	})
+
+	// Run parallel runner in background
+	go func() {
+		result, err := runner.Run(ctx)
+		if err != nil {
+			p.Send(tui.ErrorMsg{Err: err})
+			return
+		}
+
+		// Send completion message
+		p.Send(tui.RunCompleteMsg{
+			Reason:     "all epics completed",
+			Iterations: 0, // Aggregate not available in simple form
+			Cost:       result.TotalCost,
+		})
+	}()
+
+	// Run TUI (blocks until quit)
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	cancel()
+}
+
+func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool, maxParallel int) {
+	// Create context with signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Fprintln(os.Stderr, "\nInterrupted, shutting down...")
+		cancel()
+	}()
+
+	// Get current working directory for worktree manager
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting current directory: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Initialize worktree manager
+	wtManager, err := worktree.NewManager(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing worktree manager: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Initialize merge manager
+	mergeManager, err := worktree.NewMergeManager(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing merge manager: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Create shared budget tracker
+	sharedBudget := budget.NewTracker(budget.Limits{
+		MaxIterations: maxIterations * len(epicIDs),
+		MaxCost:       maxCost,
+	})
+
+	// Check claude availability
+	claudeAgent := agent.NewClaudeAgent()
+	if !claudeAgent.Available() {
+		fmt.Fprintln(os.Stderr, "Error: claude CLI not found. Please install Claude Code.")
+		os.Exit(ExitError)
+	}
+
+	// Engine factory creates a new engine for each epic
+	ticksClient := ticks.NewClient()
+	checkpointMgr := checkpoint.NewManager()
+
+	engineFactory := func() *engine.Engine {
+		eng := engine.NewEngine(
+			agent.NewClaudeAgent(),
+			ticksClient,
+			sharedBudget,
+			checkpointMgr,
+		)
+		if !skipVerify {
+			if runner := createVerifyRunner(); runner != nil {
+				eng.SetVerifyRunner(runner)
+			}
+		}
+		return eng
+	}
+
+	// Create parallel runner config
+	runnerConfig := parallel.RunnerConfig{
+		EpicIDs:         epicIDs,
+		MaxParallel:     maxParallel,
+		SharedBudget:    sharedBudget,
+		WorktreeManager: wtManager,
+		MergeManager:    mergeManager,
+		EngineFactory:   engineFactory,
+		EngineConfig: engine.RunConfig{
+			MaxIterations:   maxIterations,
+			MaxCost:         maxCost,
+			CheckpointEvery: checkpointInterval,
+			MaxTaskRetries:  maxTaskRetries,
+			UseWorktree:     true,
+		},
+	}
+
+	runner := parallel.NewRunner(runnerConfig)
+
+	// Set up callbacks for headless output
+	runner.SetCallbacks(parallel.RunnerCallbacks{
+		OnEpicStart: func(epicID string) {
+			fmt.Printf("[%s] Starting epic\n", epicID)
+		},
+		OnEpicComplete: func(epicID string, result *engine.RunResult) {
+			fmt.Printf("[%s] Epic completed\n", epicID)
+		},
+		OnEpicFailed: func(epicID string, err error) {
+			fmt.Printf("[%s] Epic failed: %v\n", epicID, err)
+		},
+		OnEpicConflict: func(epicID string, conflict *parallel.ConflictState) {
+			fmt.Printf("[%s] Merge conflict in: %v\n", epicID, conflict.Files)
+		},
+	})
+
+	fmt.Printf("Starting parallel run for %d epics (max %d concurrent)\n", len(epicIDs), maxParallel)
+	fmt.Printf("Budget: max %d iterations total, $%.2f\n", maxIterations*len(epicIDs), maxCost)
+	fmt.Println()
+
+	result, err := runner.Run(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Print summary
+	fmt.Println()
+	fmt.Println("=== Parallel Run Complete ===")
+	fmt.Printf("Duration: %v\n", result.Duration.Round(1000000000))
+	fmt.Printf("Total cost: $%.4f\n", result.TotalCost)
+	fmt.Printf("Total tokens: %d\n", result.TotalTokens)
+	fmt.Println()
+
+	// Print per-epic results
+	allSuccess := true
+	for _, status := range result.Statuses {
+		icon := "✓"
+		if status.Status != "completed" {
+			icon = "✗"
+			allSuccess = false
+		}
+		fmt.Printf("%s [%s] %s\n", icon, status.EpicID, status.Status)
+		if status.Error != nil {
+			fmt.Printf("    Error: %v\n", status.Error)
+		}
+		if status.Conflict != nil {
+			fmt.Printf("    Conflict in: %v\n", status.Conflict.Files)
+			fmt.Printf("    Worktree: %s\n", status.Conflict.Worktree)
+		}
+	}
+
+	if allSuccess {
+		os.Exit(ExitSuccess)
+	}
+	os.Exit(ExitError)
 }
 
 func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree bool) {
