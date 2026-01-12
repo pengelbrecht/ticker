@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/pengelbrecht/ticker/internal/agent"
 )
@@ -1605,11 +1606,14 @@ func TestBuildOutputContent_OutputOnly(t *testing.T) {
 
 	content := m.buildOutputContent(80)
 
+	// Strip ANSI codes for text content assertions (glamour adds styling)
+	stripped := ansi.Strip(content)
+
 	// Should contain output but no thinking section
-	if !strings.Contains(content, "Some output text") {
+	if !strings.Contains(stripped, "Some output text") {
 		t.Error("expected content to contain output text")
 	}
-	if strings.Contains(content, "Thinking") {
+	if strings.Contains(stripped, "Thinking") {
 		t.Error("expected no Thinking section when thinking is empty")
 	}
 }
@@ -1639,14 +1643,17 @@ func TestBuildOutputContent_BothThinkingAndOutput(t *testing.T) {
 
 	content := m.buildOutputContent(80)
 
+	// Strip ANSI codes for text content assertions (glamour adds styling)
+	stripped := ansi.Strip(content)
+
 	// Should contain both sections
-	if !strings.Contains(content, "Thinking") {
+	if !strings.Contains(stripped, "Thinking") {
 		t.Error("expected Thinking section header")
 	}
-	if !strings.Contains(content, "Output") {
+	if !strings.Contains(stripped, "Output") {
 		t.Error("expected Output section header/separator")
 	}
-	if !strings.Contains(content, "The final answer") {
+	if !strings.Contains(stripped, "The final answer") {
 		t.Error("expected output text in content")
 	}
 }
@@ -2053,12 +2060,15 @@ func TestBuildOutputContent_WithTools(t *testing.T) {
 
 	content := m.buildOutputContent(80)
 
+	// Strip ANSI codes for text content assertions (glamour adds styling)
+	stripped := ansi.Strip(content)
+
 	// Should contain tool section
-	if !strings.Contains(content, "Read") {
+	if !strings.Contains(stripped, "Read") {
 		t.Error("expected content to contain active tool 'Read'")
 	}
 	// Should contain output
-	if !strings.Contains(content, "Some output text") {
+	if !strings.Contains(stripped, "Some output text") {
 		t.Error("expected content to contain output text")
 	}
 }
@@ -2127,48 +2137,51 @@ func TestBuildRunRecordContent_Basic(t *testing.T) {
 
 	content := m.buildRunRecordContent(runRecord, 80)
 
+	// Strip ANSI codes for text content assertions (glamour adds styling)
+	stripped := ansi.Strip(content)
+
 	// Check for metrics section
-	if !strings.Contains(content, "Run Summary") {
+	if !strings.Contains(stripped, "Run Summary") {
 		t.Error("expected content to contain 'Run Summary' header")
 	}
-	if !strings.Contains(content, "Duration:") {
+	if !strings.Contains(stripped, "Duration:") {
 		t.Error("expected content to contain 'Duration:' label")
 	}
-	if !strings.Contains(content, "Turns:") {
+	if !strings.Contains(stripped, "Turns:") {
 		t.Error("expected content to contain 'Turns:' label")
 	}
-	if !strings.Contains(content, "5") { // NumTurns
+	if !strings.Contains(stripped, "5") { // NumTurns
 		t.Error("expected content to contain turns count '5'")
 	}
-	if !strings.Contains(content, "Tokens:") {
+	if !strings.Contains(stripped, "Tokens:") {
 		t.Error("expected content to contain 'Tokens:' label")
 	}
-	if !strings.Contains(content, "Cost:") {
+	if !strings.Contains(stripped, "Cost:") {
 		t.Error("expected content to contain 'Cost:' label")
 	}
-	if !strings.Contains(content, "Model:") {
+	if !strings.Contains(stripped, "Model:") {
 		t.Error("expected content to contain 'Model:' label")
 	}
-	if !strings.Contains(content, "opus") {
+	if !strings.Contains(stripped, "opus") {
 		t.Error("expected content to contain model name 'opus'")
 	}
-	if !strings.Contains(content, "Success") {
+	if !strings.Contains(stripped, "Success") {
 		t.Error("expected content to contain 'Success' result")
 	}
 
 	// Check for thinking section
-	if !strings.Contains(content, "Thinking") {
+	if !strings.Contains(stripped, "Thinking") {
 		t.Error("expected content to contain 'Thinking' header")
 	}
-	if !strings.Contains(content, "Let me think about this") {
+	if !strings.Contains(stripped, "Let me think about this") {
 		t.Error("expected content to contain thinking text")
 	}
 
 	// Check for output section
-	if !strings.Contains(content, "Output") {
+	if !strings.Contains(stripped, "Output") {
 		t.Error("expected content to contain 'Output' header")
 	}
-	if !strings.Contains(content, "Task completed successfully") {
+	if !strings.Contains(stripped, "Task completed successfully") {
 		t.Error("expected content to contain output text")
 	}
 }
@@ -2595,5 +2608,96 @@ func TestIterationStart_ResetsStatusFields(t *testing.T) {
 	}
 	if m.liveActiveToolName != "" {
 		t.Errorf("expected liveActiveToolName to be reset, got '%s'", m.liveActiveToolName)
+	}
+}
+
+func TestRefreshViewportContent_LiveOutput(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.output = "Test output content"
+	m.viewingTask = "" // Live output mode
+
+	// Initialize viewport size
+	m.updateViewportSize()
+	m.mdRenderer = newMarkdownRenderer(m.viewport.Width)
+
+	m.refreshViewportContent()
+
+	content := m.viewport.View()
+	if !strings.Contains(content, "output") {
+		t.Errorf("expected viewport to contain output content")
+	}
+}
+
+func TestRefreshViewportContent_RunRecordView(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.viewingTask = "task-123"
+	m.viewingRunRecord = true
+	m.taskRunRecords = map[string]*agent.RunRecord{
+		"task-123": {
+			StartedAt: time.Now().Add(-time.Minute),
+			EndedAt:   time.Now(),
+			Output:    "Completed task output",
+			Success:   true,
+			NumTurns:  5,
+		},
+	}
+
+	// Initialize viewport size
+	m.updateViewportSize()
+	m.mdRenderer = newMarkdownRenderer(m.viewport.Width)
+
+	m.refreshViewportContent()
+
+	content := m.viewport.View()
+	if !strings.Contains(content, "Run Summary") {
+		t.Errorf("expected viewport to contain 'Run Summary', got: %s", content)
+	}
+}
+
+func TestRefreshViewportContent_HistoricalOutput(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.viewingTask = "task-456"
+	m.viewingRunRecord = false
+	m.taskOutputs = map[string]string{
+		"task-456": "Historical output text",
+	}
+
+	// Initialize viewport size
+	m.updateViewportSize()
+	m.mdRenderer = newMarkdownRenderer(m.viewport.Width)
+
+	m.refreshViewportContent()
+
+	// Strip ANSI codes for content assertion
+	content := ansi.Strip(m.viewport.View())
+	if !strings.Contains(content, "Historical") {
+		t.Errorf("expected viewport to contain 'Historical', got: %s", content)
+	}
+}
+
+func TestWindowResize_RefreshesViewportContent(t *testing.T) {
+	m := New(Config{})
+	m.output = "Some long text that needs wrapping"
+
+	// Initial size
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = newM.(Model)
+
+	initialContent := m.viewport.View()
+
+	// Resize to different width
+	newM, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = newM.(Model)
+
+	// Content should be re-rendered (may or may not differ depending on content)
+	// Main assertion is that no panic occurs and content is set
+	if m.viewport.View() == "" && initialContent != "" {
+		t.Error("viewport content should not become empty on resize")
 	}
 }

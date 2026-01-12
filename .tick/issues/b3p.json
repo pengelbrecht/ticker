@@ -2,7 +2,7 @@
   "id": "b3p",
   "title": "Fix line wrapping in output pane",
   "description": "Lines don't wrap properly in the output pane, causing horizontal overflow. The markdown renderer (glamour) should handle this, but ensure word wrap is configured for the viewport width. May need to set glamour's WordWrap option to the inner pane width.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "e02",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T07:20:51.853966Z",
-  "updated_at": "2026-01-12T07:21:11.821996Z"
+  "updated_at": "2026-01-12T07:48:04.579146Z",
+  "closed_at": "2026-01-12T07:48:04.579146Z",
+  "closed_reason": "Added refreshViewportContent() method that re-renders viewport content when window is resized. This ensures glamour's word wrapping uses the updated viewport width. The fix handles all three view states: live output, RunRecord view, and historical output. Also preserves scroll position during resize."
 }

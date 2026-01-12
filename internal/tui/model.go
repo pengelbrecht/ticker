@@ -13,6 +13,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
+	gansi "github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -444,6 +446,9 @@ type Model struct {
 	// Internal
 	keys keyMap
 	help help.Model
+
+	// Markdown renderer for output pane
+	mdRenderer *glamour.TermRenderer
 }
 
 // -----------------------------------------------------------------------------
@@ -514,6 +519,273 @@ func pulsingStyle(animFrame int, running bool) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colors[animFrame%4])
 }
 
+// catppuccinMochaStyle returns a glamour style configuration based on the Catppuccin Mocha palette.
+// This provides consistent markdown rendering that matches the TUI color scheme.
+func catppuccinMochaStyle() gansi.StyleConfig {
+	// Helper functions for style primitives
+	boolPtr := func(b bool) *bool { return &b }
+	stringPtr := func(s string) *string { return &s }
+	uintPtr := func(u uint) *uint { return &u }
+
+	return gansi.StyleConfig{
+		Document: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color: stringPtr("#CDD6F4"), // Text
+			},
+			Margin: uintPtr(0),
+		},
+		BlockQuote: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:  stringPtr("#A6ADC8"), // Subtext0
+				Italic: boolPtr(true),
+			},
+			Indent:      uintPtr(1),
+			IndentToken: stringPtr("│ "),
+		},
+		Paragraph: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{},
+		},
+		List: gansi.StyleList{
+			LevelIndent: 2,
+			StyleBlock: gansi.StyleBlock{
+				StylePrimitive: gansi.StylePrimitive{},
+			},
+		},
+		Heading: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color: stringPtr("#F5C2E7"), // Pink
+				Bold:  boolPtr(true),
+			},
+		},
+		H1: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:  stringPtr("#F5C2E7"), // Pink
+				Bold:   boolPtr(true),
+				Prefix: "# ",
+			},
+		},
+		H2: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:  stringPtr("#CBA6F7"), // Mauve
+				Bold:   boolPtr(true),
+				Prefix: "## ",
+			},
+		},
+		H3: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:  stringPtr("#89B4FA"), // Blue
+				Bold:   boolPtr(true),
+				Prefix: "### ",
+			},
+		},
+		H4: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:  stringPtr("#94E2D5"), // Teal
+				Bold:   boolPtr(true),
+				Prefix: "#### ",
+			},
+		},
+		H5: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:  stringPtr("#89DCEB"), // Sky
+				Bold:   boolPtr(true),
+				Prefix: "##### ",
+			},
+		},
+		H6: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:  stringPtr("#A6ADC8"), // Subtext0
+				Bold:   boolPtr(true),
+				Prefix: "###### ",
+			},
+		},
+		Text: gansi.StylePrimitive{
+			Color: stringPtr("#CDD6F4"), // Text
+		},
+		Strikethrough: gansi.StylePrimitive{
+			CrossedOut: boolPtr(true),
+		},
+		Emph: gansi.StylePrimitive{
+			Italic: boolPtr(true),
+			Color:  stringPtr("#F9E2AF"), // Yellow
+		},
+		Strong: gansi.StylePrimitive{
+			Bold:  boolPtr(true),
+			Color: stringPtr("#FAB387"), // Peach
+		},
+		HorizontalRule: gansi.StylePrimitive{
+			Color:  stringPtr("#6C7086"), // Overlay0
+			Format: "─────────────────────────────────────────",
+		},
+		Item: gansi.StylePrimitive{
+			BlockPrefix: "• ",
+		},
+		Enumeration: gansi.StylePrimitive{
+			BlockPrefix: ". ",
+		},
+		Task: gansi.StyleTask{
+			Ticked:   "[✓] ",
+			Unticked: "[ ] ",
+		},
+		Link: gansi.StylePrimitive{
+			Color:     stringPtr("#89B4FA"), // Blue
+			Underline: boolPtr(true),
+		},
+		LinkText: gansi.StylePrimitive{
+			Color: stringPtr("#89DCEB"), // Sky
+		},
+		Image: gansi.StylePrimitive{
+			Color:     stringPtr("#CBA6F7"), // Mauve
+			Underline: boolPtr(true),
+		},
+		ImageText: gansi.StylePrimitive{
+			Color:  stringPtr("#CBA6F7"), // Mauve
+			Format: "Image: {{.text}}",
+		},
+		Code: gansi.StyleBlock{
+			StylePrimitive: gansi.StylePrimitive{
+				Color:           stringPtr("#A6E3A1"), // Green
+				BackgroundColor: stringPtr("#313244"), // Surface0
+			},
+		},
+		CodeBlock: gansi.StyleCodeBlock{
+			StyleBlock: gansi.StyleBlock{
+				StylePrimitive: gansi.StylePrimitive{
+					Color: stringPtr("#CDD6F4"), // Text
+				},
+				Margin: uintPtr(0),
+			},
+			Chroma: &gansi.Chroma{
+				Text: gansi.StylePrimitive{
+					Color: stringPtr("#CDD6F4"), // Text
+				},
+				Error: gansi.StylePrimitive{
+					Color:           stringPtr("#F38BA8"), // Red
+					BackgroundColor: stringPtr("#313244"), // Surface0
+				},
+				Comment: gansi.StylePrimitive{
+					Color:  stringPtr("#6C7086"), // Overlay0
+					Italic: boolPtr(true),
+				},
+				CommentPreproc: gansi.StylePrimitive{
+					Color: stringPtr("#CBA6F7"), // Mauve
+				},
+				Keyword: gansi.StylePrimitive{
+					Color: stringPtr("#CBA6F7"), // Mauve
+				},
+				KeywordReserved: gansi.StylePrimitive{
+					Color: stringPtr("#CBA6F7"), // Mauve
+				},
+				KeywordNamespace: gansi.StylePrimitive{
+					Color: stringPtr("#94E2D5"), // Teal
+				},
+				KeywordType: gansi.StylePrimitive{
+					Color: stringPtr("#F9E2AF"), // Yellow
+				},
+				Operator: gansi.StylePrimitive{
+					Color: stringPtr("#89DCEB"), // Sky
+				},
+				Punctuation: gansi.StylePrimitive{
+					Color: stringPtr("#9399B2"), // Overlay2
+				},
+				Name: gansi.StylePrimitive{
+					Color: stringPtr("#CDD6F4"), // Text
+				},
+				NameBuiltin: gansi.StylePrimitive{
+					Color: stringPtr("#F38BA8"), // Red
+				},
+				NameTag: gansi.StylePrimitive{
+					Color: stringPtr("#CBA6F7"), // Mauve
+				},
+				NameAttribute: gansi.StylePrimitive{
+					Color: stringPtr("#F9E2AF"), // Yellow
+				},
+				NameClass: gansi.StylePrimitive{
+					Color: stringPtr("#F9E2AF"), // Yellow
+				},
+				NameConstant: gansi.StylePrimitive{
+					Color: stringPtr("#FAB387"), // Peach
+				},
+				NameDecorator: gansi.StylePrimitive{
+					Color: stringPtr("#89B4FA"), // Blue
+				},
+				NameFunction: gansi.StylePrimitive{
+					Color: stringPtr("#89B4FA"), // Blue
+				},
+				NameOther: gansi.StylePrimitive{
+					Color: stringPtr("#CDD6F4"), // Text
+				},
+				Literal: gansi.StylePrimitive{
+					Color: stringPtr("#FAB387"), // Peach
+				},
+				LiteralNumber: gansi.StylePrimitive{
+					Color: stringPtr("#FAB387"), // Peach
+				},
+				LiteralDate: gansi.StylePrimitive{
+					Color: stringPtr("#F9E2AF"), // Yellow
+				},
+				LiteralString: gansi.StylePrimitive{
+					Color: stringPtr("#A6E3A1"), // Green
+				},
+				LiteralStringEscape: gansi.StylePrimitive{
+					Color: stringPtr("#F5C2E7"), // Pink
+				},
+				GenericDeleted: gansi.StylePrimitive{
+					Color: stringPtr("#F38BA8"), // Red
+				},
+				GenericEmph: gansi.StylePrimitive{
+					Italic: boolPtr(true),
+				},
+				GenericInserted: gansi.StylePrimitive{
+					Color: stringPtr("#A6E3A1"), // Green
+				},
+				GenericStrong: gansi.StylePrimitive{
+					Bold: boolPtr(true),
+				},
+				GenericSubheading: gansi.StylePrimitive{
+					Color: stringPtr("#89DCEB"), // Sky
+				},
+				Background: gansi.StylePrimitive{
+					BackgroundColor: stringPtr("#1E1E2E"), // Base
+				},
+			},
+		},
+		Table: gansi.StyleTable{
+			StyleBlock: gansi.StyleBlock{
+				StylePrimitive: gansi.StylePrimitive{},
+			},
+			CenterSeparator: stringPtr("┼"),
+			ColumnSeparator: stringPtr("│"),
+			RowSeparator:    stringPtr("─"),
+		},
+		DefinitionTerm: gansi.StylePrimitive{
+			Color: stringPtr("#89B4FA"), // Blue
+			Bold:  boolPtr(true),
+		},
+		DefinitionDescription: gansi.StylePrimitive{
+			Color: stringPtr("#CDD6F4"), // Text
+		},
+	}
+}
+
+// newMarkdownRenderer creates a glamour markdown renderer with Catppuccin Mocha styling.
+// The width parameter controls word wrapping.
+func newMarkdownRenderer(width int) *glamour.TermRenderer {
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStyles(catppuccinMochaStyle()),
+		glamour.WithWordWrap(width),
+		glamour.WithEmoji(),
+	)
+	if err != nil {
+		// Fallback to dark style if custom style fails
+		r, _ = glamour.NewTermRenderer(
+			glamour.WithStandardStyle("dark"),
+			glamour.WithWordWrap(width),
+		)
+	}
+	return r
+}
+
 // Config holds configuration for initializing the TUI.
 // Passed to New() to create a configured Model.
 type Config struct {
@@ -560,8 +832,9 @@ func New(cfg Config) Model {
 		pauseChan: cfg.PauseChan,
 
 		// Internal
-		keys: defaultKeyMap,
-		help: h,
+		keys:       defaultKeyMap,
+		help:       h,
+		mdRenderer: newMarkdownRenderer(80), // default width, updated on WindowSizeMsg
 	}
 }
 
@@ -600,6 +873,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update viewport dimensions
 		m.updateViewportSize()
+
+		// Update markdown renderer for new width
+		m.mdRenderer = newMarkdownRenderer(m.viewport.Width)
+
+		// Re-render viewport content with new width
+		m.refreshViewportContent()
 
 		// Set ready only when terminal is large enough
 		m.ready = m.realWidth >= minWidth && m.realHeight >= minHeight
@@ -953,10 +1232,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.viewport.SetContent(content)
 					m.viewport.GotoTop()
 				} else if output, ok := m.taskOutputs[task.ID]; ok && output != "" {
-					// Fallback to legacy output view
+					// Fallback to legacy output view - render as markdown
 					m.viewingTask = task.ID
 					m.viewingRunRecord = false
-					m.viewport.SetContent(output)
+					m.viewport.SetContent(m.renderMarkdown(output))
 					m.viewport.GotoTop()
 				}
 			}
@@ -1008,6 +1287,34 @@ func (m *Model) updateOutputViewport() {
 	m.viewport.GotoBottom()
 }
 
+// refreshViewportContent re-renders the current viewport content with the current width.
+// This is called on window resize to ensure word wrapping is updated.
+// Preserves scroll position when possible.
+func (m *Model) refreshViewportContent() {
+	// Save current scroll position
+	yOffset := m.viewport.YOffset
+
+	if m.viewingTask == "" {
+		// Viewing live output
+		content := m.buildOutputContent(m.viewport.Width)
+		m.viewport.SetContent(content)
+	} else if m.viewingRunRecord {
+		// Viewing a RunRecord
+		if runRecord, ok := m.taskRunRecords[m.viewingTask]; ok && runRecord != nil {
+			content := m.buildRunRecordContent(runRecord, m.viewport.Width)
+			m.viewport.SetContent(content)
+		}
+	} else {
+		// Viewing historical output
+		if output, ok := m.taskOutputs[m.viewingTask]; ok && output != "" {
+			m.viewport.SetContent(m.renderMarkdown(output))
+		}
+	}
+
+	// Restore scroll position (clamped to valid range)
+	m.viewport.SetYOffset(yOffset)
+}
+
 // updateSelectedTaskView updates the details pane to show the currently selected task.
 // This is called when navigating the task list with j/k/g/G to provide immediate feedback.
 // For closed tasks with a RunRecord, shows the detailed run summary.
@@ -1037,11 +1344,11 @@ func (m *Model) updateSelectedTaskView() {
 		return
 	}
 
-	// Fallback to legacy output view
+	// Fallback to legacy output view - render as markdown
 	if output, ok := m.taskOutputs[task.ID]; ok && output != "" {
 		m.viewingTask = task.ID
 		m.viewingRunRecord = false
-		m.viewport.SetContent(output)
+		m.viewport.SetContent(m.renderMarkdown(output))
 		m.viewport.GotoTop()
 		return
 	}
@@ -1053,8 +1360,25 @@ func (m *Model) updateSelectedTaskView() {
 	m.viewport.GotoTop()
 }
 
+// renderMarkdown renders markdown content using glamour with Catppuccin Mocha styling.
+// Returns the rendered content, or the original content if rendering fails.
+func (m *Model) renderMarkdown(content string) string {
+	if m.mdRenderer == nil || content == "" {
+		return content
+	}
+
+	rendered, err := m.mdRenderer.Render(content)
+	if err != nil {
+		return content
+	}
+
+	// Trim trailing newlines that glamour adds
+	return strings.TrimRight(rendered, "\n")
+}
+
 // buildOutputContent creates the combined content for the output viewport.
 // It includes a collapsible thinking section (when non-empty), tool activity, and the main output.
+// The main output is rendered as markdown using glamour.
 func (m *Model) buildOutputContent(width int) string {
 	var sections []string
 
@@ -1081,9 +1405,10 @@ func (m *Model) buildOutputContent(width int) string {
 		sections = append(sections, "", separator)
 	}
 
-	// Main output section
+	// Main output section - render as markdown
 	if m.output != "" {
-		sections = append(sections, m.output)
+		renderedOutput := m.renderMarkdown(m.output)
+		sections = append(sections, renderedOutput)
 	}
 
 	return strings.Join(sections, "\n")
@@ -1188,11 +1513,12 @@ func (m *Model) buildRunRecordContent(record *agent.RunRecord, width int) string
 		sections = append(sections, "")
 	}
 
-	// Output section
+	// Output section - render as markdown
 	if record.Output != "" {
 		outputHeader := dimStyle.Render("─── Output ───")
 		sections = append(sections, outputHeader)
-		sections = append(sections, record.Output)
+		renderedOutput := m.renderMarkdown(record.Output)
+		sections = append(sections, renderedOutput)
 	}
 
 	return strings.Join(sections, "\n")
