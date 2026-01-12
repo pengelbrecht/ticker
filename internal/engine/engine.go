@@ -291,6 +291,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 	for {
 		// Check context cancellation
 		if ctx.Err() != nil {
+			e.writeInterruptionNotes(state, config.EpicID)
 			return state.toResult("context cancelled"), ctx.Err()
 		}
 
@@ -308,6 +309,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 					for paused {
 						select {
 						case <-ctx.Done():
+							e.writeInterruptionNotes(state, config.EpicID)
 							return state.toResult("context cancelled while paused"), ctx.Err()
 						case paused = <-config.PauseChan:
 						}
@@ -357,6 +359,10 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			state.lastTaskID = task.ID
 			state.sameTaskCount = 1
 		}
+
+		// Track current task for interruption notes
+		state.currentTaskID = task.ID
+		state.currentTaskTitle = task.Title
 
 		// Run iteration
 		state.iteration++
@@ -465,6 +471,10 @@ type runState struct {
 	// Stuck loop detection
 	lastTaskID    string
 	sameTaskCount int
+
+	// Current task being worked on (for interruption notes)
+	currentTaskID    string
+	currentTaskTitle string
 
 	// Worktree support
 	workDir string // Working directory for agent (worktree path or empty for current dir)
@@ -628,6 +638,25 @@ func buildTimeoutNote(iteration int, taskID string, timeout time.Duration, parti
 	}
 
 	return note
+}
+
+// writeInterruptionNotes writes notes to both the epic and current task when interrupted.
+func (e *Engine) writeInterruptionNotes(state *runState, epicID string) {
+	if state.currentTaskID == "" {
+		// No task in progress, just write epic note
+		_ = e.ticks.AddNote(epicID, fmt.Sprintf("Run interrupted by user at iteration %d. No task was in progress.", state.iteration))
+		return
+	}
+
+	// Build interruption message
+	msg := fmt.Sprintf("Run interrupted by user at iteration %d while working on task %s (%s).",
+		state.iteration, state.currentTaskID, state.currentTaskTitle)
+
+	// Write note to epic
+	_ = e.ticks.AddNote(epicID, msg+" Task may be partially complete - review before continuing.")
+
+	// Write note to the interrupted task
+	_ = e.ticks.AddNote(state.currentTaskID, "Work on this task was interrupted by user. May be partially complete.")
 }
 
 // wasTaskClosed checks if a task was closed by the agent.
