@@ -525,12 +525,13 @@ func TestUpdate_RunComplete(t *testing.T) {
 	m.width = 100
 	m.height = 30
 	m.running = true
+	m.cost = 2.75 // Pre-accumulated cost from iterations
 
 	msg := RunCompleteMsg{
 		Reason:     "All tasks done",
 		Signal:     "COMPLETE",
 		Iterations: 10,
-		Cost:       5.50,
+		Cost:       5.50, // This should be ignored - cost is accumulated via IterationEndMsg
 	}
 
 	newModel, _ := m.Update(msg)
@@ -551,8 +552,9 @@ func TestUpdate_RunComplete(t *testing.T) {
 	if m.iteration != 10 {
 		t.Errorf("expected iteration 10, got %d", m.iteration)
 	}
-	if m.cost != 5.50 {
-		t.Errorf("expected cost 5.50, got %f", m.cost)
+	// Cost should NOT be overwritten by RunCompleteMsg - should preserve accumulated value
+	if m.cost != 2.75 {
+		t.Errorf("expected cost 2.75 (accumulated, not overwritten), got %f", m.cost)
 	}
 }
 

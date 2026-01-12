@@ -1,0 +1,15 @@
+{
+  "id": "8lh",
+  "title": "Fix status bar to show cumulative totals, not just current iteration",
+  "description": "Status bar shows wrong values:\n\n1. **Tokens**: Displays liveInputTokens/liveOutputTokens which reset each iteration. Should display totalInputTokens/totalOutputTokens (which exist and accumulate correctly), plus current iteration's live metrics.\n\n2. **Cost**: RunCompleteMsg at line ~998 does 'm.cost = msg.Cost' which overwrites the accumulated total. Should keep accumulated value.\n\nFix renderStatusBar() to show: 'Tokens: X total (Y this iter)' or similar, and fix RunCompleteMsg to not overwrite m.cost.",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "2os",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:51:09.696274Z",
+  "updated_at": "2026-01-12T08:08:57.670021Z",
+  "closed_at": "2026-01-12T08:08:57.670021Z",
+  "closed_reason": "Fixed status bar to show cumulative token totals (totalInputTokens + liveInputTokens) instead of just current iteration tokens. Removed cost override in RunCompleteMsg since cost is already accumulated via IterationEndMsg. Updated tests to reflect correct behavior."
+}

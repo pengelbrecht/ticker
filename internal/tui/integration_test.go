@@ -609,9 +609,11 @@ func TestIntegration_OutputViewport(t *testing.T) {
 	m.output = ""
 	m.focusedPane = PaneOutput
 
-	// Send enough output to fill the viewport
+	// Send enough output to fill the viewport.
+	// Use proper markdown paragraphs (double newline) so glamour preserves line breaks.
+	// Without the blank lines, glamour would join consecutive lines into a single paragraph.
 	for i := 0; i < 50; i++ {
-		m = updateModel(m, OutputMsg("Line "+string(rune('0'+i%10))+" of output text\n"))
+		m = updateModel(m, OutputMsg("Line "+string(rune('0'+i%10))+" of output text\n\n"))
 	}
 
 	// Verify viewport has content
@@ -839,7 +841,7 @@ func TestIntegration_RunCompleteMsgMetricsHandling(t *testing.T) {
 		t.Errorf("expected cost 0.60 (accumulated), got %f", m.cost)
 	}
 
-	// Reset and test with non-zero values in RunComplete
+	// Reset and test that RunComplete does NOT override accumulated cost
 	m = New(cfg)
 	m = updateModel(m, tea.WindowSizeMsg{Width: 120, Height: 40})
 
@@ -847,15 +849,16 @@ func TestIntegration_RunCompleteMsgMetricsHandling(t *testing.T) {
 	m = updateModel(m, RunCompleteMsg{
 		Signal:     "COMPLETE",
 		Reason:     "Done",
-		Iterations: 10, // Override
-		Cost:       5.0, // Override
+		Iterations: 10, // Override iteration count
+		Cost:       5.0, // This should be ignored - cost is accumulated via IterationEndMsg
 	})
 
-	// Should use provided values
+	// Iteration count can be overridden by RunCompleteMsg
 	if m.iteration != 10 {
 		t.Errorf("expected iteration 10 (from RunComplete), got %d", m.iteration)
 	}
-	if m.cost != 5.0 {
-		t.Errorf("expected cost 5.0 (from RunComplete), got %f", m.cost)
+	// Cost should NOT be overridden - should keep accumulated value
+	if m.cost != 0.25 {
+		t.Errorf("expected cost 0.25 (accumulated, not overwritten), got %f", m.cost)
 	}
 }

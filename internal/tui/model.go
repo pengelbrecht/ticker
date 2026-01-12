@@ -996,12 +996,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.running = false
 		m.endTime = time.Now()
 
-		// Update metrics from the message if provided
+		// Update iteration count from the message if provided
+		// Note: Cost is accumulated through IterationEndMsg, not overwritten here
 		if msg.Iterations > 0 {
 			m.iteration = msg.Iterations
-		}
-		if msg.Cost > 0 {
-			m.cost = msg.Cost
 		}
 
 	case TasksUpdateMsg:
@@ -1852,15 +1850,20 @@ func (m Model) renderStatusBar() string {
 	}
 	progressParts = append(progressParts, costLabel+costValue)
 
-	// Token metrics from live streaming (if available)
-	if m.liveInputTokens > 0 || m.liveOutputTokens > 0 {
+	// Token metrics: show cumulative totals + current iteration
+	// totalInputTokens/totalOutputTokens accumulate across iterations
+	// liveInputTokens/liveOutputTokens are the current iteration's tokens
+	totalIn := m.totalInputTokens + m.liveInputTokens
+	totalOut := m.totalOutputTokens + m.liveOutputTokens
+	totalCache := m.totalCacheReadTokens + m.totalCacheCreationTokens + m.liveCacheReadTokens + m.liveCacheCreationTokens
+
+	if totalIn > 0 || totalOut > 0 {
 		var tokenParts []string
-		tokenParts = append(tokenParts, formatTokens(m.liveInputTokens)+" in")
-		tokenParts = append(tokenParts, formatTokens(m.liveOutputTokens)+" out")
+		tokenParts = append(tokenParts, formatTokens(totalIn)+" in")
+		tokenParts = append(tokenParts, formatTokens(totalOut)+" out")
 		// Show cache if there are any cache tokens
-		if m.liveCacheReadTokens > 0 || m.liveCacheCreationTokens > 0 {
-			cacheTotal := m.liveCacheReadTokens + m.liveCacheCreationTokens
-			tokenParts = append(tokenParts, formatTokens(cacheTotal)+" cache")
+		if totalCache > 0 {
+			tokenParts = append(tokenParts, formatTokens(totalCache)+" cache")
 		}
 		tokensLabel := dimStyle.Render("Tokens:")
 		tokensValue := " " + strings.Join(tokenParts, " │ ")
