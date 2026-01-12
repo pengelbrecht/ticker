@@ -51,7 +51,7 @@ type RunConfig struct {
 	// ResumeFrom is the checkpoint ID to resume from (empty = start fresh).
 	ResumeFrom string
 
-	// AgentTimeout is the per-iteration timeout for the agent (0 = 5 minutes default).
+	// AgentTimeout is the per-iteration timeout for the agent (0 = 30 minutes default).
 	AgentTimeout time.Duration
 
 	// PauseChan is a channel that signals pause/resume. When true, engine pauses.
@@ -67,7 +67,7 @@ const (
 	DefaultMaxIterations   = 50
 	DefaultMaxCost         = 20.00
 	DefaultCheckpointEvery = 5
-	DefaultAgentTimeout    = 5 * time.Minute
+	DefaultAgentTimeout    = 30 * time.Minute
 	DefaultMaxTaskRetries  = 3
 )
 

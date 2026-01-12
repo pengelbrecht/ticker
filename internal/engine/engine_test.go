@@ -353,7 +353,7 @@ func TestDefaultConstants(t *testing.T) {
 	if DefaultCheckpointEvery != 5 {
 		t.Errorf("DefaultCheckpointEvery = %d, want 5", DefaultCheckpointEvery)
 	}
-	if DefaultAgentTimeout != 5*time.Minute {
-		t.Errorf("DefaultAgentTimeout = %v, want 5m", DefaultAgentTimeout)
+	if DefaultAgentTimeout != 30*time.Minute {
+		t.Errorf("DefaultAgentTimeout = %v, want 30m", DefaultAgentTimeout)
 	}
 }
