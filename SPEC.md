@@ -72,7 +72,55 @@ ticker run <epic-id> --headless  # Disable TUI
 
 ---
 
-### Phase 3: Worktrees & Parallel Execution
+### Phase 3: Verification System
+
+Add automated verification to ensure tasks are actually complete before moving on.
+
+**Scope:**
+- Verification runner integrated into iteration loop
+- Config-based commands (`.ticker/config.json`)
+- Auto-detection fallback for common project types
+- Graceful skip when not configured/detected
+- Verification failure handling (add to epic notes, retry)
+
+**Detection hierarchy:**
+1. Check `.ticker/config.json` for explicit commands
+2. Auto-detect from project files:
+   - `go.mod` → `go test ./...`, `go build ./...`
+   - `package.json` (with test script) → `npm test`
+   - `pyproject.toml` / `setup.py` → `pytest`
+   - `Cargo.toml` → `cargo test`
+   - `Makefile` (with test target) → `make test`
+3. Skip verification if nothing configured/detected
+
+**Config example:**
+```json
+{
+  "verification": {
+    "test_command": "npm test",
+    "build_command": "npm run build",
+    "custom_scripts": ["./scripts/lint.sh"]
+  }
+}
+```
+
+**Behavior:**
+- Run verifiers after each iteration (before considering task complete)
+- On failure: add failure output to epic notes, don't close task, retry
+- Configurable failure threshold before giving up on task
+- TUI shows verification status (running/pass/fail)
+
+**CLI:**
+```bash
+ticker run <epic-id> --skip-verify     # Disable verification
+ticker run <epic-id> --verify-only     # Run verify without agent (debug)
+```
+
+**Exit criteria:** Verification runs automatically for Go/Node/Python/Rust projects, failures cause retry.
+
+---
+
+### Phase 4: Worktrees & Parallel Execution
 
 Enable running multiple epics simultaneously in isolated git worktrees.
 
@@ -96,7 +144,7 @@ ticker run h8d fbv 5b8 --parallel 3
 
 ---
 
-### Phase 4: Multi-Agent Support
+### Phase 5: Multi-Agent Support
 
 Add support for non-Claude coding agents with unified permission management.
 
@@ -262,6 +310,128 @@ ticker/
  1-9 focus epic  m merge completed  k kill epic  + add epic  esc back
 ```
 
+### Epic Switcher (Parallel Mode)
+
+When running multiple epics in parallel, the TUI needs to manage focus between them. The main dashboard always shows one "active" epic, while others run in the background.
+
+**Model State for Multi-Epic:**
+
+```go
+type Model struct {
+    // Multi-epic state
+    engines      map[string]*engine.Engine  // epic ID -> engine instance
+    epicOrder    []string                   // ordered list of epic IDs (for 1-9 keys)
+    activeEpic   string                     // currently displayed epic
+
+    // Per-epic state (keyed by epic ID)
+    outputs      map[string]*OutputBuffer   // streaming output per epic
+    tasks        map[string][]ticks.Task    // task list per epic
+    iterations   map[string]int             // current iteration per epic
+
+    // Shared state
+    budget       *budget.Tracker            // aggregate budget across all epics
+
+    // ... existing pane state (renders activeEpic data)
+}
+```
+
+**Message Routing:**
+
+All engine messages are tagged with their source epic:
+
+```go
+// Wrapper for all engine-originated messages
+type EngineMsg struct {
+    EpicID string
+    Inner  tea.Msg  // IterationStartMsg, OutputMsg, SignalMsg, etc.
+}
+
+// In Update(), route messages to appropriate state
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch msg := msg.(type) {
+    case EngineMsg:
+        // Always update state for the source epic
+        m.updateEpicState(msg.EpicID, msg.Inner)
+
+        // Only trigger view refresh if it's the active epic
+        if msg.EpicID == m.activeEpic {
+            return m.handleActiveEpicMsg(msg.Inner)
+        }
+        return m, nil
+    }
+}
+```
+
+**Key Bindings:**
+
+| Key | Action | Context |
+|-----|--------|---------|
+| `1-9` | Switch to epic by index | Any view |
+| `[` | Previous epic | Any view |
+| `]` | Next epic | Any view |
+| `w` | Open worktrees view | Dashboard |
+| `Tab` | Cycle panes (existing) | Dashboard |
+
+**Switching Behavior:**
+
+When switching epics:
+1. **Instant switch** - No animation or delay
+2. **State preserved** - Output buffer, scroll position, pane focus retained per-epic
+3. **Background continues** - Non-active epics keep running, accumulating output
+4. **Status bar updates** - Shows active epic ID and quick status of others
+
+**Status Indicators (Header Bar):**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ticker v0.1.0    [1:h8d ●]  [2:fbv ↻]  [3:5b8 ✓]    $7.35 total │
+│ Agent: claude    Epic: h8d (Parallel test execution)            │
+```
+
+Legend: `●` active/focused, `↻` running in background, `✓` complete, `⏸` paused, `✗` failed
+
+**Output Buffering:**
+
+Each epic maintains its own circular output buffer:
+
+```go
+type OutputBuffer struct {
+    lines      []string
+    maxLines   int        // e.g., 10000 lines
+    scrollPos  int        // preserved when switching away
+    following  bool       // auto-scroll to bottom
+}
+```
+
+When switching to an epic:
+- If `following` was true, scroll to latest output
+- If user had scrolled up, restore exact scroll position
+- New output since last view is highlighted briefly (optional)
+
+**Notification System:**
+
+Background epics can surface important events:
+
+```go
+type Notification struct {
+    EpicID    string
+    Level     NotificationLevel  // Info, Warning, Error, Complete
+    Message   string
+    Timestamp time.Time
+}
+
+// Shown in status bar or toast overlay
+// "fbv: COMPLETE - all tasks done"
+// "5b8: BLOCKED - missing API key"
+```
+
+**Worktree View Integration:**
+
+The `w` key worktrees view serves as a "bird's eye" overview, while number keys provide quick switching without leaving dashboard context. Users can:
+1. Press `w` to see all epics at a glance
+2. Press `1-9` to jump directly to an epic from any view
+3. Use `[`/`]` to cycle through epics sequentially
+
 ### Dependency Graph View (`g` key)
 
 ```
@@ -351,7 +521,7 @@ that should persist across iterations. Epic notes replace the scratchpad concept
 | MAX_ITERATIONS | (internal) | Hit iteration limit | 1 |
 | BUDGET_EXCEEDED | (internal) | Hit token/cost/time limit | 1 |
 
-### Verification System
+### Verification System (Phase 3)
 
 ```go
 type Verifier interface {
@@ -361,11 +531,13 @@ type Verifier interface {
 ```
 
 Built-in verifiers:
-- **TestVerifier**: Runs test suite (configurable command)
-- **BuildVerifier**: Checks project builds
+- **TestVerifier**: Runs test suite (auto-detected or configured command)
+- **BuildVerifier**: Checks project builds (auto-detected or configured)
 - **GitVerifier**: Ensures changes were committed
 - **TickVerifier**: Confirms task was closed in Ticks
-- **ScriptVerifier**: Custom verification scripts
+- **ScriptVerifier**: Custom verification scripts from config
+
+Detection priority: config → auto-detect → skip. See Phase 3 in Roadmap for details.
 
 Verification failures are added as epic notes (via `tk note`) for the next iteration to review.
 

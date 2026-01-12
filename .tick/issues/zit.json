@@ -1,0 +1,13 @@
+{
+  "id": "zit",
+  "title": "What day is it?",
+  "description": "Report today's date.",
+  "status": "open",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "0i1",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T21:33:01.234081Z",
+  "updated_at": "2026-01-11T21:33:01.234081Z"
+}

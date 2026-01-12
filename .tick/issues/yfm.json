@@ -1,0 +1,222 @@
+{
+  "closed_at": "2026-01-12T08:01:43.985846Z",
+  "closed_reason": "Added GetRunRecord() method to ticks.Client to read RunRecord from tick JSON files. Updated refreshTasks() in main.go to fetch RunRecords for closed tasks and send TaskRunRecordMsg to TUI. The buildRunRecordContent() function was already comprehensive - the issue was that TaskRunRecordMsg was never being sent. Now when tasks are refreshed, closed tasks with run data will display the rich RunRecord view (metrics, tools, thinking, output).",
+  "created_at": "2026-01-12T07:20:54.728175Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "When viewing a completed task, show the full RunRecord data including:\n- Run metrics (duration, turns, tokens, cost, model)\n- Tool history with icons (✓/✗) and timing\n- Thinking content (collapsed/truncated)\n- Full output\n\nThe buildRunRecordContent() function exists but may need enhancement. Ensure it's being called when selecting closed tasks. Wire up TaskRunRecordMsg from engine to TUI.",
+  "id": "yfm",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "e02",
+  "priority": 2,
+  "run": {
+    "session_id": "ca755f80-6ae2-4230-8dc4-51a8a36c2e16",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-12T08:57:50.808726+01:00",
+    "ended_at": "2026-01-12T09:02:21.206971+01:00",
+    "output": "I'll start by reading the epic notes and understanding the current task. Let me first explore the relevant files to understand the current implementation.Let me read the buildRunRecordContent function and the RunRecord type to understand the current implementation:Now I can see the full implementation. The `buildRunRecordContent()` function is already quite comprehensive. Let me check if it's being called correctly when selecting closed tasks. Let me also check the engine to see how TaskRunRecordMsg is wired to the TUI:I see. The engine stores the RunRecord via `e.ticks.SetRunRecord(task.ID, agentResult.Record)`. Now I need to understand how the TUI receives this. Let me check how the TUI interacts with the engine:Interesting - there's no `GetRunRecord` method. Let me check the ticks client to see the full `SetRunRecord` implementation and what structure stores the record:Good. The engine persists RunRecords directly to the tick JSON files. Now I need to understand how the TUI gets the RunRecord. Let me check how the TUI is set up and how it receives messages from the engine:I see! The `TaskRunRecordMsg` is handled in the TUI but there's no code that actually sends this message from the engine to the TUI. The engine only persists the RunRecord to the tick file, but doesn't notify the TUI. Let me check how the TUI is launched and connected to the engine:Now I understand the issue. The engine saves the RunRecord to disk via `e.ticks.SetRunRecord(task.ID, agentResult.Record)`, but there's no code that sends `TaskRunRecordMsg` to the TUI. The `OnIterationEnd` callback doesn't include the RunRecord, and the TUI never receives it.\n\nThere are two approaches:\n1. Add a `GetRunRecord` method to ticks.Client and have the TUI fetch it when refreshing tasks\n2. Send the RunRecord via a new engine callback or extend IterationResult to include the RunRecord\n\nThe simpler approach is to add a `GetRunRecord` method to the ticks client and have the task refresh logic in main.go also fetch the RunRecord for closed tasks. Let me check what the Task struct contains:Excellent! The Task struct already has a `Run *agent.RunRecord` field. Now let me check how `ListTasks` is implemented to see if it already loads the RunRecord:I see that `ListTasks` uses the `tk list --parent` command which returns JSON. The question is whether the `tk` CLI returns the `run` field in its JSON output. Let me check one of the tick issue JSON files to see the actual format:The tick JSON files do include the `run` field with the full RunRecord. The issue is that `tk list --json` (via the CLI) might not return this field. Let me verify by checking how `tk` outputs JSON:I can confirm that `tk list --json` does NOT include the `run` field. The `run` field is stored directly in the JSON file but is not returned by the `tk list` command.\n\nThis means I need to either:\n1. Add a `GetRunRecord` function that reads directly from the tick JSON file (similar to `SetRunRecord`)\n2. Have the TUI fetch RunRecords separately after getting the task list\n\nLet me implement approach #1 - add a `GetRunRecord` method to the ticks client and then use it in the refreshTasks function in main.go:Now let me add the `GetRunRecord` method to the ticks client. I'll add it right after `SetRunRecord`:Now I need to update the `refreshTasks` function in main.go to fetch RunRecords for closed tasks and send `TaskRunRecordMsg` to the TUI:I need to update the `refreshTasks` function to also fetch and send RunRecords for closed tasks. Let me update this:Now let me add a test for the new `GetRunRecord` function and run the tests:Now let me add tests for `GetRunRecord`:Now I need to add the `filepath` and `time` imports to the test file:The imports are already there. Now let me run the tests:Now let me run all tests to make sure nothing else is broken:All tests pass. Let me also verify the build works:Let me also verify the buildRunRecordContent function displays all the rich data. Let me take another look at it to confirm it already shows all the required data:The `buildRunRecordContent` function is already comprehensive and shows all the required data:\n- Run metrics (duration, turns, tokens, cost, model) ✓\n- Tool history with icons (✓/✗) and timing ✓\n- Thinking content (collapsed/truncated) ✓\n- Full output ✓\n\nThe issue was that the TUI never received the `TaskRunRecordMsg` because nothing was sending it. I've now wired that up in the `refreshTasks` function.\n\nNow let me close the task and commit the changes:Now let me add an epic note for future iterations:Task yfm is complete. Here's a summary of what was done:\n\n**Task: Show rich RunRecord data in details pane [yfm]**\n\n**Problem:**\nThe TUI had a comprehensive `buildRunRecordContent()` function that displays all required data (metrics, tools, thinking, output), but it was never being called because `TaskRunRecordMsg` was never sent to the TUI.\n\n**Solution:**\n1. Added `GetRunRecord(taskID string)` method to `ticks.Client` that reads the `run` field directly from tick JSON files (since `tk list --json` doesn't include this field).\n\n2. Updated `refreshTasks()` in `cmd/ticker/main.go` to:\n   - Fetch RunRecords for closed tasks after loading the task list\n   - Send `TaskRunRecordMsg` to the TUI for each closed task with a RunRecord\n\n3. Added tests for the new `GetRunRecord` function covering:\n   - Successfully retrieving a RunRecord\n   - Task without a RunRecord (returns nil, nil)\n   - Non-existent task (returns nil, nil)\n\n**Files Modified:**\n- `internal/ticks/client.go`: Added GetRunRecord() method\n- `internal/ticks/client_test.go`: Added tests for GetRunRecord()\n- `cmd/ticker/main.go`: Updated refreshTasks() to send TaskRunRecordMsg",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2794
+      },
+      {
+        "name": "Read",
+        "duration_ms": 671
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 365
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1105
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 646
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 701
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1391
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1499
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1362
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 405
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1151
+      },
+      {
+        "name": "Read",
+        "duration_ms": 557
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1685
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1033
+      },
+      {
+        "name": "Read",
+        "duration_ms": 946
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1785
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1521
+      },
+      {
+        "name": "Read",
+        "duration_ms": 845
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4567
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1744
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1055
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1935
+      },
+      {
+        "name": "Read",
+        "duration_ms": 902
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1715
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1077
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3232
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7227
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4133
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1057
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6336
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4177
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1023
+      },
+      {
+        "name": "Read",
+        "duration_ms": 923
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 25873
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1371
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1234
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 649
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 827
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2973
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1291
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 9956
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1279
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 743
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 777
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 7721
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2559
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2900
+      }
+    ],
+    "metrics": {
+      "input_tokens": 5857,
+      "output_tokens": 9981,
+      "cache_read_tokens": 1947227,
+      "cache_creation_tokens": 56224,
+      "cost_usd": 1.6979055000000007,
+      "duration_ms": 269969
+    },
+    "success": true,
+    "num_turns": 48
+  },
+  "status": "closed",
+  "title": "Show rich RunRecord data in details pane",
+  "type": "task",
+  "updated_at": "2026-01-12T08:01:43.985846Z"
+}

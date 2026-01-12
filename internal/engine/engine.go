@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pengelbrecht/ticker/internal/agent"
@@ -24,6 +26,11 @@ type Engine struct {
 	OnIterationEnd   func(result *IterationResult)
 	OnOutput         func(chunk string)
 	OnSignal         func(signal Signal, reason string)
+
+	// Rich streaming callback for real-time agent state updates.
+	// Called whenever agent state changes (text, thinking, tools, metrics).
+	// If set, this provides structured updates; OnOutput is still called for backward compat.
+	OnAgentState func(snap agent.AgentStateSnapshot)
 }
 
 // RunConfig configures an engine run.
@@ -34,7 +41,7 @@ type RunConfig struct {
 	// MaxIterations is the maximum number of iterations (0 = 50 default).
 	MaxIterations int
 
-	// MaxCost is the maximum cost in USD (0 = 20.00 default).
+	// MaxCost is the maximum cost in USD (0 = disabled/unlimited).
 	MaxCost float64
 
 	// MaxDuration is the maximum wall-clock time (0 = unlimited).
@@ -46,7 +53,7 @@ type RunConfig struct {
 	// ResumeFrom is the checkpoint ID to resume from (empty = start fresh).
 	ResumeFrom string
 
-	// AgentTimeout is the per-iteration timeout for the agent (0 = 5 minutes default).
+	// AgentTimeout is the per-iteration timeout for the agent (0 = 30 minutes default).
 	AgentTimeout time.Duration
 
 	// PauseChan is a channel that signals pause/resume. When true, engine pauses.
@@ -60,9 +67,9 @@ type RunConfig struct {
 // Defaults for RunConfig.
 const (
 	DefaultMaxIterations   = 50
-	DefaultMaxCost         = 20.00
+	DefaultMaxCost         = 0 // Disabled by default (most users have subscriptions)
 	DefaultCheckpointEvery = 5
-	DefaultAgentTimeout    = 5 * time.Minute
+	DefaultAgentTimeout    = 30 * time.Minute
 	DefaultMaxTaskRetries  = 3
 )
 
@@ -130,6 +137,10 @@ type IterationResult struct {
 
 	// Error is any error that occurred.
 	Error error
+
+	// IsTimeout indicates the iteration was terminated due to timeout.
+	// When true, Output may contain partial output captured before timeout.
+	IsTimeout bool
 }
 
 // NewEngine creates a new engine with the given dependencies.
@@ -149,9 +160,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 	if config.MaxIterations == 0 {
 		config.MaxIterations = DefaultMaxIterations
 	}
-	if config.MaxCost == 0 {
-		config.MaxCost = DefaultMaxCost
-	}
+	// Note: MaxCost == 0 means disabled (unlimited), not a default value
 	if config.CheckpointEvery == 0 {
 		config.CheckpointEvery = DefaultCheckpointEvery
 	}
@@ -269,6 +278,13 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Call callback
 		if e.OnIterationEnd != nil {
 			e.OnIterationEnd(iterResult)
+		}
+
+		// Handle timeout specially - add detailed note for recovery
+		if iterResult.IsTimeout {
+			note := buildTimeoutNote(state.iteration, iterResult.TaskID, config.AgentTimeout, iterResult.Output)
+			_ = e.ticks.AddNote(config.EpicID, note)
+			continue // Try next iteration
 		}
 
 		// Handle iteration error
@@ -403,7 +419,12 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 		Timeout: timeout,
 	}
 
-	// Set up streaming if callback is configured
+	// Set up rich streaming callback if configured (preferred)
+	if e.OnAgentState != nil {
+		opts.StateCallback = e.OnAgentState
+	}
+
+	// Set up legacy streaming if callback is configured (backward compat)
 	var streamChan chan string
 	if e.OnOutput != nil {
 		streamChan = make(chan string, 100)
@@ -426,6 +447,23 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 
 	result.Duration = time.Since(startTime)
 
+	// Handle timeout specially - capture partial output
+	if errors.Is(err, agent.ErrTimeout) {
+		result.IsTimeout = true
+		// agentResult contains partial output on timeout
+		if agentResult != nil {
+			result.Output = agentResult.Output
+			result.TokensIn = agentResult.TokensIn
+			result.TokensOut = agentResult.TokensOut
+			result.Cost = agentResult.Cost
+			// Still persist the partial RunRecord
+			if agentResult.Record != nil {
+				_ = e.ticks.SetRunRecord(task.ID, agentResult.Record)
+			}
+		}
+		return result
+	}
+
 	if err != nil {
 		result.Error = fmt.Errorf("agent run: %w", err)
 		return result
@@ -436,8 +474,39 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 	result.TokensOut = agentResult.TokensOut
 	result.Cost = agentResult.Cost
 
+	// Persist RunRecord to task (enables viewing historical run data)
+	if agentResult.Record != nil {
+		if err := e.ticks.SetRunRecord(task.ID, agentResult.Record); err != nil {
+			// Log but don't fail on record persistence error
+			_ = e.ticks.AddNote(state.epicID, fmt.Sprintf("Warning: could not persist RunRecord for %s: %v", task.ID, err))
+		}
+	}
+
 	// Parse signals
 	result.Signal, result.SignalReason = ParseSignals(agentResult.Output)
 
 	return result
+}
+
+// buildTimeoutNote creates a detailed note about a timeout for recovery.
+// Includes iteration number, task ID, timeout duration, and partial output summary.
+func buildTimeoutNote(iteration int, taskID string, timeout time.Duration, partialOutput string) string {
+	note := fmt.Sprintf("Iteration %d timed out after %v on task %s.", iteration, timeout, taskID)
+
+	if partialOutput != "" {
+		// Truncate partial output for the note (keep last portion as most relevant)
+		const maxOutputLen = 500
+		outputSummary := partialOutput
+		if len(outputSummary) > maxOutputLen {
+			outputSummary = "..." + outputSummary[len(outputSummary)-maxOutputLen:]
+		}
+		// Clean up for note format (replace newlines with spaces for readability)
+		outputSummary = strings.ReplaceAll(outputSummary, "\n", " ")
+		outputSummary = strings.Join(strings.Fields(outputSummary), " ") // normalize whitespace
+		note += fmt.Sprintf(" Partial output: %s", outputSummary)
+	} else {
+		note += " No output captured before timeout."
+	}
+
+	return note
 }

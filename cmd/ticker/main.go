@@ -119,7 +119,7 @@ var upgradeCmd = &cobra.Command{
 func init() {
 	// Run command flags
 	runCmd.Flags().IntP("max-iterations", "n", 50, "Maximum number of iterations")
-	runCmd.Flags().Float64("max-cost", 20.0, "Maximum cost in USD")
+	runCmd.Flags().Float64("max-cost", 0, "Maximum cost in USD (0 = disabled)")
 	runCmd.Flags().Int("checkpoint-interval", 5, "Save checkpoint every N iterations (0 to disable)")
 	runCmd.Flags().Int("max-task-retries", 3, "Maximum iterations on same task before assuming stuck")
 	runCmd.Flags().Bool("auto", false, "Auto-select next ready epic")
@@ -251,17 +251,98 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 			}
 		}
 		p.Send(tui.TasksUpdateMsg{Tasks: taskInfos})
+
+		// Fetch and send RunRecords for closed tasks
+		for _, t := range tasks {
+			if t.Status == "closed" {
+				if record, err := ticksClient.GetRunRecord(t.ID); err == nil && record != nil {
+					p.Send(tui.TaskRunRecordMsg{TaskID: t.ID, RunRecord: record})
+				}
+			}
+		}
 	}
 
 	// Initial task list load
 	go refreshTasks()
 
 	// Wire engine callbacks to send TUI messages
+
+	// Track previous snapshot state for delta-based TUI updates
+	var prevOutput, prevThinking string
+	var prevToolID string
+
+	// Rich streaming callback - converts AgentStateSnapshot to TUI messages
+	eng.OnAgentState = func(snap agent.AgentStateSnapshot) {
+		// Send text deltas (only new content since last update)
+		if snap.Output != prevOutput {
+			delta := snap.Output[len(prevOutput):]
+			if delta != "" {
+				p.Send(tui.AgentTextMsg{Text: delta})
+			}
+			prevOutput = snap.Output
+		}
+
+		// Send thinking deltas
+		if snap.Thinking != prevThinking {
+			delta := snap.Thinking[len(prevThinking):]
+			if delta != "" {
+				p.Send(tui.AgentThinkingMsg{Text: delta})
+			}
+			prevThinking = snap.Thinking
+		}
+
+		// Send tool activity updates
+		if snap.ActiveTool != nil && snap.ActiveTool.ID != prevToolID {
+			// New tool started
+			p.Send(tui.AgentToolStartMsg{
+				ID:   snap.ActiveTool.ID,
+				Name: snap.ActiveTool.Name,
+			})
+			prevToolID = snap.ActiveTool.ID
+		} else if snap.ActiveTool == nil && prevToolID != "" {
+			// Tool ended - find it in history to get duration and error status
+			for _, tool := range snap.ToolHistory {
+				if tool.ID == prevToolID {
+					p.Send(tui.AgentToolEndMsg{
+						ID:       tool.ID,
+						Name:     tool.Name,
+						Duration: tool.Duration,
+						IsError:  tool.IsError,
+					})
+					break
+				}
+			}
+			prevToolID = ""
+		}
+
+		// Send metrics update (including model name)
+		p.Send(tui.AgentMetricsMsg{
+			InputTokens:         snap.Metrics.InputTokens,
+			OutputTokens:        snap.Metrics.OutputTokens,
+			CacheReadTokens:     snap.Metrics.CacheReadTokens,
+			CacheCreationTokens: snap.Metrics.CacheCreationTokens,
+			CostUSD:             snap.Metrics.CostUSD,
+			Model:               snap.Model,
+		})
+
+		// Send status update
+		p.Send(tui.AgentStatusMsg{
+			Status: snap.Status,
+			Error:  snap.ErrorMsg,
+		})
+	}
+
+	// Legacy output callback kept for backward compatibility
 	eng.OnOutput = func(chunk string) {
 		p.Send(tui.OutputMsg(chunk))
 	}
 
 	eng.OnIterationStart = func(ctx engine.IterationContext) {
+		// Reset delta tracking state for new iteration
+		prevOutput = ""
+		prevThinking = ""
+		prevToolID = ""
+
 		p.Send(tui.IterationStartMsg{
 			Iteration: ctx.Iteration,
 			TaskID:    ctx.Task.ID,

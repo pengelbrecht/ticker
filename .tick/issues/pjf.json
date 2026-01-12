@@ -1,0 +1,26 @@
+{
+  "id": "pjf",
+  "title": "Update main.go to use new TUI API",
+  "description": "Update cmd/ticker/main.go for new TUI:\n\nThe new TUI should be a drop-in replacement. Verify:\n\n1. tui.New(cfg) creates Model correctly\n2. Message types match what engine sends:\n   - tui.OutputMsg(string)\n   - tui.IterationStartMsg{Iteration, TaskID, TaskTitle}\n   - tui.IterationEndMsg{Iteration, Cost, Tokens}\n   - tui.SignalMsg{Signal, Reason}\n   - tui.ErrorMsg{Err}\n   - tui.RunCompleteMsg{Reason, Signal, Iterations, Cost}\n   - tui.TasksUpdateMsg{Tasks}\n\n3. tui.TaskInfo and tui.TaskStatus match what ticksClient returns\n\n4. tui.EpicInfo and tui.Picker for epic selection\n\n5. p.Send() calls work with new message types\n\n6. pauseChan communication works bidirectionally\n\nTest with: go build ./cmd/ticker \u0026\u0026 ./ticker run --auto",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "integration"
+  ],
+  "blocked_by": [
+    "13o",
+    "p1t",
+    "g1a",
+    "gpl",
+    "7df",
+    "mr3"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:12:02.218402Z",
+  "updated_at": "2026-01-11T20:55:07.918152Z",
+  "closed_at": "2026-01-11T20:55:07.918152Z",
+  "closed_reason": "Verified main.go TUI API integration complete - all message types (OutputMsg, IterationStartMsg/EndMsg, SignalMsg, ErrorMsg, RunCompleteMsg, TasksUpdateMsg), Config/New(), TaskInfo/TaskStatus, EpicInfo/Picker, and pauseChan properly wired. Build successful, all tests pass."
+}

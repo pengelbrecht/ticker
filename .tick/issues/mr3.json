@@ -1,0 +1,22 @@
+{
+  "id": "mr3",
+  "title": "Implement Update() for engine message handling",
+  "description": "Handle custom engine messages in Update():\n\ncase tickMsg:\n- Increment animFrame for pulsing animations\n- Return tickCmd() to schedule next tick\n\ncase IterationStartMsg:\n- Update iteration, taskID, taskTitle\n- Mark task as current in task list\n- Clear output buffer for new iteration\n\ncase IterationEndMsg:\n- Update cost, tokens\n- Increment iteration count\n\ncase OutputMsg:\n- Append string(msg) to m.output\n- Update viewport content: m.viewport.SetContent(m.output)\n- Auto-scroll: m.viewport.GotoBottom()\n\ncase SignalMsg:\n- Store signal and reason for display\n- May trigger completion overlay\n\ncase ErrorMsg:\n- Append error to output\n- May set error state\n\ncase RunCompleteMsg:\n- Set showComplete = true\n- Store completeReason, completeSignal\n- Set running = false\n\ncase TasksUpdateMsg:\n- Replace m.tasks with msg.Tasks\n- Clamp selectedTask if out of bounds\n- Mark current task based on taskID",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "update"
+  ],
+  "blocked_by": [
+    "l7b",
+    "fkz"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:11:32.339083Z",
+  "updated_at": "2026-01-11T20:45:36.236529Z",
+  "closed_at": "2026-01-11T20:45:36.236529Z",
+  "closed_reason": "Implemented all engine message handlers in Update(): IterationStartMsg (updates iteration/taskID/taskTitle, marks current task, clears output), IterationEndMsg (accumulates cost/tokens), SignalMsg (stores signal/reason, triggers completion overlay for terminal signals), ErrorMsg (appends error to output), RunCompleteMsg (sets showComplete, stores reason/signal/metrics), TasksUpdateMsg (replaces tasks, clamps selection, marks current task, updates viewport)"
+}

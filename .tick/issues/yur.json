@@ -1,0 +1,15 @@
+{
+  "id": "yur",
+  "title": "TUI Test Epic",
+  "description": "Simple tasks for testing the ticker TUI",
+  "notes": "2026-01-12 07:19 - Completed task thu: 2+2=4. This was a simple test task to verify the ticker TUI is working correctly.\n2026-01-12 07:19 - Completed task t0j: Module name is github.com/pengelbrecht/ticker (found in go.mod line 1). Simple read task, no code changes required.\n2026-01-12 07:19 - Completed task ior: There are 35 .go files in the internal/ directory. Simple read-only task, no code changes required.\n2026-01-12 07:20 - Completed task i2a: Listed 4 CLI subcommands from cmd/ticker/main.go: (1) run [epic-id] with flags for iterations, cost, checkpoint-interval, task-retries, auto, headless (2) resume \u003ccheckpoint-id\u003e (3) checkpoints [epic-id] (4) upgrade. Root command 'ticker' has version flag. All commands defined using Cobra framework (github.com/spf13/cobra).\n2026-01-12 07:20 - Completed task ujf: Today's date is 2026-01-12. Simple informational task, no code changes required.\n2026-01-12 07:21 - Completed task b26: Summarized all test epic findings - confirmed 5 prior tasks completed successfully (math, module name, file count, CLI commands, date). This was the final synthesis task that depended on ior (count task). The TUI test epic validated that ticker can run autonomous iterations through a series of dependent tasks.",
+  "status": "closed",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T06:18:36.688895Z",
+  "updated_at": "2026-01-12T06:21:10.092509Z",
+  "closed_at": "2026-01-12T06:21:10.092509Z",
+  "closed_reason": "all tasks completed"
+}

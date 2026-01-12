@@ -1,0 +1,12 @@
+{
+  "id": "w7f",
+  "title": "Test TUI Features",
+  "description": "Epic for testing the new TUI implementation",
+  "status": "open",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T21:23:56.443201Z",
+  "updated_at": "2026-01-11T21:23:56.443201Z"
+}

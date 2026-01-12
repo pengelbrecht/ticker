@@ -1,6 +1,10 @@
 package ticks
 
-import "time"
+import (
+	"time"
+
+	"github.com/pengelbrecht/ticker/internal/agent"
+)
 
 // Task represents a single task in the Ticks issue tracker.
 type Task struct {
@@ -17,6 +21,9 @@ type Task struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	ClosedAt    time.Time `json:"closed_at,omitempty"`
+
+	// Run contains the agent run result for completed tasks.
+	Run *agent.RunRecord `json:"run,omitempty"`
 }
 
 // Epic represents an epic containing multiple tasks.

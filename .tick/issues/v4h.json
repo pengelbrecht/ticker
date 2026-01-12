@@ -1,0 +1,21 @@
+{
+  "id": "v4h",
+  "title": "Add viewport scroll percentage to output pane header",
+  "description": "Show scroll position in output pane header:\n\nWhen content overflows viewport, show percentage:\n'Agent Output (45%)'\n\nImplementation:\nif m.viewport.TotalLineCount() \u003e m.viewport.VisibleLineCount() {\n    scrollPct := int(m.viewport.ScrollPercent() * 100)\n    header = fmt.Sprintf(\"Agent Output (%d%%)\", scrollPct)\n}\n\nUpdate on:\n- Initial content load\n- Scroll navigation (j/k, ctrl+d/u, g/G)\n- Window resize\n- New output appended\n\nMatch ticks behavior exactly.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "polish"
+  ],
+  "blocked_by": [
+    "g9b"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:12:44.448123Z",
+  "updated_at": "2026-01-11T21:06:12.773966Z",
+  "closed_at": "2026-01-11T21:06:12.773966Z",
+  "closed_reason": "Feature already implemented in renderOutputPane() at lines 1008-1019. Shows scroll percentage in format 'Agent Output (XX%)' when viewport.TotalLineCount() \u003e viewport.Height. Added 2 unit tests to validate: TestRenderOutputPane_ScrollPercentage (verifies % shown only when content overflows) and TestRenderOutputPane_ScrollPercentageUpdatesOnScroll (verifies % indicator present at different scroll positions). All tests pass."
+}

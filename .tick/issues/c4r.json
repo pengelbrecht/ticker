@@ -1,0 +1,21 @@
+{
+  "id": "c4r",
+  "title": "Implement footer with keyboard hints",
+  "description": "Implement renderFooter() function:\n\nFormat (single line, centered):\n'q:quit  p:pause  j/k:nav  tab:pane  ^d/u:scroll  ?:help'\n\nStyling:\n- Gray text for all hints\n- Keys slightly bolder or different shade\n- Separated by double space\n- Centered in available width\n\nDynamic hints based on state:\n- When paused: show 'p:resume' instead of 'p:pause'\n- When in help overlay: show 'esc:close'\n- When in completion: show 'q:quit' only\n\nUse help.Model from bubbles for consistent formatting.\nImplement ShortHelp() in keyMap to return footer bindings.",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "layout"
+  ],
+  "blocked_by": [
+    "pul"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:10:46.887732Z",
+  "updated_at": "2026-01-11T20:37:12.93652Z",
+  "closed_at": "2026-01-11T20:37:12.93652Z",
+  "closed_reason": "Implemented renderFooter() with custom format (q:quit p:pause j/k:nav tab:pane ^d/u:scroll ?:help). Keys rendered bold with footerStyle.Bold(true), descriptions use footerStyle (gray/colorOverlay). Dynamic hints: completion shows only q:quit, help overlay shows ?:close, paused shows p:resume. Footer centered in available width using lipgloss.Width calculation. Updated ShortHelp() to return matching order for help.KeyMap interface consistency."
+}

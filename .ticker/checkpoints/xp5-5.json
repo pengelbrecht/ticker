@@ -1,0 +1,10 @@
+{
+  "id": "xp5-5",
+  "timestamp": "2026-01-12T09:38:12.846817+01:00",
+  "epic_id": "xp5",
+  "iteration": 5,
+  "total_tokens": 4127,
+  "total_cost": 0.9598108500000002,
+  "completed_tasks": [],
+  "git_commit": "6be50249fe4bdc3ef9b496e964ddb0ed71ddf94e"
+}

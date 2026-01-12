@@ -1,0 +1,21 @@
+{
+  "id": "ks2",
+  "title": "Implement status bar pane (top)",
+  "description": "Implement renderStatusBar() function:\n\nLine 1 - Header:\n'⚡ ticker: [epic-id] Epic Title          ● STATUS'\n- Left: ticker branding + epic info (pink header style)\n- Right: status indicator (● RUNNING green / ⏸ PAUSED orange / ■ STOPPED gray)\n- Right-align status with padding\n\nLine 2 - Progress:\n'Iter: 5 │ Tasks: 3/8 │ Time: 2:34 │ Cost: $1.23/$20.00'\n- Iteration count\n- Tasks completed/total\n- Elapsed time (MM:SS or HH:MM:SS if \u003e 1 hour)\n- Cost tracking (current/max)\n- Use dim labels, bright values\n\nOptional Line 3 - Progress bar:\n'████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  37%'\n- Visual progress based on tasks completed\n- Green for completed portion\n\nStyling:\n- Full width with left/right padding\n- Border bottom to separate from main content",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "layout"
+  ],
+  "blocked_by": [
+    "pul"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:10:43.994007Z",
+  "updated_at": "2026-01-11T20:31:20.291528Z",
+  "closed_at": "2026-01-11T20:31:20.291528Z",
+  "closed_reason": "Implemented full renderStatusBar() with 3-4 line layout: Line 1 has branding (⚡ ticker) + epic ID/title + right-aligned status indicator (RUNNING green/PAUSED orange/STOPPED gray); Line 2 shows progress metrics (Iter/Tasks/Time/Cost) with dim labels and bright values separated by │; Line 3 is optional progress bar with green filled and gray empty portions; Line 4 is border separator. Updated statusBarRows constant to statusBarMinRows and made View() calculate dynamic height based on whether progress bar is shown."
+}

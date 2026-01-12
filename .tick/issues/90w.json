@@ -1,0 +1,102 @@
+{
+  "closed_at": "2026-01-12T07:23:48.338211Z",
+  "closed_reason": "Added updateSelectedTaskView() helper method that updates the details pane when selection changes. Modified j/k/g/G/pgup/pgdown handlers to call this method when selectedTask changes. For the current (in-progress) task, shows live output; for closed tasks, shows RunRecord detail view; otherwise shows historical output. Updated footer to show 'esc:live' hint when viewing historical data instead of Enter hint.",
+  "created_at": "2026-01-12T07:20:52.513831Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Moving selector up/down (j/k) in the task list should automatically update the details pane to show that task's output/details. Remove the Enter keystroke requirement. This matches how ../ticks works - selection change immediately updates the detail view.",
+  "id": "90w",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "e02",
+  "priority": 1,
+  "run": {
+    "session_id": "ad77128b-76d7-4b60-81f1-bd746d14ebb9",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-12T08:21:39.151219+01:00",
+    "ended_at": "2026-01-12T08:24:16.018308+01:00",
+    "output": "I'll work on task 90w to make the task list selection automatically update the details pane without requiring Enter. Let me start by understanding the current implementation.I've read the model.go file. Now I understand the current implementation. Looking at the key handling in the `Update` method (lines 828-944):\n\n1. `j/k` keys navigate the task list (lines 833-853)\n2. `enter` or space is currently required to view a task's details (lines 918-936)\n3. When viewing a task, `esc` returns to live output (lines 937-943)\n\nThe task is to make the details pane automatically update when navigating with j/k, removing the need for Enter. Let me also check how the ticks TUI works to understand the expected behavior.Now I need to implement the auto-update behavior. The key changes needed are:\n\n1. When j/k navigation changes `selectedTask`, automatically update the viewport to show that task's output/details\n2. The current `viewingTask` mechanism already exists - I just need to trigger it on selection change\n3. Keep Esc to return to live output (current task)\n\nLet me implement this. The approach is to add a helper function that updates the details pane based on the selected task, and call it after each j/k/g/G navigation:Now I need to update the g/G and pgup/pgdown handlers to also call `updateSelectedTaskView()`:Now I need to add the `updateSelectedTaskView()` helper method. Looking at the existing code, the Enter key handler shows the logic I need to replicate. I'll add the helper method after `updateOutputViewport()`:Now I should also update the footer hints since Enter is no longer needed for viewing task details. Let me check the footer rendering:I see the footer shows `↵:view` hint at line 1887. Since selection now automatically updates the view, I should remove this hint and add an `esc:live` hint when viewing historical data. Let me update the footer:Now let me run the tests to ensure everything works:All 115 tests pass. Let me also run the full test suite to make sure nothing else broke:All tests pass. Let me also make sure the build still works:Now let me update the todo list and close the task:Now let me add an epic note for future iterations:Task 90w is complete. Here's a summary of what was done:\n\n**Task: Auto-switch details pane on task selection [90w]**\n\n**Solution:**\n1. Added `updateSelectedTaskView()` helper method that updates the details pane based on the currently selected task:\n   - For the current (in-progress) task: shows live streaming output\n   - For closed tasks with RunRecord: shows the detailed run summary view\n   - For other tasks: shows historical output or an empty state message\n\n2. Modified all task navigation handlers (j/k, g/G, pgup/pgdown) to call this method when the selection changes\n\n3. Updated the footer to dynamically show `esc:live` hint when viewing historical task data instead of the `↵:view` hint\n\n**Files Modified:**\n- `internal/tui/model.go`: Added `updateSelectedTaskView()` method, updated navigation handlers, updated footer rendering",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2967
+      },
+      {
+        "name": "Read",
+        "duration_ms": 403
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3608
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 9721
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 11514
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 12117
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1066
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7792
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2837
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 615
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 835
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 684
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3995
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3989
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 5058
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2848
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3399
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5985,
+      "cache_read_tokens": 997497,
+      "cache_creation_tokens": 55747,
+      "cost_usd": 1.1653592500000003,
+      "duration_ms": 156437
+    },
+    "success": true,
+    "num_turns": 18
+  },
+  "status": "closed",
+  "title": "Auto-switch details pane on task selection",
+  "type": "task",
+  "updated_at": "2026-01-12T07:23:48.338211Z"
+}
