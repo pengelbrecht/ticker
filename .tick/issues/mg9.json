@@ -1,0 +1,17 @@
+{
+  "id": "mg9",
+  "title": "Add CLI support for multiple epics and --parallel flag",
+  "description": "Extend CLI to accept multiple epic IDs and add --parallel flag for controlling concurrency.\n\n## Overview\n\nUpdate the `run` command to accept multiple epic IDs and add a --parallel flag to control max concurrency.\n\n## CLI Changes\n\n```bash\n# Single epic (existing, unchanged)\nticker run abc123\n\n# Single epic in worktree\nticker run abc123 --worktree\n\n# Multiple epics (implies --worktree)\nticker run abc123 def456 ghi789\n\n# Multiple epics with explicit concurrency\nticker run abc123 def456 ghi789 --parallel 2\n\n# Sequential but isolated (parallel=1)\nticker run abc123 def456 --parallel 1\n```\n\n## Files to Modify\n\n### cmd/ticker/main.go (or run.go)\n\n```go\n// Change epic-id from single arg to variadic\n// Before: ticker run \u003cepic-id\u003e\n// After:  ticker run \u003cepic-id\u003e [epic-id...]\n\nrunCmd.Flags().Int(\"parallel\", 0, \"Max parallel epics (default: number of epics)\")\nrunCmd.Flags().Bool(\"worktree\", false, \"Run in isolated git worktree\")\n\n// In run handler:\nepicIDs := args // All positional args are epic IDs\n\nif len(epicIDs) \u003e 1 {\n    // Multiple epics - use ParallelRunner\n    // Implies --worktree\n    maxParallel := parallel\n    if maxParallel == 0 {\n        maxParallel = len(epicIDs)\n    }\n    // ... setup ParallelRunner ...\n} else {\n    // Single epic - use existing Engine\n    // --worktree optional\n}\n```\n\n## Validation\n\n- At least one epic ID required\n- --parallel must be \u003e 0 if specified\n- --parallel without multiple epics is warning (ignored)\n- All epic IDs must exist and be open\n- All epic IDs must be unique (no duplicates)\n\n## Help Text\n\n```\nUsage:\n  ticker run \u003cepic-id\u003e [epic-id...] [flags]\n\nFlags:\n      --worktree      Run epic(s) in isolated git worktree\n      --parallel int  Max parallel epics (default: number of epics)\n      --headless      Run without TUI\n      --skip-verify   Skip verification after task completion\n  -h, --help          help for run\n\nExamples:\n  ticker run abc123                      # Single epic with TUI\n  ticker run abc123 --worktree           # Single epic in worktree\n  ticker run abc def ghi                 # Three epics in parallel\n  ticker run abc def ghi --parallel 2    # Three epics, max 2 at a time\n```\n\n### cmd/ticker/main_test.go\n- Test single epic ID parsing\n- Test multiple epic IDs parsing\n- Test --parallel flag parsing\n- Test validation errors\n- Test multiple epics implies worktree",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "91k"
+  ],
+  "parent": "8my",
+  "acceptance_criteria": "1. Run command accepts multiple epic IDs\n2. --parallel flag controls max concurrency\n3. Multiple epics automatically implies --worktree mode\n4. --parallel defaults to number of epics\n5. Validation: all epic IDs must exist and be open\n6. Validation: --parallel must be positive\n7. Duplicate epic IDs rejected\n8. Help text documents new usage\n9. All tests pass",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T10:03:49.281265Z",
+  "updated_at": "2026-01-12T10:03:49.281265Z"
+}
