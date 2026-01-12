@@ -1777,11 +1777,11 @@ func TestBuildOutputContent_ThinkingOnly(t *testing.T) {
 
 	content := m.buildOutputContent(80)
 
-	// Should contain thinking section
-	if !strings.Contains(content, "Thinking") {
-		t.Error("expected Thinking section header")
+	// Thinking is now rendered separately via renderThinkingArea, not in buildOutputContent
+	// So buildOutputContent should be empty when there's only thinking and no output
+	if content != "" {
+		t.Errorf("expected empty content when only thinking is set (thinking is rendered separately), got '%s'", content)
 	}
-	// Note: thinking content is rendered with dimStyle so we check for presence
 }
 
 func TestBuildOutputContent_BothThinkingAndOutput(t *testing.T) {
@@ -1796,12 +1796,10 @@ func TestBuildOutputContent_BothThinkingAndOutput(t *testing.T) {
 	// Strip ANSI codes for text content assertions (glamour adds styling)
 	stripped := ansi.Strip(content)
 
-	// Should contain both sections
-	if !strings.Contains(stripped, "Thinking") {
-		t.Error("expected Thinking section header")
-	}
-	if !strings.Contains(stripped, "Output") {
-		t.Error("expected Output section header/separator")
+	// Thinking is now rendered separately via renderThinkingArea, not in buildOutputContent
+	// So buildOutputContent should only contain output, not thinking
+	if strings.Contains(stripped, "Thinking") {
+		t.Error("did not expect Thinking section - thinking is now rendered separately")
 	}
 	if !strings.Contains(stripped, "The final answer") {
 		t.Error("expected output text in content")
@@ -1833,6 +1831,7 @@ func TestIterationStartMsg_ClearsThinking(t *testing.T) {
 	// Set initial output and thinking
 	m.output = "previous output"
 	m.thinking = "previous thinking"
+	m.lastThought = "previous last thought"
 	m.taskID = "task1"
 
 	// Start new iteration
@@ -1844,12 +1843,143 @@ func TestIterationStartMsg_ClearsThinking(t *testing.T) {
 	newModel, _ := m.Update(msg)
 	m = newModel.(Model)
 
-	// Both should be cleared
+	// All should be cleared
 	if m.output != "" {
 		t.Errorf("expected output to be cleared, got '%s'", m.output)
 	}
 	if m.thinking != "" {
 		t.Errorf("expected thinking to be cleared, got '%s'", m.thinking)
+	}
+	if m.lastThought != "" {
+		t.Errorf("expected lastThought to be cleared, got '%s'", m.lastThought)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Thinking Area Tests
+// -----------------------------------------------------------------------------
+
+func TestExtractLastThought(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty input",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "single paragraph",
+			input:    "This is a single thought.",
+			expected: "This is a single thought.",
+		},
+		{
+			name:     "multiple paragraphs - returns last",
+			input:    "First thought.\n\nSecond thought.\n\nLast thought here.",
+			expected: "Last thought here.",
+		},
+		{
+			name:     "trailing whitespace",
+			input:    "First thought.\n\nLast thought.\n\n  ",
+			expected: "Last thought.",
+		},
+		{
+			name:     "single line with newlines",
+			input:    "One thought\nwith multiple lines",
+			expected: "One thought\nwith multiple lines",
+		},
+		{
+			name:     "empty paragraphs in middle",
+			input:    "First.\n\n\n\nLast.",
+			expected: "Last.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractLastThought(tt.input)
+			if result != tt.expected {
+				t.Errorf("extractLastThought(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRenderThinkingArea_Empty(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.lastThought = ""
+
+	result := m.renderThinkingArea(80)
+	if result != "" {
+		t.Errorf("expected empty result when lastThought is empty, got '%s'", result)
+	}
+}
+
+func TestRenderThinkingArea_WithContent(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.lastThought = "My current thinking"
+
+	result := m.renderThinkingArea(80)
+
+	// Should contain thinking emoji and content
+	if !strings.Contains(result, "🧠") {
+		t.Error("expected brain emoji in thinking area")
+	}
+	if !strings.Contains(result, "Thinking") {
+		t.Error("expected 'Thinking' header in thinking area")
+	}
+	// The content should be present (may have ANSI codes)
+	stripped := ansi.Strip(result)
+	if !strings.Contains(stripped, "My current thinking") {
+		t.Error("expected thinking content in thinking area")
+	}
+}
+
+func TestRenderThinkingArea_Truncation(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	// Create a very long thought
+	m.lastThought = strings.Repeat("This is a very long thought. ", 20)
+
+	result := m.renderThinkingArea(80)
+
+	// Should be truncated with ellipsis
+	stripped := ansi.Strip(result)
+	if !strings.Contains(stripped, "...") {
+		t.Error("expected truncation ellipsis for long thinking content")
+	}
+}
+
+func TestAgentThinkingMsg_UpdatesLastThought(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.ready = true
+	m.updateViewportSize()
+
+	// Send first thinking message
+	msg := AgentThinkingMsg{Text: "First paragraph.\n\n"}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.lastThought != "First paragraph." {
+		t.Errorf("expected lastThought 'First paragraph.', got '%s'", m.lastThought)
+	}
+
+	// Send second paragraph
+	msg = AgentThinkingMsg{Text: "Second paragraph."}
+	newModel, _ = m.Update(msg)
+	m = newModel.(Model)
+
+	if m.lastThought != "Second paragraph." {
+		t.Errorf("expected lastThought 'Second paragraph.', got '%s'", m.lastThought)
 	}
 }
 

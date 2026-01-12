@@ -932,3 +932,85 @@ func TestStreamingPipeline_FullEndToEnd(t *testing.T) {
 		}
 	}
 }
+
+// TestStreamingPipeline_NewlinePreservation verifies that newlines in streamed output
+// are preserved through the full pipeline: stream-json -> StreamParser -> TUI Model.
+func TestStreamingPipeline_NewlinePreservation(t *testing.T) {
+	// Stream data with newlines in text_delta events (mimics real Claude output)
+	streamData := `{"type":"system","subtype":"init","session_id":"newline-test","model":"claude-opus-4-5-20251101"}
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Line"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" 1\nLine 2\nLine"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" 3"}}}
+{"type":"stream_event","event":{"type":"content_block_stop","index":0}}
+{"type":"result","subtype":"success","result":"Line 1\nLine 2\nLine 3","duration_ms":1000,"num_turns":1,"total_cost_usd":0.01}`
+
+	state := &agent.AgentState{}
+	mockProgram := &mockTUIProgram{}
+
+	var prevOutput string
+
+	parser := agent.NewStreamParser(state, func() {
+		snap := state.Snapshot()
+
+		// Convert output delta (mimics main.go OnAgentState)
+		if snap.Output != prevOutput {
+			delta := snap.Output[len(prevOutput):]
+			if delta != "" {
+				mockProgram.Send(AgentTextMsg{Text: delta})
+			}
+			prevOutput = snap.Output
+		}
+	})
+
+	err := parser.Parse(strings.NewReader(streamData))
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	// Verify AgentState has preserved newlines
+	snap := state.Snapshot()
+	expectedOutput := "Line 1\nLine 2\nLine 3"
+
+	if snap.Output != expectedOutput {
+		t.Errorf("AgentState.Output = %q, want %q", snap.Output, expectedOutput)
+	}
+
+	// Verify newlines in state
+	newlineCount := strings.Count(snap.Output, "\n")
+	if newlineCount != 2 {
+		t.Errorf("AgentState.Output newline count = %d, want 2", newlineCount)
+	}
+
+	// Apply messages to TUI Model and verify
+	m := New(Config{EpicID: "test", EpicTitle: "Test"})
+	m = applyMsg(m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = applyMsg(m, IterationStartMsg{Iteration: 1, TaskID: "t1", TaskTitle: "Test"})
+
+	messages := mockProgram.Messages()
+	for _, msg := range messages {
+		m = applyMsg(m, msg)
+	}
+
+	// Verify TUI Model output has preserved newlines
+	if !strings.Contains(m.output, "\n") {
+		t.Errorf("Model.output should contain newlines, got %q", m.output)
+	}
+
+	// Concatenate all text messages and verify
+	var allText strings.Builder
+	for _, msg := range messages {
+		if txt, ok := msg.(AgentTextMsg); ok {
+			allText.WriteString(txt.Text)
+		}
+	}
+	concatenatedText := allText.String()
+	if concatenatedText != expectedOutput {
+		t.Errorf("Concatenated text = %q, want %q", concatenatedText, expectedOutput)
+	}
+
+	modelNewlineCount := strings.Count(m.output, "\n")
+	if modelNewlineCount != 2 {
+		t.Errorf("Model.output newline count = %d, want 2", modelNewlineCount)
+	}
+}

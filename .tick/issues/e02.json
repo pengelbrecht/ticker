@@ -2,11 +2,14 @@
   "id": "e02",
   "title": "TUI Output \u0026 UX Improvements",
   "description": "Epic for improving the TUI output display and user experience based on testing feedback.",
-  "status": "open",
+  "notes": "2026-01-12 08:24 - Completed 90w: Task selection now auto-updates details pane. Added updateSelectedTaskView() method that handles the three cases: (1) current task shows live output, (2) closed tasks with RunRecord show detailed summary, (3) other tasks show historical output or empty state. The footer dynamically shows 'esc:live' hint when viewing historical data. Enter/Space keys still work for backwards compatibility but are no longer required.\n2026-01-12 08:29 - Iteration 2 error: agent run: claude timed out after 5m0s\n2026-01-12 08:34 - Iteration 3 error: agent run: claude timed out after 5m0s\n2026-01-12 08:39 - Iteration 4 error: agent run: claude timed out after 5m0s\n2026-01-12 08:44 - Iteration 5 error: agent run: claude timed out after 5m0s\n2026-01-12 08:48 - Completed b3p: Fixed line wrapping by adding refreshViewportContent() method called on WindowSizeMsg. The issue was that window resize updated the markdown renderer with new width but didn't re-render the existing content. The fix handles all three view states (live, RunRecord, historical) and preserves scroll position.\n2026-01-12 08:53 - Iteration 7 error: agent run: claude timed out after 5m0s\n2026-01-12 08:57 - Completed gj2: Token counts now show in completion modal. The fix required widening the modal from 42 to 48 characters to prevent token line (e.g., '15k in | 2.5k out | 8.5k cache') from wrapping. Status bar token display (liveInputTokens etc) was already implemented - this task added cumulative totals for the completion summary.\n2026-01-12 09:02 - Completed yfm: Wired RunRecord display to TUI. Added GetRunRecord() to ticks.Client to read run field from tick JSON files (tk list --json doesn't include this field). refreshTasks() in main.go now fetches RunRecords for closed tasks and sends TaskRunRecordMsg. The buildRunRecordContent() was already complete - just needed the wiring.",
+  "status": "closed",
   "priority": 2,
   "type": "epic",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T07:20:32.137336Z",
-  "updated_at": "2026-01-12T07:20:32.137336Z"
+  "updated_at": "2026-01-12T08:02:21.313276Z",
+  "closed_at": "2026-01-12T08:02:21.313276Z",
+  "closed_reason": "all tasks completed"
 }

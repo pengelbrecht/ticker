@@ -1,0 +1,15 @@
+{
+  "id": "6xw",
+  "title": "Improve thinking display - separate area, single thought",
+  "description": "Hard to distinguish between thinking comments and real output. Instead of inline thinking blocks:\n- Display thinking in a separate fixed area of the details pane (not scrollable with output)\n- Show only the most recent/current thought (not full history)\n- Make it visually distinct (different styling, border, or position)\n\nThis keeps focus on the actual output while still showing what Claude is thinking about.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "2os",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:30:18.388432Z",
+  "updated_at": "2026-01-12T08:17:59.68522Z",
+  "closed_at": "2026-01-12T08:17:59.68522Z",
+  "closed_reason": "Added separate thinking display area: (1) Added lastThought field to Model storing most recent thinking paragraph, (2) Created extractLastThought() to extract last paragraph from thinking buffer, (3) Created renderThinkingArea() to display fixed bordered area with brain emoji above scrollable viewport, (4) Removed thinking section from buildOutputContent() since it's now rendered separately, (5) Updated renderOutputPane() to display thinking area before viewport. Files modified: internal/tui/model.go, internal/tui/model_test.go"
+}

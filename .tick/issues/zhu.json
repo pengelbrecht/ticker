@@ -1,0 +1,13 @@
+{
+  "id": "zhu",
+  "title": "Sort task list by status groups with execution order",
+  "description": "Task list jumps around confusingly during execution. Implement grouped sorting:\n\n1. Completed tasks (in execution order they finished)\n2. In-progress task (current)\n3. Pending tasks (in tk's priority/blocker order)\n\nTrack execution order internally as tasks start. Completed tasks stay stable at top in the order they ran, giving clear progress indication. Pending tasks below hint at what's next.",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "2os",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:41:53.949307Z",
+  "updated_at": "2026-01-12T07:41:53.949307Z"
+}

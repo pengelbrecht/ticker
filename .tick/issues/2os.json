@@ -1,0 +1,13 @@
+{
+  "id": "2os",
+  "title": "Bug Fixes",
+  "description": "General bug fixes and corrections for ticker TUI and engine.",
+  "notes": "2026-01-12 09:06 - Completed x1h: Increased DefaultAgentTimeout from 5 minutes to 30 minutes. Changes in internal/engine/engine.go (constant and comment) and internal/engine/engine_test.go (test assertion). Simple config change with no architectural impact.\n2026-01-12 09:09 - Completed 8lh: Fixed status bar to show cumulative token totals (totalInputTokens + liveInputTokens) instead of just liveInputTokens. Also removed cost override in RunCompleteMsg handler since cost is already accumulated via IterationEndMsg. Key insight: the Model has both 'live' metrics (current iteration, reset on IterationStartMsg) and 'total' metrics (accumulated across iterations). Status bar should show totals+live, completion modal should show totals.\n2026-01-12 09:13 - Completed wzx: Fixed tools list to show most recent first. The key insight is that agent.AgentState.ToolHistory stores tools oldest-first (via append in stream.go:363), while tui.Model.toolHistory stores newest-first (via prepend in model.go:1071). The fix was in buildRunRecordContent() which displays RunRecord tools - changed iteration from ascending (oldest first) to descending (newest first). The live tool display in buildToolActivitySection() was already correct since TUI's toolHistory uses prepend.",
+  "status": "open",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:24:27.839915Z",
+  "updated_at": "2026-01-12T08:13:57.478902Z"
+}

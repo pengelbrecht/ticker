@@ -38,9 +38,18 @@ echo "  Task $T4: List commands"
 T5=$(tk create "What day is it?" -d "Report today's date." -t task -parent "$EPIC_ID" -p 3)
 echo "  Task $T5: Date question"
 
+# Rich markdown output test
+T6=$(tk create "Generate project summary with rich markdown" -d "Create a summary of this project using rich markdown formatting. Include:
+- A table comparing the main packages (name, purpose, key files)
+- Code snippets showing key type definitions
+- A bullet list of features
+- Headers and subheaders
+Output should exercise markdown rendering: tables, code blocks, lists, emphasis, etc." -t task -parent "$EPIC_ID" -p 2)
+echo "  Task $T6: Rich markdown output"
+
 # A blocked task to test blocked display
-T6=$(tk create "Summarize after counting" -d "Summarize findings after the count task is done." -t task -parent "$EPIC_ID" -p 3 -blocked-by "$T3")
-echo "  Task $T6: Blocked task (blocked by $T3)"
+T7=$(tk create "Summarize after counting" -d "Summarize findings after the count task is done." -t task -parent "$EPIC_ID" -p 3 -blocked-by "$T3")
+echo "  Task $T7: Blocked task (blocked by $T3)"
 
 echo ""
 echo "Test epic ready: $EPIC_ID"

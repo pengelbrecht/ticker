@@ -256,6 +256,31 @@ func formatTokens(count int) string {
 	return fmt.Sprintf("%.1fM", float64(count)/1000000)
 }
 
+// extractLastThought extracts the most recent thinking paragraph from the thinking buffer.
+// Looks for the last meaningful paragraph (separated by double newlines or significant whitespace).
+func extractLastThought(thinking string) string {
+	if thinking == "" {
+		return ""
+	}
+
+	// Trim trailing whitespace
+	thinking = strings.TrimRight(thinking, " \t\n")
+
+	// Split by double newlines to find paragraphs
+	paragraphs := strings.Split(thinking, "\n\n")
+
+	// Get the last non-empty paragraph
+	for i := len(paragraphs) - 1; i >= 0; i-- {
+		p := strings.TrimSpace(paragraphs[i])
+		if p != "" {
+			return p
+		}
+	}
+
+	// Fallback: just return trimmed thinking
+	return strings.TrimSpace(thinking)
+}
+
 // shortModelName extracts a short model name from a full model ID.
 // Examples: "claude-opus-4-5-20251101" -> "opus", "claude-sonnet-4-20250514" -> "sonnet"
 func shortModelName(model string) string {
@@ -409,7 +434,8 @@ type Model struct {
 	tasks        []TaskInfo
 	selectedTask int
 	output       string            // legacy output buffer (kept for backward compatibility during transition)
-	thinking     string            // thinking/reasoning content (dimmed, collapsible section)
+	thinking     string            // thinking/reasoning content (full history, for RunRecord)
+	lastThought  string            // most recent thinking paragraph (displayed in fixed area)
 	agentState   *agent.AgentState // live streaming state for rich agent output display
 	taskOutputs  map[string]string // per-task output history
 	taskRunRecords map[string]*agent.RunRecord // per-task RunRecord for completed tasks
@@ -932,6 +958,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Clear output, thinking, tool state, metrics, and status for new iteration
 		m.output = ""
 		m.thinking = ""
+		m.lastThought = ""
 		m.activeTool = nil
 		m.toolHistory = nil
 		m.liveInputTokens = 0
@@ -1033,8 +1060,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case AgentThinkingMsg:
-		// Append thinking text to thinking buffer
+		// Append thinking text to full thinking buffer (for RunRecord history)
 		m.thinking += msg.Text
+		// Update lastThought to show only the most recent thinking paragraph
+		m.lastThought = extractLastThought(m.thinking)
 		// Update viewport if viewing live output
 		if m.viewingTask == "" {
 			m.updateOutputViewport()
@@ -1393,8 +1422,9 @@ func (m *Model) renderMarkdown(content string) string {
 }
 
 // buildOutputContent creates the combined content for the output viewport.
-// It includes a collapsible thinking section (when non-empty), tool activity, and the main output.
+// It includes tool activity and the main output.
 // The main output is rendered as markdown using glamour.
+// Note: Thinking is displayed separately in a fixed area above the viewport (see renderThinkingArea).
 func (m *Model) buildOutputContent(width int) string {
 	var sections []string
 
@@ -1403,22 +1433,6 @@ func (m *Model) buildOutputContent(width int) string {
 	if toolSection != "" {
 		sections = append(sections, toolSection)
 		sections = append(sections, "") // Blank line after tools
-	}
-
-	// Thinking section (collapsible - only shown when non-empty)
-	if m.thinking != "" {
-		thinkingHeader := dimStyle.Render("─── Thinking ───")
-		sections = append(sections, thinkingHeader)
-
-		// Render thinking content dimmed
-		thinkingLines := strings.Split(m.thinking, "\n")
-		for _, line := range thinkingLines {
-			sections = append(sections, dimStyle.Render(line))
-		}
-
-		// Separator between thinking and output
-		separator := dimStyle.Render("─── Output ───")
-		sections = append(sections, "", separator)
 	}
 
 	// Main output section - render as markdown
@@ -1685,6 +1699,45 @@ func (m Model) renderStatusIndicator() string {
 		// No status set - return empty
 		return ""
 	}
+}
+
+// renderThinkingArea renders the fixed thinking area showing only the most recent thought.
+// This is displayed above the scrollable viewport and is visually distinct.
+// Returns empty string if there's no current thinking, or the rendered thinking area.
+func (m Model) renderThinkingArea(width int) string {
+	if m.lastThought == "" {
+		return ""
+	}
+
+	// Create a distinctive style for thinking: dimmed text with a box border
+	thinkingStyle := lipgloss.NewStyle().
+		Foreground(colorLavender).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorGray).
+		Padding(0, 1).
+		Width(width - 2) // Account for border
+
+	// Header with brain emoji
+	header := lipgloss.NewStyle().Foreground(colorOverlay).Render("🧠 Thinking")
+
+	// Truncate thinking text if it's too long (max 3 lines, ~200 chars)
+	thought := m.lastThought
+	maxLen := 200
+	if len(thought) > maxLen {
+		thought = thought[:maxLen] + "..."
+	}
+	// Wrap to max 3 lines
+	lines := strings.Split(thought, "\n")
+	if len(lines) > 3 {
+		lines = lines[:3]
+		lines[2] = lines[2] + "..."
+	}
+	thought = strings.Join(lines, "\n")
+
+	// Render the content
+	content := header + "\n" + thought
+
+	return thinkingStyle.Render(content)
 }
 
 // Layout constants
@@ -2104,8 +2157,15 @@ func (m Model) renderOutputPane(height int) string {
 		task := m.tasks[m.selectedTask]
 		detailContent := m.renderTaskDetail(task, innerWidth, innerHeight)
 		contentLines = append(contentLines, detailContent)
-	} else if m.output != "" || m.thinking != "" {
-		// Running mode: show viewport content (thinking + output sections)
+	} else if m.output != "" || m.lastThought != "" {
+		// Running mode: show thinking area (fixed) above viewport content
+		// Render thinking area first (if present)
+		thinkingArea := m.renderThinkingArea(innerWidth)
+		if thinkingArea != "" {
+			contentLines = append(contentLines, thinkingArea)
+			contentLines = append(contentLines, "") // Blank line between thinking and output
+		}
+		// Then render scrollable viewport content
 		viewportContent := m.viewport.View()
 		contentLines = append(contentLines, viewportContent)
 	} else {

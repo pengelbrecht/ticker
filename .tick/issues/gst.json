@@ -1,0 +1,13 @@
+{
+  "id": "gst",
+  "title": "Add graceful timeout handling with notes",
+  "description": "When an iteration times out, Claude doesn't get a chance to save progress. The orchestrator should:\n\n1. Add a note to the epic/task on timeout explaining what happened\n2. Include iteration number and task ID\n3. Ideally capture any partial output that was produced\n\nThis helps the next iteration understand what happened and potentially resume from where it left off.",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "2os",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:44:28.321566Z",
+  "updated_at": "2026-01-12T07:44:28.321566Z"
+}

@@ -323,6 +323,11 @@ func (p *StreamParser) handleStreamEvent(eventData json.RawMessage) {
 			p.notify()
 		} else if event.ContentBlock.Type == "text" {
 			p.state.mu.Lock()
+			// Add newline separator if there's already output content.
+			// This ensures text blocks across turns don't concatenate directly.
+			if p.state.Output.Len() > 0 {
+				p.state.Output.WriteString("\n\n")
+			}
 			p.state.Status = StatusWriting
 			p.state.mu.Unlock()
 			p.notify()
@@ -337,7 +342,10 @@ func (p *StreamParser) handleStreamEvent(eventData json.RawMessage) {
 			if event.Delta.Text != "" {
 				p.state.Thinking.WriteString(event.Delta.Text)
 			}
-		} else if event.Delta.Type == "text_delta" {
+		} else if event.Delta.Type == "text_delta" || blockType == "text" {
+			// Handle text_delta explicitly, but also fall back to blockType check
+			// in case the delta type is not set or is different.
+			// This ensures text content is captured regardless of delta type variation.
 			p.state.Output.WriteString(event.Delta.Text)
 		} else if event.Delta.Type == "input_json_delta" && p.state.ActiveTool != nil {
 			// Accumulate tool input (could truncate for display)
