@@ -41,6 +41,10 @@ type RunOpts struct {
 	// Timeout for the entire run. If zero, no timeout is applied
 	// beyond any context deadline.
 	Timeout time.Duration
+
+	// WorkDir is the working directory for the agent.
+	// If empty, the current working directory is used.
+	WorkDir string
 }
 
 // Result contains the output and metrics from an agent run.

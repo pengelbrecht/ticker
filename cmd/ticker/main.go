@@ -127,6 +127,7 @@ func init() {
 	runCmd.Flags().Bool("headless", false, "Run without TUI (stdout/stderr only)")
 	runCmd.Flags().Bool("skip-verify", false, "Skip verification after task completion")
 	runCmd.Flags().Bool("verify-only", false, "Run verification without the agent (for debugging)")
+	runCmd.Flags().Bool("worktree", false, "Run epic in isolated git worktree")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
@@ -150,6 +151,7 @@ func runRun(cmd *cobra.Command, args []string) {
 	maxTaskRetries, _ := cmd.Flags().GetInt("max-task-retries")
 	skipVerify, _ := cmd.Flags().GetBool("skip-verify")
 	verifyOnly, _ := cmd.Flags().GetBool("verify-only")
+	useWorktree, _ := cmd.Flags().GetBool("worktree")
 
 	// Check mutual exclusivity
 	if skipVerify && verifyOnly {
@@ -207,15 +209,15 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	// TUI mode (default)
 	if !headless {
-		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify)
+		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree)
 		return
 	}
 
 	// Headless mode
-	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify)
+	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree)
 }
 
-func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool) {
+func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree bool) {
 	// Create pause channel for TUI <-> engine communication
 	pauseChan := make(chan bool, 1)
 
@@ -413,12 +415,13 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	// Run engine in background
 	go func() {
 		config := engine.RunConfig{
-			EpicID:           epicID,
-			MaxIterations:    maxIterations,
-			MaxCost:          maxCost,
-			CheckpointEvery:  checkpointInterval,
-			MaxTaskRetries:   maxTaskRetries,
-			PauseChan:        pauseChan,
+			EpicID:          epicID,
+			MaxIterations:   maxIterations,
+			MaxCost:         maxCost,
+			CheckpointEvery: checkpointInterval,
+			MaxTaskRetries:  maxTaskRetries,
+			PauseChan:       pauseChan,
+			UseWorktree:     useWorktree,
 		}
 
 		result, err := eng.Run(ctx, config)
@@ -445,7 +448,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	cancel()
 }
 
-func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify bool) {
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree bool) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -529,9 +532,13 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		MaxCost:         maxCost,
 		CheckpointEvery: checkpointInterval,
 		MaxTaskRetries:  maxTaskRetries,
+		UseWorktree:     useWorktree,
 	}
 
 	fmt.Printf("Starting ticker run for epic %s\n", epicID)
+	if useWorktree {
+		fmt.Println("Running in isolated worktree")
+	}
 	fmt.Printf("Budget: max %d iterations, $%.2f\n", maxIterations, maxCost)
 	fmt.Println()
 

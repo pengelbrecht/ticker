@@ -54,6 +54,11 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts RunOpts) (*Re
 
 	cmd := exec.CommandContext(ctx, a.command(), args...)
 
+	// Set working directory if specified
+	if opts.WorkDir != "" {
+		cmd.Dir = opts.WorkDir
+	}
+
 	var stderr bytes.Buffer
 
 	stdoutPipe, err := cmd.StdoutPipe()

@@ -118,6 +118,18 @@ func TestRunOpts_Defaults(t *testing.T) {
 	if opts.Timeout != 0 {
 		t.Error("Timeout should be 0 by default")
 	}
+	if opts.WorkDir != "" {
+		t.Error("WorkDir should be empty by default")
+	}
+}
+
+func TestRunOpts_WorkDir(t *testing.T) {
+	opts := RunOpts{
+		WorkDir: "/custom/work/dir",
+	}
+	if opts.WorkDir != "/custom/work/dir" {
+		t.Errorf("WorkDir = %q, want %q", opts.WorkDir, "/custom/work/dir")
+	}
 }
 
 func TestResult_Fields(t *testing.T) {

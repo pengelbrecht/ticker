@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/verify"
+	"github.com/pengelbrecht/ticker/internal/worktree"
 )
 
 // Engine orchestrates the Ralph iteration loop.
@@ -73,6 +75,14 @@ type RunConfig struct {
 
 	// SkipVerify disables verification even if configured (--skip-verify flag).
 	SkipVerify bool
+
+	// UseWorktree enables running in an isolated git worktree.
+	// When true, a worktree is created before running and cleaned up after.
+	UseWorktree bool
+
+	// RepoRoot is the root of the git repository for worktree operations.
+	// Required when UseWorktree is true. If empty, current working directory is used.
+	RepoRoot string
 }
 
 // Defaults for RunConfig.
@@ -194,6 +204,53 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		iteration:      0,
 		completedTasks: []string{},
 		startTime:      time.Now(),
+	}
+
+	// Handle worktree mode
+	var wtManager *worktree.Manager
+	var wt *worktree.Worktree
+	if config.UseWorktree {
+		// Determine repo root
+		repoRoot := config.RepoRoot
+		if repoRoot == "" {
+			var err error
+			repoRoot, err = os.Getwd()
+			if err != nil {
+				return nil, fmt.Errorf("getting working directory: %w", err)
+			}
+		}
+
+		// Create worktree manager
+		var err error
+		wtManager, err = worktree.NewManager(repoRoot)
+		if err != nil {
+			return nil, fmt.Errorf("creating worktree manager: %w", err)
+		}
+
+		// Create worktree for this epic
+		wt, err = wtManager.Create(config.EpicID)
+		if err != nil {
+			// If worktree already exists, try to get it
+			if errors.Is(err, worktree.ErrWorktreeExists) {
+				wt, err = wtManager.Get(config.EpicID)
+				if err != nil {
+					return nil, fmt.Errorf("getting existing worktree: %w", err)
+				}
+			} else {
+				return nil, fmt.Errorf("creating worktree: %w", err)
+			}
+		}
+
+		// Set the work directory in state
+		state.workDir = wt.Path
+
+		// Ensure cleanup on exit (success, error, or panic)
+		defer func() {
+			if wtManager != nil && wt != nil {
+				// Always cleanup worktree on exit
+				_ = wtManager.Remove(config.EpicID)
+			}
+		}()
 	}
 
 	// Resume from checkpoint if specified
@@ -406,8 +463,11 @@ type runState struct {
 	signalReason   string
 
 	// Stuck loop detection
-	lastTaskID     string
-	sameTaskCount  int
+	lastTaskID    string
+	sameTaskCount int
+
+	// Worktree support
+	workDir string // Working directory for agent (worktree path or empty for current dir)
 }
 
 // toResult converts run state to a RunResult.
@@ -475,6 +535,7 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 
 	opts := agent.RunOpts{
 		Timeout: timeout,
+		WorkDir: state.workDir,
 	}
 
 	// Set up rich streaming callback if configured (preferred)

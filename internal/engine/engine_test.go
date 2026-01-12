@@ -666,3 +666,38 @@ func TestRunConfig_SkipVerify(t *testing.T) {
 		t.Error("SkipVerify should be true after being set")
 	}
 }
+
+func TestRunConfig_UseWorktree(t *testing.T) {
+	// Test that UseWorktree field exists and defaults to false
+	config := RunConfig{
+		EpicID: "test-epic",
+	}
+
+	if config.UseWorktree {
+		t.Error("UseWorktree should default to false")
+	}
+
+	// Test that it can be set to true
+	config.UseWorktree = true
+	if !config.UseWorktree {
+		t.Error("UseWorktree should be true after being set")
+	}
+
+	// Test RepoRoot can be set
+	config.RepoRoot = "/some/path"
+	if config.RepoRoot != "/some/path" {
+		t.Errorf("RepoRoot = %q, want %q", config.RepoRoot, "/some/path")
+	}
+}
+
+func TestRunState_WorkDir(t *testing.T) {
+	// Test that workDir field exists on runState
+	state := &runState{
+		epicID:  "test-epic",
+		workDir: "/path/to/worktree",
+	}
+
+	if state.workDir != "/path/to/worktree" {
+		t.Errorf("workDir = %q, want %q", state.workDir, "/path/to/worktree")
+	}
+}
