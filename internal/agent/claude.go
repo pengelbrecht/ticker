@@ -47,6 +47,7 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts RunOpts) (*Re
 		"--dangerously-skip-permissions",
 		"--print",
 		"--output-format", "stream-json",
+		"--include-partial-messages",
 		"--verbose",
 		prompt,
 	}

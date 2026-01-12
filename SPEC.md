@@ -72,7 +72,55 @@ ticker run <epic-id> --headless  # Disable TUI
 
 ---
 
-### Phase 3: Worktrees & Parallel Execution
+### Phase 3: Verification System
+
+Add automated verification to ensure tasks are actually complete before moving on.
+
+**Scope:**
+- Verification runner integrated into iteration loop
+- Config-based commands (`.ticker/config.json`)
+- Auto-detection fallback for common project types
+- Graceful skip when not configured/detected
+- Verification failure handling (add to epic notes, retry)
+
+**Detection hierarchy:**
+1. Check `.ticker/config.json` for explicit commands
+2. Auto-detect from project files:
+   - `go.mod` → `go test ./...`, `go build ./...`
+   - `package.json` (with test script) → `npm test`
+   - `pyproject.toml` / `setup.py` → `pytest`
+   - `Cargo.toml` → `cargo test`
+   - `Makefile` (with test target) → `make test`
+3. Skip verification if nothing configured/detected
+
+**Config example:**
+```json
+{
+  "verification": {
+    "test_command": "npm test",
+    "build_command": "npm run build",
+    "custom_scripts": ["./scripts/lint.sh"]
+  }
+}
+```
+
+**Behavior:**
+- Run verifiers after each iteration (before considering task complete)
+- On failure: add failure output to epic notes, don't close task, retry
+- Configurable failure threshold before giving up on task
+- TUI shows verification status (running/pass/fail)
+
+**CLI:**
+```bash
+ticker run <epic-id> --skip-verify     # Disable verification
+ticker run <epic-id> --verify-only     # Run verify without agent (debug)
+```
+
+**Exit criteria:** Verification runs automatically for Go/Node/Python/Rust projects, failures cause retry.
+
+---
+
+### Phase 4: Worktrees & Parallel Execution
 
 Enable running multiple epics simultaneously in isolated git worktrees.
 
@@ -96,7 +144,7 @@ ticker run h8d fbv 5b8 --parallel 3
 
 ---
 
-### Phase 4: Multi-Agent Support
+### Phase 5: Multi-Agent Support
 
 Add support for non-Claude coding agents with unified permission management.
 
@@ -473,7 +521,7 @@ that should persist across iterations. Epic notes replace the scratchpad concept
 | MAX_ITERATIONS | (internal) | Hit iteration limit | 1 |
 | BUDGET_EXCEEDED | (internal) | Hit token/cost/time limit | 1 |
 
-### Verification System
+### Verification System (Phase 3)
 
 ```go
 type Verifier interface {
@@ -483,11 +531,13 @@ type Verifier interface {
 ```
 
 Built-in verifiers:
-- **TestVerifier**: Runs test suite (configurable command)
-- **BuildVerifier**: Checks project builds
+- **TestVerifier**: Runs test suite (auto-detected or configured command)
+- **BuildVerifier**: Checks project builds (auto-detected or configured)
 - **GitVerifier**: Ensures changes were committed
 - **TickVerifier**: Confirms task was closed in Ticks
-- **ScriptVerifier**: Custom verification scripts
+- **ScriptVerifier**: Custom verification scripts from config
+
+Detection priority: config → auto-detect → skip. See Phase 3 in Roadmap for details.
 
 Verification failures are added as epic notes (via `tk note`) for the next iteration to review.
 

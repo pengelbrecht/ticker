@@ -832,9 +832,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "j", "down":
 			// Navigate down in task list when task pane is focused
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				oldSelected := m.selectedTask
 				m.selectedTask++
 				if m.selectedTask >= len(m.tasks) {
 					m.selectedTask = len(m.tasks) - 1 // Clamp at bounds
+				}
+				// Auto-update details pane when selection changes
+				if m.selectedTask != oldSelected {
+					m.updateSelectedTaskView()
 				}
 			} else if m.focusedPane == PaneOutput {
 				// Scroll down in output pane
@@ -843,9 +848,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "k", "up":
 			// Navigate up in task list when task pane is focused
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				oldSelected := m.selectedTask
 				m.selectedTask--
 				if m.selectedTask < 0 {
 					m.selectedTask = 0 // Clamp at bounds
+				}
+				// Auto-update details pane when selection changes
+				if m.selectedTask != oldSelected {
+					m.updateSelectedTaskView()
 				}
 			} else if m.focusedPane == PaneOutput {
 				// Scroll up in output pane
@@ -864,23 +874,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "g":
 			// Go to top
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				oldSelected := m.selectedTask
 				m.selectedTask = 0
+				if m.selectedTask != oldSelected {
+					m.updateSelectedTaskView()
+				}
 			} else if m.focusedPane == PaneOutput {
 				m.viewport.GotoTop()
 			}
 		case "G":
 			// Go to bottom
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				oldSelected := m.selectedTask
 				m.selectedTask = len(m.tasks) - 1
+				if m.selectedTask != oldSelected {
+					m.updateSelectedTaskView()
+				}
 			} else if m.focusedPane == PaneOutput {
 				m.viewport.GotoBottom()
 			}
 		case "pgup":
 			// Page up
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				oldSelected := m.selectedTask
 				m.selectedTask -= 5
 				if m.selectedTask < 0 {
 					m.selectedTask = 0
+				}
+				if m.selectedTask != oldSelected {
+					m.updateSelectedTaskView()
 				}
 			} else if m.focusedPane == PaneOutput {
 				m.viewport.ViewUp()
@@ -888,9 +910,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "pgdown":
 			// Page down
 			if m.focusedPane == PaneTasks && len(m.tasks) > 0 {
+				oldSelected := m.selectedTask
 				m.selectedTask += 5
 				if m.selectedTask >= len(m.tasks) {
 					m.selectedTask = len(m.tasks) - 1
+				}
+				if m.selectedTask != oldSelected {
+					m.updateSelectedTaskView()
 				}
 			} else if m.focusedPane == PaneOutput {
 				m.viewport.ViewDown()
@@ -980,6 +1006,51 @@ func (m *Model) updateOutputViewport() {
 	content := m.buildOutputContent(m.viewport.Width)
 	m.viewport.SetContent(content)
 	m.viewport.GotoBottom()
+}
+
+// updateSelectedTaskView updates the details pane to show the currently selected task.
+// This is called when navigating the task list with j/k/g/G to provide immediate feedback.
+// For closed tasks with a RunRecord, shows the detailed run summary.
+// For other tasks, shows historical output if available, or returns to live output.
+func (m *Model) updateSelectedTaskView() {
+	if len(m.tasks) == 0 || m.selectedTask < 0 || m.selectedTask >= len(m.tasks) {
+		return
+	}
+
+	task := m.tasks[m.selectedTask]
+
+	// If this is the current (in-progress) task, show live output
+	if task.IsCurrent {
+		m.viewingTask = ""
+		m.viewingRunRecord = false
+		m.updateOutputViewport()
+		return
+	}
+
+	// Prefer RunRecord view for closed tasks
+	if runRecord, ok := m.taskRunRecords[task.ID]; ok && runRecord != nil {
+		m.viewingTask = task.ID
+		m.viewingRunRecord = true
+		content := m.buildRunRecordContent(runRecord, m.viewport.Width)
+		m.viewport.SetContent(content)
+		m.viewport.GotoTop()
+		return
+	}
+
+	// Fallback to legacy output view
+	if output, ok := m.taskOutputs[task.ID]; ok && output != "" {
+		m.viewingTask = task.ID
+		m.viewingRunRecord = false
+		m.viewport.SetContent(output)
+		m.viewport.GotoTop()
+		return
+	}
+
+	// No historical data available - show empty state but still mark as viewing this task
+	m.viewingTask = task.ID
+	m.viewingRunRecord = false
+	m.viewport.SetContent(dimStyle.Render("No output recorded for this task"))
+	m.viewport.GotoTop()
 }
 
 // buildOutputContent creates the combined content for the output viewport.
@@ -1813,7 +1884,10 @@ func (m Model) renderFooter() string {
 		}
 
 		hints = append(hints, keyStyle.Render("j/k")+descStyle.Render(":nav"))
-		hints = append(hints, keyStyle.Render("↵")+descStyle.Render(":view"))
+		// Show esc:live hint when viewing historical task output
+		if m.viewingTask != "" {
+			hints = append(hints, keyStyle.Render("esc")+descStyle.Render(":live"))
+		}
 		hints = append(hints, keyStyle.Render("tab")+descStyle.Render(":pane"))
 		hints = append(hints, keyStyle.Render("^d/u")+descStyle.Render(":scroll"))
 		hints = append(hints, keyStyle.Render("?")+descStyle.Render(":help"))

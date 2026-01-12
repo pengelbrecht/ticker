@@ -1,0 +1,15 @@
+{
+  "id": "90w",
+  "title": "Auto-switch details pane on task selection",
+  "description": "Moving selector up/down (j/k) in the task list should automatically update the details pane to show that task's output/details. Remove the Enter keystroke requirement. This matches how ../ticks works - selection change immediately updates the detail view.",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "e02",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:20:52.513831Z",
+  "updated_at": "2026-01-12T07:23:48.338211Z",
+  "closed_at": "2026-01-12T07:23:48.338211Z",
+  "closed_reason": "Added updateSelectedTaskView() helper method that updates the details pane when selection changes. Modified j/k/g/G/pgup/pgdown handlers to call this method when selectedTask changes. For the current (in-progress) task, shows live output; for closed tasks, shows RunRecord detail view; otherwise shows historical output. Updated footer to show 'esc:live' hint when viewing historical data instead of Enter hint."
+}

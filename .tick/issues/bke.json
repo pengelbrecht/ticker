@@ -1,0 +1,13 @@
+{
+  "id": "bke",
+  "title": "Add markdown rendering for output pane",
+  "description": "Output is in markdown format. Add glamour (github.com/charmbracelet/glamour) for rendering markdown in the output pane. This will handle formatting, code blocks, headers, lists, etc. Use a dark theme matching Catppuccin Mocha palette.",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "e02",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:20:51.132468Z",
+  "updated_at": "2026-01-12T07:20:51.132468Z"
+}

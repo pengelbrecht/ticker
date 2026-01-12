@@ -1,0 +1,32 @@
+{
+  "closed_at": "2026-01-12T06:20:36.818917Z",
+  "closed_reason": "Today's date is 2026-01-12 (January 12, 2026). Retrieved from system environment context.",
+  "created_at": "2026-01-12T06:18:36.840491Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Report today's date.",
+  "id": "ujf",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "yur",
+  "priority": 3,
+  "run": {
+    "session_id": "f7ed8ee4-6a6d-455a-b45e-03cd607c933b",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-12T07:20:30.149484+01:00",
+    "ended_at": "2026-01-12T07:20:41.117092+01:00",
+    "output": "",
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 290,
+      "cache_read_tokens": 39791,
+      "cache_creation_tokens": 2855,
+      "cost_usd": 0.06794725000000001,
+      "duration_ms": 10332
+    },
+    "success": true,
+    "num_turns": 3
+  },
+  "status": "closed",
+  "title": "What day is it?",
+  "type": "task",
+  "updated_at": "2026-01-12T06:20:36.818917Z"
+}

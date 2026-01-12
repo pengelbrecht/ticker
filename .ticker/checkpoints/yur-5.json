@@ -1,0 +1,10 @@
+{
+  "id": "yur-5",
+  "timestamp": "2026-01-12T07:20:41.118239+01:00",
+  "epic_id": "yur",
+  "iteration": 5,
+  "total_tokens": 2162,
+  "total_cost": 0.63854375,
+  "completed_tasks": [],
+  "git_commit": "dad0a89405c4fd939bb4c8add2b46670abbee874"
+}

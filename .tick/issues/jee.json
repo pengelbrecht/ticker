@@ -1,0 +1,13 @@
+{
+  "id": "jee",
+  "title": "Fix missing newlines in streamed output",
+  "description": "Output from Claude sometimes misses newlines. Investigate the stream parser to ensure newlines are preserved correctly when parsing content_block_delta events. Check if the issue is in how text deltas are concatenated.",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "e02",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:20:50.298938Z",
+  "updated_at": "2026-01-12T07:20:50.298938Z"
+}

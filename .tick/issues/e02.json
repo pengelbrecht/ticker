@@ -1,0 +1,12 @@
+{
+  "id": "e02",
+  "title": "TUI Output \u0026 UX Improvements",
+  "description": "Epic for improving the TUI output display and user experience based on testing feedback.",
+  "status": "open",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T07:20:32.137336Z",
+  "updated_at": "2026-01-12T07:20:32.137336Z"
+}
