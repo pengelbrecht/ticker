@@ -212,6 +212,22 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 	if err != nil {
 		return nil, fmt.Errorf("getting epic: %w", err)
 	}
+
+	// Validate that the ID refers to an epic, not a task
+	if epic.Type != "epic" {
+		errMsg := fmt.Sprintf("'%s' is a %s, not an epic", config.EpicID, epic.Type)
+		// Try to get parent epic to suggest it
+		task, taskErr := e.ticks.GetTask(config.EpicID)
+		if taskErr == nil && task.Parent != "" {
+			parentEpic, parentErr := e.ticks.GetEpic(task.Parent)
+			if parentErr == nil {
+				errMsg = fmt.Sprintf("%s\nParent epic: %s (%s)\nRun: ticker run %s",
+					errMsg, task.Parent, parentEpic.Title, task.Parent)
+			}
+		}
+		return nil, errors.New(errMsg)
+	}
+
 	state.epic = epic
 
 	// Main loop
