@@ -13,7 +13,7 @@
   "acceptance_criteria": "1. ParallelRunner can run multiple epics concurrently\n2. MaxParallel limit is respected (semaphore-based)\n3. Each epic runs in its own worktree\n4. Shared budget tracks cost across all epics\n5. EpicStatus accurately reflects each epic's state\n6. Context cancellation stops all running engines\n7. Conflict in one epic doesn't block others\n8. Callbacks fire appropriately for TUI integration\n9. All tests pass",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:02:20.543835Z",
-  "updated_at": "2026-01-12T14:02:46.247925187Z",
-  "closed_at": "2026-01-12T14:02:46.247925187Z",
-  "closed_reason": "Implemented ParallelRunner in internal/parallel/runner.go with: RunnerConfig, EpicStatus, ConflictState, ParallelResult types; Runner with semaphore-based concurrency control; callbacks for TUI integration (OnEpicStart/Complete/Failed/Conflict); worktree creation/cleanup per epic; merge handling with conflict detection; thread-safe status tracking. Tests cover: single/multi epic runs, MaxParallel limit, context cancellation, callbacks, metrics aggregation, worktree lifecycle, shared budget thread-safety, conflict isolation."
+  "updated_at": "2026-01-12T14:03:49.303118515Z",
+  "closed_at": "2026-01-12T14:03:49.303118515Z",
+  "closed_reason": "Implemented ParallelRunner with semaphore-based concurrency, WaitGroup coordination, thread-safe status updates, callbacks for TUI, and comprehensive test suite covering 11 test cases"
 }
