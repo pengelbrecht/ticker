@@ -6,6 +6,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -430,9 +431,11 @@ type Model struct {
 	completeSignal string
 
 	// Components
-	viewport     viewport.Model
-	tasks        []TaskInfo
-	selectedTask int
+	viewport       viewport.Model
+	tasks          []TaskInfo
+	selectedTask   int
+	taskExecOrder  map[string]int // task ID -> execution order (when task started)
+	nextExecOrder  int            // counter for assigning execution order
 	output       string            // legacy output buffer (kept for backward compatibility during transition)
 	thinking     string            // thinking/reasoning content (full history, for RunRecord)
 	lastThought  string            // most recent thinking paragraph (displayed in fixed area)
@@ -857,6 +860,7 @@ func New(cfg Config) Model {
 		// Components
 		viewport:       vp,
 		tasks:          []TaskInfo{},
+		taskExecOrder:  make(map[string]int),
 		taskOutputs:    make(map[string]string),
 		taskRunRecords: make(map[string]*agent.RunRecord),
 
@@ -949,6 +953,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Track execution order when a task starts (only if not already tracked)
+		if msg.TaskID != "" {
+			if _, exists := m.taskExecOrder[msg.TaskID]; !exists {
+				m.taskExecOrder[msg.TaskID] = m.nextExecOrder
+				m.nextExecOrder++
+			}
+		}
+
+		// Re-sort tasks after status change
+		m.sortTasks()
+
 		// Accumulate live token metrics to totals before clearing
 		m.totalInputTokens += m.liveInputTokens
 		m.totalOutputTokens += m.liveOutputTokens
@@ -1030,8 +1045,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case TasksUpdateMsg:
+		// Remember currently selected task ID to restore selection after sorting
+		var selectedTaskID string
+		if m.selectedTask >= 0 && m.selectedTask < len(m.tasks) {
+			selectedTaskID = m.tasks[m.selectedTask].ID
+		}
+
 		// Replace task list with updated tasks
 		m.tasks = msg.Tasks
+
+		// Mark current task based on taskID
+		for i := range m.tasks {
+			if m.tasks[i].ID == m.taskID && m.taskID != "" {
+				m.tasks[i].IsCurrent = true
+			}
+		}
+
+		// Sort tasks by status groups (completed, in-progress, pending)
+		m.sortTasks()
+
+		// Restore selection to the same task ID after sorting
+		m.selectedTask = 0 // default to first
+		if selectedTaskID != "" {
+			for i, t := range m.tasks {
+				if t.ID == selectedTaskID {
+					m.selectedTask = i
+					break
+				}
+			}
+		}
 
 		// Clamp selectedTask if out of bounds
 		if m.selectedTask >= len(m.tasks) {
@@ -1039,13 +1081,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.selectedTask < 0 && len(m.tasks) > 0 {
 			m.selectedTask = 0
-		}
-
-		// Mark current task based on taskID
-		for i := range m.tasks {
-			if m.tasks[i].ID == m.taskID && m.taskID != "" {
-				m.tasks[i].IsCurrent = true
-			}
 		}
 
 		// Update viewport size since task count affects layout
@@ -1295,6 +1330,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// sortTasks sorts tasks by status groups with execution order.
+// Order: Completed tasks (by execution order), In-progress task, Pending tasks (original order)
+// This provides a stable view where completed tasks accumulate at the top in the order they ran.
+func (m *Model) sortTasks() {
+	if len(m.tasks) == 0 {
+		return
+	}
+
+	sort.SliceStable(m.tasks, func(i, j int) bool {
+		ti, tj := m.tasks[i], m.tasks[j]
+
+		// Assign priority to status groups: closed=0, in_progress=1, open=2
+		statusPriority := func(t TaskInfo) int {
+			switch t.Status {
+			case TaskStatusClosed:
+				return 0
+			case TaskStatusInProgress:
+				return 1
+			default: // TaskStatusOpen
+				return 2
+			}
+		}
+
+		pi, pj := statusPriority(ti), statusPriority(tj)
+		if pi != pj {
+			return pi < pj // Lower priority number comes first
+		}
+
+		// Within the same status group:
+		// - Completed tasks: sort by execution order (when they started)
+		// - In-progress: there should only be one, order doesn't matter
+		// - Pending: preserve original order (stable sort handles this)
+		if ti.Status == TaskStatusClosed {
+			// Both are closed, sort by execution order
+			orderI, hasI := m.taskExecOrder[ti.ID]
+			orderJ, hasJ := m.taskExecOrder[tj.ID]
+			if hasI && hasJ {
+				return orderI < orderJ
+			}
+			// If one doesn't have execution order, put it after those that do
+			if hasI {
+				return true
+			}
+			if hasJ {
+				return false
+			}
+		}
+
+		// For pending tasks, preserve original order (stable sort)
+		return false
+	})
 }
 
 // updateViewportSize recalculates and sets the viewport dimensions.

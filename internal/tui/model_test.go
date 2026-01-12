@@ -520,6 +520,122 @@ func TestUpdate_TasksUpdate(t *testing.T) {
 	}
 }
 
+func TestTaskSorting_StatusGroups(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Send tasks in mixed order (open, closed, in_progress, open, closed)
+	// With execution order: task2 started first, then task3
+	tasks := []TaskInfo{
+		{ID: "task1", Title: "Open Task 1", Status: TaskStatusOpen},
+		{ID: "task2", Title: "Closed Task 2", Status: TaskStatusClosed},
+		{ID: "task3", Title: "In Progress Task 3", Status: TaskStatusInProgress},
+		{ID: "task4", Title: "Open Task 4", Status: TaskStatusOpen},
+		{ID: "task5", Title: "Closed Task 5", Status: TaskStatusClosed},
+	}
+
+	// Simulate execution order: task2 ran first (order 0), then task5 (order 1), then task3 started (order 2)
+	m.taskExecOrder = map[string]int{
+		"task2": 0,
+		"task5": 1,
+		"task3": 2,
+	}
+
+	msg := TasksUpdateMsg{Tasks: tasks}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Expected order after sorting:
+	// 1. Closed tasks by execution order: task2 (exec 0), task5 (exec 1)
+	// 2. In-progress: task3
+	// 3. Open tasks in original order: task1, task4
+
+	if len(m.tasks) != 5 {
+		t.Fatalf("expected 5 tasks, got %d", len(m.tasks))
+	}
+
+	expectedOrder := []string{"task2", "task5", "task3", "task1", "task4"}
+	for i, expected := range expectedOrder {
+		if m.tasks[i].ID != expected {
+			t.Errorf("position %d: expected task '%s', got '%s'", i, expected, m.tasks[i].ID)
+		}
+	}
+}
+
+func TestTaskSorting_ExecutionOrderTracking(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.tasks = []TaskInfo{
+		{ID: "task1", Title: "Task 1", Status: TaskStatusOpen},
+		{ID: "task2", Title: "Task 2", Status: TaskStatusOpen},
+		{ID: "task3", Title: "Task 3", Status: TaskStatusOpen},
+	}
+
+	// Simulate IterationStartMsg for task2
+	msg1 := IterationStartMsg{Iteration: 1, TaskID: "task2", TaskTitle: "Task 2"}
+	newModel, _ := m.Update(msg1)
+	m = newModel.(Model)
+
+	// Verify execution order is tracked
+	if order, ok := m.taskExecOrder["task2"]; !ok || order != 0 {
+		t.Errorf("expected task2 to have execution order 0, got %v", m.taskExecOrder["task2"])
+	}
+	if m.nextExecOrder != 1 {
+		t.Errorf("expected nextExecOrder to be 1, got %d", m.nextExecOrder)
+	}
+
+	// Simulate task2 completing and task1 starting
+	m.tasks[1].Status = TaskStatusClosed // task2 closed
+	msg2 := IterationStartMsg{Iteration: 2, TaskID: "task1", TaskTitle: "Task 1"}
+	newModel, _ = m.Update(msg2)
+	m = newModel.(Model)
+
+	// Verify task1 now has execution order 1
+	if order, ok := m.taskExecOrder["task1"]; !ok || order != 1 {
+		t.Errorf("expected task1 to have execution order 1, got %v", m.taskExecOrder["task1"])
+	}
+
+	// Verify task2 still has order 0 (not overwritten)
+	if order := m.taskExecOrder["task2"]; order != 0 {
+		t.Errorf("expected task2 to still have execution order 0, got %d", order)
+	}
+}
+
+func TestTaskSorting_SelectionPreserved(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Initial tasks with selection on task3 (index 2)
+	m.tasks = []TaskInfo{
+		{ID: "task1", Title: "Task 1", Status: TaskStatusOpen},
+		{ID: "task2", Title: "Task 2", Status: TaskStatusOpen},
+		{ID: "task3", Title: "Task 3", Status: TaskStatusOpen},
+	}
+	m.selectedTask = 2 // selecting task3
+
+	// Now send update where task1 is closed - this will reorder tasks
+	// but selection should stay on task3
+	m.taskExecOrder["task1"] = 0
+	updatedTasks := []TaskInfo{
+		{ID: "task1", Title: "Task 1", Status: TaskStatusClosed},
+		{ID: "task2", Title: "Task 2", Status: TaskStatusInProgress},
+		{ID: "task3", Title: "Task 3", Status: TaskStatusOpen},
+	}
+
+	msg := TasksUpdateMsg{Tasks: updatedTasks}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// After sorting: task1 (closed), task2 (in_progress), task3 (open)
+	// task3 should still be selected, now at index 2
+	if m.tasks[m.selectedTask].ID != "task3" {
+		t.Errorf("expected selection to remain on task3, but selected task is '%s'", m.tasks[m.selectedTask].ID)
+	}
+}
+
 func TestUpdate_RunComplete(t *testing.T) {
 	m := New(Config{})
 	m.width = 100
