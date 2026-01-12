@@ -214,3 +214,78 @@ func createTempGitRepo(t *testing.T) string {
 
 	return dir
 }
+
+func TestFilterExcludedPaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty input",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "no excluded paths",
+			input:    " M src/main.go\n?? readme.txt",
+			expected: " M src/main.go\n?? readme.txt",
+		},
+		{
+			name:     "only tick files",
+			input:    " M .tick/issues/abc.json\n?? .ticker/checkpoints/xyz.json",
+			expected: "",
+		},
+		{
+			name:     "mixed paths",
+			input:    " M src/main.go\n M .tick/issues/abc.json\n?? .ticker/checkpoints/xyz.json\n?? readme.txt",
+			expected: " M src/main.go\n?? readme.txt",
+		},
+		{
+			name:     "tick in subdirectory is not excluded",
+			input:    " M src/.tick/foo.txt",
+			expected: " M src/.tick/foo.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := filterExcludedPaths(tt.input)
+			if result != tt.expected {
+				t.Errorf("filterExcludedPaths(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGitVerifier_IgnoresTickerMetadata(t *testing.T) {
+	dir := createTempGitRepo(t)
+	v := NewGitVerifier(dir)
+	if v == nil {
+		t.Fatal("NewGitVerifier returned nil")
+	}
+
+	// Create .tick and .ticker directories with files
+	tickDir := filepath.Join(dir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("failed to create .tick dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tickDir, "abc.json"), []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to create tick file: %v", err)
+	}
+
+	tickerDir := filepath.Join(dir, ".ticker", "checkpoints")
+	if err := os.MkdirAll(tickerDir, 0755); err != nil {
+		t.Fatalf("failed to create .ticker dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tickerDir, "cp.json"), []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to create checkpoint file: %v", err)
+	}
+
+	// Verify should pass because .tick/ and .ticker/ are excluded
+	result := v.Verify(context.Background(), "test-task", "")
+
+	if !result.Passed {
+		t.Errorf("Verify() should pass when only .tick/ and .ticker/ have changes, got output: %s", result.Output)
+	}
+}

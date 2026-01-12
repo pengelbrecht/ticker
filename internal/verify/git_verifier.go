@@ -14,6 +14,13 @@ type GitVerifier struct {
 	dir string
 }
 
+// excludedPaths are paths that GitVerifier ignores.
+// These are ticker's own metadata files that change during execution.
+var excludedPaths = []string{
+	".tick/",
+	".ticker/",
+}
+
 // NewGitVerifier creates a git verifier for the given directory.
 // Returns nil if directory is not a git repository.
 func NewGitVerifier(dir string) *GitVerifier {
@@ -63,8 +70,10 @@ func (v *GitVerifier) Verify(ctx context.Context, taskID string, agentOutput str
 		return result
 	}
 
+	// Filter out excluded paths (ticker metadata)
+	outputStr := filterExcludedPaths(strings.TrimSpace(string(output)))
+
 	// Empty output means clean working tree
-	outputStr := strings.TrimSpace(string(output))
 	if outputStr == "" {
 		result.Passed = true
 		result.Output = "working tree clean"
@@ -75,4 +84,42 @@ func (v *GitVerifier) Verify(ctx context.Context, taskID string, agentOutput str
 	result.Passed = false
 	result.Output = outputStr
 	return result
+}
+
+// filterExcludedPaths removes lines matching excluded paths from git status output.
+// Git status --porcelain format: "XY PATH" where XY is status, PATH is file path.
+func filterExcludedPaths(output string) string {
+	if output == "" {
+		return ""
+	}
+
+	lines := strings.Split(output, "\n")
+	var filtered []string
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		// Git status --porcelain format: first 2 chars are status, then space, then path
+		// e.g., " M .tick/issues/lgt.json" or "?? .ticker/checkpoints/foo.json"
+		path := ""
+		if len(line) > 3 {
+			path = line[3:] // Skip "XY " prefix
+		}
+
+		excluded := false
+		for _, excludedPath := range excludedPaths {
+			if strings.HasPrefix(path, excludedPath) {
+				excluded = true
+				break
+			}
+		}
+
+		if !excluded {
+			filtered = append(filtered, line)
+		}
+	}
+
+	return strings.Join(filtered, "\n")
 }
