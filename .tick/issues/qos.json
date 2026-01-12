@@ -13,7 +13,6 @@
   "acceptance_criteria": "1. EnsureGitignore adds .worktrees/ to .gitignore if not present\n2. EnsureGitignore creates .gitignore if file doesn't exist\n3. EnsureGitignore is idempotent (no duplicates)\n4. EnsureGitignore handles missing trailing newline\n5. Uses git check-ignore to detect existing coverage\n6. Manager.Create() calls EnsureGitignore automatically\n7. All unit tests pass",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:00:40.999382Z",
-  "updated_at": "2026-01-12T12:03:42.78673Z",
-  "closed_at": "2026-01-12T12:03:42.78673Z",
-  "closed_reason": "gitignore.go with EnsureGitignore() and isIgnored() already implemented. Uses git check-ignore with trailing slash for directory detection. Integrated into Manager.Create(). All tests pass."
+  "updated_at": "2026-01-12T12:15:29.654002Z",
+  "closed_at": "2026-01-12T12:15:29.654002Z"
 }
