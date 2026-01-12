@@ -154,6 +154,22 @@ type TaskRunRecordMsg struct {
 }
 
 // -----------------------------------------------------------------------------
+// Verification Messages - Verification status updates
+// -----------------------------------------------------------------------------
+
+// VerifyStartMsg signals that verification has started.
+type VerifyStartMsg struct {
+	TaskID string // The task being verified
+}
+
+// VerifyResultMsg contains verification results.
+type VerifyResultMsg struct {
+	TaskID    string // The task that was verified
+	Passed    bool   // Whether verification passed
+	Summary   string // Human-readable summary of results
+}
+
+// -----------------------------------------------------------------------------
 // Agent Streaming Messages - Rich agent output events
 // These messages map to AgentState changes for real-time TUI updates.
 // -----------------------------------------------------------------------------
@@ -466,6 +482,12 @@ type Model struct {
 	// Live agent status (updated via AgentStatusMsg)
 	liveStatus         agent.RunStatus // current agent status
 	liveActiveToolName string          // name of active tool (when status is tool_use)
+
+	// Verification state (updated via VerifyStartMsg/VerifyResultMsg)
+	verifying      bool   // true while verification is running
+	verifyTaskID   string // task being verified (set during verification)
+	verifyPassed   bool   // last verification result
+	verifySummary  string // human-readable summary of last verification
 
 	// Layout
 	width       int // clamped width for rendering (min: minWidth)
@@ -1158,6 +1180,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.liveActiveToolName = ""
 		}
 
+	case VerifyStartMsg:
+		// Verification has started - update state and show in output
+		m.verifying = true
+		m.verifyTaskID = msg.TaskID
+		// Add verification start message to output
+		verifyLine := "\n[Verification] Running verification checks...\n"
+		m.output += verifyLine
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case VerifyResultMsg:
+		// Verification has completed - update state and show result in output
+		m.verifying = false
+		m.verifyPassed = msg.Passed
+		m.verifySummary = msg.Summary
+		// Add verification result to output
+		var verifyLine string
+		if msg.Passed {
+			verifyLine = "[Verification] ✓ All checks passed\n"
+		} else {
+			verifyLine = "[Verification] ✗ Verification failed:\n"
+			// Include summary details (indent each line)
+			for _, line := range strings.Split(msg.Summary, "\n") {
+				if line != "" {
+					verifyLine += "  " + line + "\n"
+				}
+			}
+			verifyLine += "[Verification] Task reopened - please address the issues above\n"
+		}
+		m.output += verifyLine
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
 	case tea.KeyMsg:
 		// Priority 1: If complete overlay is showing, any key except 'q' dismisses, 'q' quits
 		if m.showComplete {
@@ -1751,6 +1808,7 @@ func (m *Model) renderToolHistoryLine(tool ToolActivityInfo, width int) string {
 
 // renderStatusIndicator returns a styled status indicator for the output pane header.
 // Icons:
+//   - verifying: 🔍 (magnifying glass, blue) - verification in progress
 //   - thinking: 🧠 (brain, dimmed)
 //   - writing: ✏ (pencil, blue)
 //   - tool_use: 🔧 tool_name (wrench + tool name, blue)
@@ -1758,6 +1816,13 @@ func (m *Model) renderToolHistoryLine(tool ToolActivityInfo, width int) string {
 //   - error: ✗ (x, red)
 //   - starting/default: spinner (blue)
 func (m Model) renderStatusIndicator() string {
+	// Verification status takes priority when active
+	if m.verifying {
+		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		spinner := lipgloss.NewStyle().Foreground(colorBlueAlt).Render(spinnerFrames[m.animFrame%len(spinnerFrames)])
+		return spinner + lipgloss.NewStyle().Foreground(colorBlue).Render(" verifying")
+	}
+
 	switch m.liveStatus {
 	case agent.StatusThinking:
 		// Brain icon, dimmed
@@ -2759,6 +2824,17 @@ func (m Model) renderCompleteOverlay() string {
 	// Tasks
 	tasksStr := fmt.Sprintf("%d/%d completed", completedTasks, totalTasks)
 	lines = append(lines, lblStyle.Render("Tasks:")+" "+valStyle.Render(tasksStr))
+
+	// Verification result (if verification ran)
+	if m.verifySummary != "" {
+		var verifyStr string
+		if m.verifyPassed {
+			verifyStr = lipgloss.NewStyle().Foreground(colorGreen).Render("✓ Passed")
+		} else {
+			verifyStr = lipgloss.NewStyle().Foreground(colorRed).Render("✗ Failed")
+		}
+		lines = append(lines, lblStyle.Render("Verification:")+" "+verifyStr)
+	}
 
 	lines = append(lines, "")
 	lines = append(lines, footerStyle.Render("Press q to quit"))

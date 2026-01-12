@@ -388,6 +388,28 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		p.Send(tui.SignalMsg{Signal: sig.String(), Reason: reason})
 	}
 
+	// Verification callbacks for TUI status display
+	eng.OnVerificationStart = func(taskID string) {
+		p.Send(tui.VerifyStartMsg{TaskID: taskID})
+	}
+
+	eng.OnVerificationEnd = func(taskID string, results *verify.Results) {
+		// Build summary from results
+		summary := ""
+		passed := true
+		if results != nil {
+			passed = results.AllPassed
+			summary = results.Summary()
+		}
+		p.Send(tui.VerifyResultMsg{
+			TaskID:  taskID,
+			Passed:  passed,
+			Summary: summary,
+		})
+		// Refresh task list after verification (task may have been reopened)
+		go refreshTasks()
+	}
+
 	// Run engine in background
 	go func() {
 		config := engine.RunConfig{
@@ -479,6 +501,24 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 			fmt.Printf("\nSignal: %s - %s\n", sig, reason)
 		} else {
 			fmt.Printf("\nSignal: %s\n", sig)
+		}
+	}
+
+	// Verification callbacks for headless mode
+	eng.OnVerificationStart = func(taskID string) {
+		fmt.Printf("\n[Verification] Running verification checks for task %s...\n", taskID)
+	}
+
+	eng.OnVerificationEnd = func(taskID string, results *verify.Results) {
+		if results == nil {
+			return
+		}
+		if results.AllPassed {
+			fmt.Println("[Verification] ✓ All checks passed")
+		} else {
+			fmt.Println("[Verification] ✗ Verification failed:")
+			fmt.Println(results.Summary())
+			fmt.Println("[Verification] Task reopened - please address the issues above")
 		}
 	}
 

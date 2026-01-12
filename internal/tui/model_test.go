@@ -3143,3 +3143,140 @@ func TestWindowResize_RefreshesViewportContent(t *testing.T) {
 		t.Error("viewport content should not become empty on resize")
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Verification message tests
+// -----------------------------------------------------------------------------
+
+func TestUpdate_VerifyStartMsg(t *testing.T) {
+	m := New(Config{})
+
+	// Initially not verifying
+	if m.verifying {
+		t.Error("expected verifying to be false initially")
+	}
+
+	// Send VerifyStartMsg
+	newM, _ := m.Update(VerifyStartMsg{TaskID: "task-123"})
+	m = newM.(Model)
+
+	// Verify state was updated
+	if !m.verifying {
+		t.Error("expected verifying to be true after VerifyStartMsg")
+	}
+	if m.verifyTaskID != "task-123" {
+		t.Errorf("expected verifyTaskID 'task-123', got '%s'", m.verifyTaskID)
+	}
+	// Check that verification message was added to output
+	if !strings.Contains(m.output, "[Verification]") {
+		t.Error("expected [Verification] prefix in output")
+	}
+	if !strings.Contains(m.output, "Running verification checks") {
+		t.Error("expected verification start message in output")
+	}
+}
+
+func TestUpdate_VerifyResultMsg_Passed(t *testing.T) {
+	m := New(Config{})
+
+	// Set verifying state first
+	newM, _ := m.Update(VerifyStartMsg{TaskID: "task-123"})
+	m = newM.(Model)
+
+	// Send VerifyResultMsg with passed=true
+	newM, _ = m.Update(VerifyResultMsg{
+		TaskID:  "task-123",
+		Passed:  true,
+		Summary: "Verification passed (1/1)",
+	})
+	m = newM.(Model)
+
+	// Verify state was updated
+	if m.verifying {
+		t.Error("expected verifying to be false after VerifyResultMsg")
+	}
+	if !m.verifyPassed {
+		t.Error("expected verifyPassed to be true for passed verification")
+	}
+	if m.verifySummary != "Verification passed (1/1)" {
+		t.Errorf("expected verifySummary 'Verification passed (1/1)', got '%s'", m.verifySummary)
+	}
+	// Check that success message was added to output
+	if !strings.Contains(m.output, "✓") {
+		t.Error("expected checkmark in output for passed verification")
+	}
+	if !strings.Contains(m.output, "All checks passed") {
+		t.Error("expected success message in output")
+	}
+}
+
+func TestUpdate_VerifyResultMsg_Failed(t *testing.T) {
+	m := New(Config{})
+
+	// Set verifying state first
+	newM, _ := m.Update(VerifyStartMsg{TaskID: "task-123"})
+	m = newM.(Model)
+
+	// Send VerifyResultMsg with passed=false
+	newM, _ = m.Update(VerifyResultMsg{
+		TaskID:  "task-123",
+		Passed:  false,
+		Summary: "Verification failed (0/1 passed)\n  [FAIL] git (1ms)",
+	})
+	m = newM.(Model)
+
+	// Verify state was updated
+	if m.verifying {
+		t.Error("expected verifying to be false after VerifyResultMsg")
+	}
+	if m.verifyPassed {
+		t.Error("expected verifyPassed to be false for failed verification")
+	}
+	// Check that failure message was added to output
+	if !strings.Contains(m.output, "✗") {
+		t.Error("expected X mark in output for failed verification")
+	}
+	if !strings.Contains(m.output, "Verification failed") {
+		t.Error("expected failure message in output")
+	}
+	if !strings.Contains(m.output, "Task reopened") {
+		t.Error("expected task reopened message in output")
+	}
+}
+
+func TestRenderStatusIndicator_Verifying(t *testing.T) {
+	m := New(Config{})
+
+	// Set verifying state
+	newM, _ := m.Update(VerifyStartMsg{TaskID: "task-123"})
+	m = newM.(Model)
+
+	// Render status indicator
+	indicator := m.renderStatusIndicator()
+
+	// Should contain "verifying" text
+	plainText := ansi.Strip(indicator)
+	if !strings.Contains(plainText, "verifying") {
+		t.Errorf("expected 'verifying' in status indicator, got '%s'", plainText)
+	}
+}
+
+func TestRenderStatusIndicator_NotVerifying(t *testing.T) {
+	m := New(Config{})
+
+	// Set a different status
+	m.liveStatus = agent.StatusWriting
+
+	// Render status indicator
+	indicator := m.renderStatusIndicator()
+
+	// Should NOT contain "verifying" text when not verifying
+	plainText := ansi.Strip(indicator)
+	if strings.Contains(plainText, "verifying") {
+		t.Errorf("expected no 'verifying' in status indicator when not verifying, got '%s'", plainText)
+	}
+	// Should contain "writing"
+	if !strings.Contains(plainText, "writing") {
+		t.Errorf("expected 'writing' in status indicator, got '%s'", plainText)
+	}
+}
