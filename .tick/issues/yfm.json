@@ -2,12 +2,14 @@
   "id": "yfm",
   "title": "Show rich RunRecord data in details pane",
   "description": "When viewing a completed task, show the full RunRecord data including:\n- Run metrics (duration, turns, tokens, cost, model)\n- Tool history with icons (✓/✗) and timing\n- Thinking content (collapsed/truncated)\n- Full output\n\nThe buildRunRecordContent() function exists but may need enhancement. Ensure it's being called when selecting closed tasks. Wire up TaskRunRecordMsg from engine to TUI.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "e02",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T07:20:54.728175Z",
-  "updated_at": "2026-01-12T07:20:54.728175Z"
+  "updated_at": "2026-01-12T08:01:43.985846Z",
+  "closed_at": "2026-01-12T08:01:43.985846Z",
+  "closed_reason": "Added GetRunRecord() method to ticks.Client to read RunRecord from tick JSON files. Updated refreshTasks() in main.go to fetch RunRecords for closed tasks and send TaskRunRecordMsg to TUI. The buildRunRecordContent() function was already comprehensive - the issue was that TaskRunRecordMsg was never being sent. Now when tasks are refreshed, closed tasks with run data will display the rich RunRecord view (metrics, tools, thinking, output)."
 }

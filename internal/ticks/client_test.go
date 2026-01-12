@@ -156,3 +156,154 @@ func TestSetRunRecordNilRecord(t *testing.T) {
 		t.Errorf("SetRunRecord with nil record should return nil, got %v", err)
 	}
 }
+
+func TestGetRunRecord(t *testing.T) {
+	// Create a temp directory structure for .tick/issues
+	tempDir := t.TempDir()
+	tickDir := filepath.Join(tempDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating temp dirs: %v", err)
+	}
+
+	// Change to temp directory
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+	defer os.Chdir(origDir)
+
+	// Create a task file with a run record
+	startTime := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	endTime := time.Date(2025, 1, 1, 10, 5, 0, 0, time.UTC)
+
+	taskData := map[string]interface{}{
+		"id":     "test456",
+		"title":  "Test Task with Run",
+		"status": "closed",
+		"run": map[string]interface{}{
+			"session_id": "session-xyz",
+			"model":      "claude-3-5-sonnet",
+			"started_at": startTime.Format(time.RFC3339),
+			"ended_at":   endTime.Format(time.RFC3339),
+			"output":     "Test output",
+			"tools": []map[string]interface{}{
+				{"name": "Read", "duration_ms": 100},
+			},
+			"metrics": map[string]interface{}{
+				"input_tokens":  2000,
+				"output_tokens": 1000,
+				"cost_usd":      0.10,
+			},
+			"success":   true,
+			"num_turns": 5,
+		},
+	}
+
+	data, err := json.MarshalIndent(taskData, "", "  ")
+	if err != nil {
+		t.Fatalf("marshaling task data: %v", err)
+	}
+
+	taskFile := filepath.Join(tickDir, "test456.json")
+	if err := os.WriteFile(taskFile, data, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	// Test GetRunRecord
+	client := NewClient()
+	record, err := client.GetRunRecord("test456")
+	if err != nil {
+		t.Fatalf("GetRunRecord failed: %v", err)
+	}
+
+	if record == nil {
+		t.Fatal("expected non-nil record")
+	}
+	if record.SessionID != "session-xyz" {
+		t.Errorf("expected session_id 'session-xyz', got %q", record.SessionID)
+	}
+	if record.Model != "claude-3-5-sonnet" {
+		t.Errorf("expected model 'claude-3-5-sonnet', got %q", record.Model)
+	}
+	if record.Output != "Test output" {
+		t.Errorf("expected output 'Test output', got %q", record.Output)
+	}
+	if !record.Success {
+		t.Error("expected success to be true")
+	}
+	if record.NumTurns != 5 {
+		t.Errorf("expected num_turns 5, got %d", record.NumTurns)
+	}
+	if len(record.Tools) != 1 || record.Tools[0].Name != "Read" {
+		t.Errorf("expected one tool 'Read', got %+v", record.Tools)
+	}
+}
+
+func TestGetRunRecordNoRecord(t *testing.T) {
+	// Create a temp directory structure for .tick/issues
+	tempDir := t.TempDir()
+	tickDir := filepath.Join(tempDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating temp dirs: %v", err)
+	}
+
+	// Change to temp directory
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+	defer os.Chdir(origDir)
+
+	// Create a task file WITHOUT a run record
+	taskData := map[string]interface{}{
+		"id":     "test789",
+		"title":  "Task Without Run",
+		"status": "open",
+	}
+
+	data, err := json.MarshalIndent(taskData, "", "  ")
+	if err != nil {
+		t.Fatalf("marshaling task data: %v", err)
+	}
+
+	taskFile := filepath.Join(tickDir, "test789.json")
+	if err := os.WriteFile(taskFile, data, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	// Test GetRunRecord - should return nil, nil
+	client := NewClient()
+	record, err := client.GetRunRecord("test789")
+	if err != nil {
+		t.Fatalf("GetRunRecord failed: %v", err)
+	}
+	if record != nil {
+		t.Errorf("expected nil record for task without run, got %+v", record)
+	}
+}
+
+func TestGetRunRecordNonexistent(t *testing.T) {
+	// Create a temp directory structure for .tick/issues
+	tempDir := t.TempDir()
+	tickDir := filepath.Join(tempDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating temp dirs: %v", err)
+	}
+
+	// Change to temp directory
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+	defer os.Chdir(origDir)
+
+	// Test GetRunRecord for non-existent task - should return nil, nil
+	client := NewClient()
+	record, err := client.GetRunRecord("nonexistent")
+	if err != nil {
+		t.Fatalf("GetRunRecord for nonexistent task should not error, got: %v", err)
+	}
+	if record != nil {
+		t.Errorf("expected nil record for nonexistent task, got %+v", record)
+	}
+}

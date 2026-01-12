@@ -251,6 +251,15 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 			}
 		}
 		p.Send(tui.TasksUpdateMsg{Tasks: taskInfos})
+
+		// Fetch and send RunRecords for closed tasks
+		for _, t := range tasks {
+			if t.Status == "closed" {
+				if record, err := ticksClient.GetRunRecord(t.ID); err == nil && record != nil {
+					p.Send(tui.TaskRunRecordMsg{TaskID: t.ID, RunRecord: record})
+				}
+			}
+		}
 	}
 
 	// Initial task list load

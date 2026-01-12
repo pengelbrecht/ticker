@@ -263,6 +263,37 @@ func (c *Client) SetRunRecord(taskID string, record *agent.RunRecord) error {
 	return nil
 }
 
+// GetRunRecord retrieves the RunRecord for a task by reading the tick file directly.
+// Returns nil if no RunRecord exists.
+func (c *Client) GetRunRecord(taskID string) (*agent.RunRecord, error) {
+	// Find the .tick/issues directory relative to current working directory
+	tickDir, err := findTickDir()
+	if err != nil {
+		return nil, fmt.Errorf("finding .tick directory: %w", err)
+	}
+
+	filePath := filepath.Join(tickDir, "issues", taskID+".json")
+
+	// Read the existing file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // Task doesn't exist, no record
+		}
+		return nil, fmt.Errorf("reading tick file %s: %w", taskID, err)
+	}
+
+	// Parse into a struct that includes the run field
+	var tickData struct {
+		Run *agent.RunRecord `json:"run,omitempty"`
+	}
+	if err := json.Unmarshal(data, &tickData); err != nil {
+		return nil, fmt.Errorf("parsing tick file %s: %w", taskID, err)
+	}
+
+	return tickData.Run, nil
+}
+
 // findTickDir locates the .tick directory by walking up from cwd.
 func findTickDir() (string, error) {
 	dir, err := os.Getwd()
