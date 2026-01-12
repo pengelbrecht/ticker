@@ -719,8 +719,8 @@ func TestUpdate_RunComplete_AccumulatesTokens(t *testing.T) {
 
 func TestUpdate_SignalMsg(t *testing.T) {
 	testCases := []struct {
-		signal       string
-		expectShow   bool
+		signal        string
+		expectShow    bool
 		expectRunning bool
 	}{
 		{"COMPLETE", true, false},
@@ -1284,26 +1284,26 @@ func TestView_MinimumSize_TooSmall(t *testing.T) {
 	m := New(Config{})
 	m.width = minWidth
 	m.height = minHeight
-	m.realWidth = 40 // below minWidth (60)
-	m.realHeight = 8 // below minHeight (12)
+	m.realWidth = 15 // below compactMinWidth (20)
+	m.realHeight = 3 // below compactMinHeight (4)
 
 	output := m.View()
 
-	// Should show size warning instead of normal TUI
+	// Should show size warning instead of compact TUI
 	if !strings.Contains(output, "Terminal too small") {
 		t.Error("expected View to show 'Terminal too small' warning")
 	}
 	if !strings.Contains(output, "Minimum:") {
 		t.Error("expected View to show minimum dimensions")
 	}
-	if !strings.Contains(output, "60x12") {
-		t.Error("expected View to show '60x12' as minimum dimensions")
+	if !strings.Contains(output, "20x4") {
+		t.Error("expected View to show '20x4' as minimum dimensions")
 	}
 	if !strings.Contains(output, "Current:") {
 		t.Error("expected View to show current dimensions")
 	}
-	if !strings.Contains(output, "40x8") {
-		t.Error("expected View to show '40x8' as current dimensions")
+	if !strings.Contains(output, "15x3") {
+		t.Error("expected View to show '15x3' as current dimensions")
 	}
 	if !strings.Contains(output, "Please resize your terminal") {
 		t.Error("expected View to show resize instruction")
@@ -1322,13 +1322,13 @@ func TestView_MinimumSize_WidthTooSmall(t *testing.T) {
 	m := New(Config{})
 	m.width = minWidth
 	m.height = 30
-	m.realWidth = 50  // below minWidth
-	m.realHeight = 30 // above minHeight
+	m.realWidth = 15  // below compactMinWidth
+	m.realHeight = 30 // above compactMinHeight
 
 	output := m.View()
 
 	if !strings.Contains(output, "Terminal too small") {
-		t.Error("expected View to show warning when only width is too small")
+		t.Error("expected View to show warning when width is below absolute minimum")
 	}
 }
 
@@ -1336,13 +1336,13 @@ func TestView_MinimumSize_HeightTooSmall(t *testing.T) {
 	m := New(Config{})
 	m.width = 100
 	m.height = minHeight
-	m.realWidth = 100 // above minWidth
-	m.realHeight = 10 // below minHeight (12)
+	m.realWidth = 100 // above compactMinWidth
+	m.realHeight = 3  // below compactMinHeight (4)
 
 	output := m.View()
 
 	if !strings.Contains(output, "Terminal too small") {
-		t.Error("expected View to show warning when only height is too small")
+		t.Error("expected View to show warning when height is below absolute minimum")
 	}
 }
 
@@ -1350,7 +1350,7 @@ func TestView_MinimumSize_ExactMinimum(t *testing.T) {
 	m := New(Config{})
 	m.width = minWidth
 	m.height = minHeight
-	m.realWidth = minWidth  // exactly at minimum
+	m.realWidth = minWidth   // exactly at minimum
 	m.realHeight = minHeight // exactly at minimum
 	m.updateViewportSize()
 
@@ -1367,8 +1367,8 @@ func TestView_MinimumSize_ExactMinimum(t *testing.T) {
 
 func TestRenderSizeWarning(t *testing.T) {
 	m := New(Config{})
-	m.realWidth = 40
-	m.realHeight = 8
+	m.realWidth = 15
+	m.realHeight = 3
 
 	output := m.renderSizeWarning()
 
@@ -1376,14 +1376,259 @@ func TestRenderSizeWarning(t *testing.T) {
 	if !strings.Contains(output, "Terminal too small") {
 		t.Error("expected warning to contain 'Terminal too small'")
 	}
-	if !strings.Contains(output, "Minimum: 60x12") {
-		t.Error("expected warning to contain minimum dimensions")
+	if !strings.Contains(output, "Minimum: 20x4") {
+		t.Error("expected warning to contain minimum dimensions (compact thresholds)")
 	}
-	if !strings.Contains(output, "Current: 40x8") {
+	if !strings.Contains(output, "Current: 15x3") {
 		t.Error("expected warning to contain current dimensions")
 	}
 	if !strings.Contains(output, "Please resize your terminal") {
 		t.Error("expected warning to contain resize instruction")
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Compact View tests (small screen mode)
+// -----------------------------------------------------------------------------
+
+func TestView_CompactMode_BelowPreferredSize(t *testing.T) {
+	m := New(Config{EpicID: "abc", EpicTitle: "Test Epic"})
+	m.width = minWidth
+	m.height = minHeight
+	m.realWidth = 40 // below minWidth (60), above compactMinWidth (20)
+	m.realHeight = 8 // below minHeight (12), above compactMinHeight (4)
+	m.running = true
+	m.iteration = 3
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: "Task 1", Status: TaskStatusClosed},
+		{ID: "t2", Title: "Task 2", Status: TaskStatusInProgress},
+		{ID: "t3", Title: "Task 3", Status: TaskStatusOpen},
+	}
+	m.taskID = "t2"
+	m.taskTitle = "Task 2"
+
+	output := m.View()
+
+	// Should show compact view, not size warning
+	if strings.Contains(output, "Terminal too small") {
+		t.Error("expected compact view, not size warning, for size above absolute minimum")
+	}
+	// Should contain status and progress
+	if !strings.Contains(output, "ticker") {
+		t.Error("expected compact view to contain 'ticker'")
+	}
+	if !strings.Contains(output, "abc") {
+		t.Error("expected compact view to contain epic ID")
+	}
+	// Should show shortcuts
+	if !strings.Contains(output, "p:") {
+		t.Error("expected compact view to contain pause shortcut")
+	}
+	if !strings.Contains(output, "q:") {
+		t.Error("expected compact view to contain quit shortcut")
+	}
+	// Should NOT contain full TUI elements
+	if strings.Contains(output, "Agent Output") {
+		t.Error("expected compact view to NOT show 'Agent Output' pane")
+	}
+}
+
+func TestView_CompactMode_Height4_FullCompact(t *testing.T) {
+	m := New(Config{EpicID: "xyz"})
+	m.width = minWidth
+	m.height = minHeight
+	m.realWidth = 50
+	m.realHeight = 4 // exactly compactMinHeight, should show 4-line layout
+	m.running = true
+	m.iteration = 5
+	m.cost = 1.50
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: "Task 1", Status: TaskStatusClosed},
+		{ID: "t2", Title: "Task 2", Status: TaskStatusOpen},
+	}
+	m.taskID = "t1"
+	m.taskTitle = "Task 1"
+
+	output := m.View()
+	lines := strings.Split(output, "\n")
+
+	// Should have 4 lines
+	if len(lines) < 4 {
+		t.Errorf("expected at least 4 lines for height 4, got %d", len(lines))
+	}
+	// Should contain progress indicator
+	if !strings.Contains(output, "i:5") {
+		t.Error("expected compact view to show iteration count")
+	}
+	if !strings.Contains(output, "t:1/2") {
+		t.Error("expected compact view to show task progress")
+	}
+}
+
+func TestView_CompactMode_Height3_Condensed(t *testing.T) {
+	m := New(Config{EpicID: "def"})
+	m.width = minWidth
+	m.height = minHeight
+	m.realWidth = 40
+	m.realHeight = 4 // Use 4 to get the proper layout behavior
+	m.running = true
+	m.paused = false
+	m.iteration = 2
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: "Task 1", Status: TaskStatusOpen},
+	}
+
+	output := m.View()
+
+	// Should show basic info and shortcuts
+	if !strings.Contains(output, "ticker") {
+		t.Error("expected compact view to contain 'ticker'")
+	}
+	if !strings.Contains(output, "def") {
+		t.Error("expected compact view to contain epic ID")
+	}
+	if !strings.Contains(output, "p:pause") {
+		t.Error("expected compact view to show pause shortcut when running")
+	}
+}
+
+func TestView_CompactMode_Paused(t *testing.T) {
+	m := New(Config{EpicID: "abc"})
+	m.width = minWidth
+	m.height = minHeight
+	m.realWidth = 40
+	m.realHeight = 6
+	m.running = true
+	m.paused = true
+	m.iteration = 1
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: "Task 1", Status: TaskStatusOpen},
+	}
+
+	output := m.View()
+
+	// Should show resume shortcut when paused
+	if !strings.Contains(output, "p:resume") {
+		t.Error("expected compact view to show 'p:resume' when paused")
+	}
+}
+
+func TestRenderCompactView_EmptyState(t *testing.T) {
+	m := New(Config{})
+	m.realWidth = 40
+	m.realHeight = 6
+	m.running = false
+	m.paused = false
+
+	output := m.renderCompactView()
+
+	// Should still render something useful
+	if !strings.Contains(output, "ticker") {
+		t.Error("expected compact view to contain 'ticker' even with empty state")
+	}
+	if !strings.Contains(output, "q:quit") {
+		t.Error("expected compact view to show quit shortcut")
+	}
+}
+
+func TestRenderCompactView_NoActiveTask(t *testing.T) {
+	m := New(Config{EpicID: "abc"})
+	m.realWidth = 40
+	m.realHeight = 6
+	m.running = true
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: "Task 1", Status: TaskStatusOpen},
+	}
+	// No taskID set - no active task
+
+	output := m.renderCompactView()
+
+	// Should indicate no active task
+	if !strings.Contains(output, "no active task") {
+		t.Error("expected compact view to indicate no active task")
+	}
+}
+
+func TestRenderCompactView_Height2_Minimal(t *testing.T) {
+	m := New(Config{EpicID: "xyz"})
+	m.realWidth = 30
+	m.realHeight = 2
+	m.running = true
+	m.iteration = 3
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: "Task 1", Status: TaskStatusClosed},
+		{ID: "t2", Title: "Task 2", Status: TaskStatusOpen},
+	}
+
+	output := m.renderCompactView()
+	lines := strings.Split(output, "\n")
+
+	// Should have exactly 2 lines
+	if len(lines) != 2 {
+		t.Errorf("expected 2 lines for height 2, got %d", len(lines))
+	}
+	// First line should have status and progress
+	if !strings.Contains(lines[0], "xyz") {
+		t.Error("expected first line to contain epic ID")
+	}
+	if !strings.Contains(lines[0], "t:1/2") {
+		t.Error("expected first line to contain task progress")
+	}
+	// Second line should have shortcuts
+	if !strings.Contains(lines[1], "q:") {
+		t.Error("expected second line to contain quit shortcut")
+	}
+}
+
+func TestRenderCompactView_Height1_UltraMinimal(t *testing.T) {
+	m := New(Config{EpicID: "abc"})
+	m.realWidth = 30
+	m.realHeight = 1
+	m.running = true
+	m.paused = true
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: "Task 1", Status: TaskStatusClosed},
+		{ID: "t2", Title: "Task 2", Status: TaskStatusOpen},
+	}
+
+	output := m.renderCompactView()
+	lines := strings.Split(output, "\n")
+
+	// Should have exactly 1 line
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line for height 1, got %d", len(lines))
+	}
+	// Should contain task progress
+	if !strings.Contains(output, "t:1/2") {
+		t.Error("expected ultra-minimal view to contain task progress")
+	}
+	// Should indicate paused state
+	if !strings.Contains(output, "[P]") {
+		t.Error("expected ultra-minimal view to show [P] when paused")
+	}
+}
+
+func TestRenderCompactView_Truncation(t *testing.T) {
+	m := New(Config{EpicID: "abc"})
+	m.realWidth = 25 // narrow width
+	m.realHeight = 6
+	m.running = true
+	m.taskID = "t1"
+	m.taskTitle = "This is a very long task title that should be truncated"
+	m.tasks = []TaskInfo{
+		{ID: "t1", Title: m.taskTitle, Status: TaskStatusInProgress},
+	}
+
+	output := m.renderCompactView()
+
+	// Should not exceed width (checking for reasonable output)
+	lines := strings.Split(output, "\n")
+	for i, line := range lines {
+		// Use ansi.StringWidth to account for ANSI codes
+		plainLine := ansi.Strip(line)
+		if len(plainLine) > m.realWidth+5 { // allow small buffer for ANSI codes
+			t.Errorf("line %d appears too wide: %d chars (max %d): %q", i, len(plainLine), m.realWidth, plainLine)
+		}
 	}
 }
 

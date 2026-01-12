@@ -149,8 +149,8 @@ type TasksUpdateMsg struct {
 // TaskRunRecordMsg contains a RunRecord for a completed task.
 // Sent when a task is completed and its run data should be stored.
 type TaskRunRecordMsg struct {
-	TaskID    string            // The task ID this record belongs to
-	RunRecord *agent.RunRecord  // The completed run record (nil to clear)
+	TaskID    string           // The task ID this record belongs to
+	RunRecord *agent.RunRecord // The completed run record (nil to clear)
 }
 
 // -----------------------------------------------------------------------------
@@ -164,9 +164,9 @@ type VerifyStartMsg struct {
 
 // VerifyResultMsg contains verification results.
 type VerifyResultMsg struct {
-	TaskID    string // The task that was verified
-	Passed    bool   // Whether verification passed
-	Summary   string // Human-readable summary of results
+	TaskID  string // The task that was verified
+	Passed  bool   // Whether verification passed
+	Summary string // Human-readable summary of results
 }
 
 // -----------------------------------------------------------------------------
@@ -447,24 +447,24 @@ type Model struct {
 	completeSignal string
 
 	// Components
-	viewport       viewport.Model
-	tasks          []TaskInfo
-	selectedTask   int
-	taskExecOrder  map[string]int // task ID -> execution order (when task started)
-	nextExecOrder  int            // counter for assigning execution order
-	output       string            // legacy output buffer (kept for backward compatibility during transition)
-	thinking     string            // thinking/reasoning content (full history, for RunRecord)
-	lastThought  string            // most recent thinking paragraph (displayed in fixed area)
-	agentState   *agent.AgentState // live streaming state for rich agent output display
-	taskOutputs  map[string]string // per-task output history
-	taskRunRecords map[string]*agent.RunRecord // per-task RunRecord for completed tasks
-	viewingTask  string            // task ID being viewed (empty = live output)
-	viewingRunRecord bool          // true when viewing a RunRecord detail view
+	viewport         viewport.Model
+	tasks            []TaskInfo
+	selectedTask     int
+	taskExecOrder    map[string]int              // task ID -> execution order (when task started)
+	nextExecOrder    int                         // counter for assigning execution order
+	output           string                      // legacy output buffer (kept for backward compatibility during transition)
+	thinking         string                      // thinking/reasoning content (full history, for RunRecord)
+	lastThought      string                      // most recent thinking paragraph (displayed in fixed area)
+	agentState       *agent.AgentState           // live streaming state for rich agent output display
+	taskOutputs      map[string]string           // per-task output history
+	taskRunRecords   map[string]*agent.RunRecord // per-task RunRecord for completed tasks
+	viewingTask      string                      // task ID being viewed (empty = live output)
+	viewingRunRecord bool                        // true when viewing a RunRecord detail view
 
 	// Tool activity tracking
-	activeTool    *ToolActivityInfo   // currently active tool (nil if none)
-	toolHistory   []ToolActivityInfo  // completed tools (most recent first)
-	showToolHist  bool                // whether to show expanded tool history
+	activeTool   *ToolActivityInfo  // currently active tool (nil if none)
+	toolHistory  []ToolActivityInfo // completed tools (most recent first)
+	showToolHist bool               // whether to show expanded tool history
 
 	// Live streaming metrics (updated via AgentMetricsMsg)
 	liveInputTokens         int
@@ -484,18 +484,18 @@ type Model struct {
 	liveActiveToolName string          // name of active tool (when status is tool_use)
 
 	// Verification state (updated via VerifyStartMsg/VerifyResultMsg)
-	verifying      bool   // true while verification is running
-	verifyTaskID   string // task being verified (set during verification)
-	verifyPassed   bool   // last verification result
-	verifySummary  string // human-readable summary of last verification
+	verifying     bool   // true while verification is running
+	verifyTaskID  string // task being verified (set during verification)
+	verifyPassed  bool   // last verification result
+	verifySummary string // human-readable summary of last verification
 
 	// Layout
-	width       int // clamped width for rendering (min: minWidth)
-	height      int // clamped height for rendering (min: minHeight)
-	realWidth   int // actual terminal width (may be below minimum)
-	realHeight  int // actual terminal height (may be below minimum)
-	ready       bool
-	animFrame   int
+	width      int // clamped width for rendering (min: minWidth)
+	height     int // clamped height for rendering (min: minHeight)
+	realWidth  int // actual terminal width (may be below minimum)
+	realHeight int // actual terminal height (may be below minimum)
+	ready      bool
+	animFrame  int
 
 	// Communication
 	pauseChan chan<- bool
@@ -1900,6 +1900,12 @@ const (
 	footerRows       = 1  // Help hints
 	minWidth         = 60 // Minimum terminal width for usable display
 	minHeight        = 12 // Minimum terminal height for usable display
+
+	// Compact mode thresholds - for small screens (e.g., iPhone terminals)
+	// Below minWidth/minHeight but above these values: show compact view
+	// Below these values: show size warning
+	compactMinWidth  = 20 // Absolute minimum width for any display
+	compactMinHeight = 4  // Absolute minimum height for any display
 )
 
 // -----------------------------------------------------------------------------
@@ -1937,14 +1943,22 @@ func (m Model) focusHeaderStyle(pane FocusedPane) lipgloss.Style {
 
 // View renders the current model state.
 // Composes status bar, task pane, output pane, and footer into final layout.
+// For small screens (below minWidth/minHeight), renders a compact view with
+// essential status and shortcuts. For very small screens (below compactMinWidth/
+// compactMinHeight), shows a size warning.
 func (m Model) View() string {
 	if m.realWidth == 0 || m.realHeight == 0 {
 		return "Loading...\n"
 	}
 
-	// Check if terminal is below minimum size
-	if m.realWidth < minWidth || m.realHeight < minHeight {
+	// Check if terminal is below absolute minimum size
+	if m.realWidth < compactMinWidth || m.realHeight < compactMinHeight {
 		return m.renderSizeWarning()
+	}
+
+	// Check if terminal is below preferred size - use compact view
+	if m.realWidth < minWidth || m.realHeight < minHeight {
+		return m.renderCompactView()
 	}
 
 	// If showing help overlay, render it on top
@@ -2216,7 +2230,7 @@ func (m Model) renderTaskLine(task TaskInfo, selected bool, maxWidth int) string
 
 	// Calculate space used by prefix: cursor(1) + space(1) + icon(1) + space(1) + [id] + space(1)
 	// Note: icon may be multi-byte but displays as 1 char width
-	idLen := len(task.ID) + 2 // [id]
+	idLen := len(task.ID) + 2                // [id]
 	prefixWidth := 1 + 1 + 1 + 1 + idLen + 1 // cursor + sp + icon + sp + [id] + sp
 
 	// Calculate max title width
@@ -2469,14 +2483,14 @@ func (m Model) renderFooter() string {
 	return strings.Repeat(" ", padding) + helpLine
 }
 
-// renderSizeWarning renders a centered warning when terminal is below minimum size.
+// renderSizeWarning renders a centered warning when terminal is below absolute minimum size.
 // Uses orange (peach) color for visibility.
 func (m Model) renderSizeWarning() string {
 	warningStyle := lipgloss.NewStyle().Foreground(colorPeach).Bold(true)
 	dimTextStyle := dimStyle
 
 	line1 := warningStyle.Render(fmt.Sprintf("Terminal too small. Minimum: %dx%d, Current: %dx%d",
-		minWidth, minHeight, m.realWidth, m.realHeight))
+		compactMinWidth, compactMinHeight, m.realWidth, m.realHeight))
 	line2 := dimTextStyle.Render("Please resize your terminal.")
 
 	// Center content in available space
@@ -2503,6 +2517,158 @@ func (m Model) renderSizeWarning() string {
 	paddedLine1 := strings.Repeat(" ", leftPad) + line1
 	paddedLine2 := strings.Repeat(" ", leftPad) + line2
 	lines = append(lines, paddedLine1, paddedLine2)
+
+	return strings.Join(lines, "\n")
+}
+
+// renderCompactView renders a minimal view for small screens (e.g., iPhone terminals).
+// Shows only essential status and shortcuts, gracefully degrading based on available space.
+// Layout adapts to available height:
+//
+//	Height 4+: Status, task, progress, shortcuts
+//	Height 3:  Status, task/progress combined, shortcuts
+//	Height 2:  Status + progress, shortcuts
+//	Height 1:  Status only
+func (m Model) renderCompactView() string {
+	w := m.realWidth
+	h := m.realHeight
+
+	// Helper to truncate with ellipsis
+	truncate := func(s string, maxLen int) string {
+		if maxLen <= 0 {
+			return ""
+		}
+		if lipgloss.Width(s) <= maxLen {
+			return s
+		}
+		if maxLen <= 1 {
+			return "…"
+		}
+		// Account for ANSI sequences - use ansi.Truncate for styled strings
+		return ansi.Truncate(s, maxLen-1, "…")
+	}
+
+	// Status indicator
+	var statusIcon string
+	if m.running && !m.paused {
+		statusIcon = lipgloss.NewStyle().Foreground(colorGreen).Render("●")
+	} else if m.paused {
+		statusIcon = lipgloss.NewStyle().Foreground(colorPeach).Render("⏸")
+	} else {
+		statusIcon = lipgloss.NewStyle().Foreground(colorGray).Render("■")
+	}
+
+	// Epic info
+	epicInfo := ""
+	if m.epicID != "" {
+		epicInfo = "[" + m.epicID + "]"
+	}
+
+	// Current task
+	taskInfo := ""
+	if m.taskID != "" {
+		taskInfo = m.taskID
+		if m.taskTitle != "" {
+			taskInfo += " " + m.taskTitle
+		}
+	}
+
+	// Progress stats
+	completedTasks := 0
+	totalTasks := len(m.tasks)
+	for _, t := range m.tasks {
+		if t.Status == TaskStatusClosed {
+			completedTasks++
+		}
+	}
+
+	// Shortcuts (minimal set)
+	keyStyle := footerStyle.Bold(true)
+	descStyle := footerStyle
+	var shortcuts string
+	if m.paused {
+		shortcuts = keyStyle.Render("p") + descStyle.Render(":resume") + " " + keyStyle.Render("q") + descStyle.Render(":quit")
+	} else {
+		shortcuts = keyStyle.Render("p") + descStyle.Render(":pause") + " " + keyStyle.Render("q") + descStyle.Render(":quit")
+	}
+
+	var lines []string
+
+	switch {
+	case h >= 4:
+		// Full compact view: status, task, progress, shortcuts
+		// Line 1: Status + epic
+		line1 := statusIcon + " " + headerStyle.Render("ticker")
+		if epicInfo != "" {
+			line1 += " " + dimStyle.Render(epicInfo)
+		}
+		lines = append(lines, truncate(line1, w))
+
+		// Line 2: Current task (if any)
+		if taskInfo != "" {
+			line2 := dimStyle.Render("→ ") + taskInfo
+			lines = append(lines, truncate(line2, w))
+		} else {
+			lines = append(lines, dimStyle.Render("(no active task)"))
+		}
+
+		// Line 3: Progress
+		elapsed := time.Since(m.startTime)
+		if m.startTime.IsZero() {
+			elapsed = 0
+		}
+		line3 := fmt.Sprintf("i:%d t:%d/%d %s $%.2f", m.iteration, completedTasks, totalTasks, formatDuration(elapsed), m.cost)
+		lines = append(lines, truncate(dimStyle.Render(line3), w))
+
+		// Line 4: Shortcuts
+		lines = append(lines, truncate(shortcuts, w))
+
+		// Fill remaining lines if we have extra height
+		for len(lines) < h {
+			lines = append(lines, "")
+		}
+
+	case h == 3:
+		// Condensed: status, task+progress, shortcuts
+		line1 := statusIcon + " " + headerStyle.Render("ticker")
+		if epicInfo != "" {
+			line1 += " " + dimStyle.Render(epicInfo)
+		}
+		lines = append(lines, truncate(line1, w))
+
+		// Combined task/progress line
+		var line2 string
+		if taskInfo != "" {
+			line2 = fmt.Sprintf("%s i:%d t:%d/%d", taskInfo, m.iteration, completedTasks, totalTasks)
+		} else {
+			line2 = fmt.Sprintf("i:%d t:%d/%d $%.2f", m.iteration, completedTasks, totalTasks, m.cost)
+		}
+		lines = append(lines, truncate(dimStyle.Render(line2), w))
+
+		lines = append(lines, truncate(shortcuts, w))
+
+	case h == 2:
+		// Minimal: status+progress, shortcuts
+		line1 := statusIcon + " "
+		if epicInfo != "" {
+			line1 += epicInfo + " "
+		}
+		line1 += fmt.Sprintf("i:%d t:%d/%d", m.iteration, completedTasks, totalTasks)
+		lines = append(lines, truncate(line1, w))
+		lines = append(lines, truncate(shortcuts, w))
+
+	default:
+		// Ultra-minimal: single status line
+		line := statusIcon + " "
+		if epicInfo != "" {
+			line += epicInfo + " "
+		}
+		line += fmt.Sprintf("t:%d/%d", completedTasks, totalTasks)
+		if m.paused {
+			line += " [P]"
+		}
+		lines = append(lines, truncate(line, w))
+	}
 
 	return strings.Join(lines, "\n")
 }
