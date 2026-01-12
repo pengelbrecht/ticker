@@ -13,7 +13,7 @@
   "acceptance_criteria": "1. Run command accepts multiple epic IDs\n2. --parallel flag controls max concurrency\n3. Multiple epics automatically implies --worktree mode\n4. --parallel defaults to number of epics\n5. Validation: all epic IDs must exist and be open\n6. Validation: --parallel must be positive\n7. Duplicate epic IDs rejected\n8. Help text documents new usage\n9. All tests pass",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:03:49.281265Z",
-  "updated_at": "2026-01-12T22:03:43.441854886Z",
-  "closed_at": "2026-01-12T22:03:43.441854886Z",
-  "closed_reason": "Added CLI support for multiple epics and --parallel flag. Key changes: (1) Updated run command to accept multiple epic IDs via variadic args, (2) Added --parallel int flag with default=number of epics, (3) Added validateEpicIDs to check existence, open status, and uniqueness, (4) Added runParallelWithTUI and runParallelHeadless functions that use ParallelRunner, (5) Multiple epics implicitly enables --worktree, (6) Added 5 new tests for flag parsing and validation."
+  "updated_at": "2026-01-12T22:05:07.561891131Z",
+  "closed_at": "2026-01-12T22:05:07.561891131Z",
+  "closed_reason": "Implementation complete: Added --parallel flag, multiple epic ID support, validateEpicIDs for existence/open/unique checks, runParallelWithTUI/runParallelHeadless integration. Multiple epics implies --worktree. All 10 CLI tests pass."
 }
