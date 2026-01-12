@@ -119,7 +119,7 @@ var upgradeCmd = &cobra.Command{
 func init() {
 	// Run command flags
 	runCmd.Flags().IntP("max-iterations", "n", 50, "Maximum number of iterations")
-	runCmd.Flags().Float64("max-cost", 20.0, "Maximum cost in USD")
+	runCmd.Flags().Float64("max-cost", 0, "Maximum cost in USD (0 = disabled)")
 	runCmd.Flags().Int("checkpoint-interval", 5, "Save checkpoint every N iterations (0 to disable)")
 	runCmd.Flags().Int("max-task-retries", 3, "Maximum iterations on same task before assuming stuck")
 	runCmd.Flags().Bool("auto", false, "Auto-select next ready epic")

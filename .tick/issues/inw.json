@@ -2,12 +2,14 @@
   "id": "inw",
   "title": "Make cost ceiling off by default",
   "description": "Most users run ticker on Claude subscription where cost is irrelevant. Changes needed:\n\n1. Set DefaultMaxCost to 0 (disabled) in engine.go\n2. When maxCost is 0/disabled, skip cost budget checks\n3. Update status pane to show just 'Cost: $X.XX' without target when disabled\n4. Update completion modal similarly\n5. Keep --max-cost flag for users who want to set a limit\n\nCurrent default of $20 causes unnecessary stops for subscription users.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "2os",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T07:44:29.229424Z",
-  "updated_at": "2026-01-12T07:44:29.229424Z"
+  "updated_at": "2026-01-12T08:29:22.14943Z",
+  "closed_at": "2026-01-12T08:29:22.14943Z",
+  "closed_reason": "Set DefaultMaxCost to 0 (disabled by default). Removed default application in Run(), updated CLI flag default from 20.0 to 0 with updated help text, fixed test assertion. Budget tracker already handles MaxCost=0 as unlimited, TUI already shows just cost without target when maxCost=0."
 }

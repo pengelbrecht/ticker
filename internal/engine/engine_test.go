@@ -347,8 +347,8 @@ func TestDefaultConstants(t *testing.T) {
 	if DefaultMaxIterations != 50 {
 		t.Errorf("DefaultMaxIterations = %d, want 50", DefaultMaxIterations)
 	}
-	if DefaultMaxCost != 20.00 {
-		t.Errorf("DefaultMaxCost = %f, want 20.00", DefaultMaxCost)
+	if DefaultMaxCost != 0 {
+		t.Errorf("DefaultMaxCost = %v, want 0 (disabled)", DefaultMaxCost)
 	}
 	if DefaultCheckpointEvery != 5 {
 		t.Errorf("DefaultCheckpointEvery = %d, want 5", DefaultCheckpointEvery)

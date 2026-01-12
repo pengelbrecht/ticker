@@ -41,7 +41,7 @@ type RunConfig struct {
 	// MaxIterations is the maximum number of iterations (0 = 50 default).
 	MaxIterations int
 
-	// MaxCost is the maximum cost in USD (0 = 20.00 default).
+	// MaxCost is the maximum cost in USD (0 = disabled/unlimited).
 	MaxCost float64
 
 	// MaxDuration is the maximum wall-clock time (0 = unlimited).
@@ -67,7 +67,7 @@ type RunConfig struct {
 // Defaults for RunConfig.
 const (
 	DefaultMaxIterations   = 50
-	DefaultMaxCost         = 20.00
+	DefaultMaxCost         = 0 // Disabled by default (most users have subscriptions)
 	DefaultCheckpointEvery = 5
 	DefaultAgentTimeout    = 30 * time.Minute
 	DefaultMaxTaskRetries  = 3
@@ -160,9 +160,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 	if config.MaxIterations == 0 {
 		config.MaxIterations = DefaultMaxIterations
 	}
-	if config.MaxCost == 0 {
-		config.MaxCost = DefaultMaxCost
-	}
+	// Note: MaxCost == 0 means disabled (unlimited), not a default value
 	if config.CheckpointEvery == 0 {
 		config.CheckpointEvery = DefaultCheckpointEvery
 	}
