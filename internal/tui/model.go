@@ -428,6 +428,12 @@ type Model struct {
 	liveCacheCreationTokens int
 	liveModel               string // model name from streaming
 
+	// Cumulative token totals across all iterations (for completion modal)
+	totalInputTokens         int
+	totalOutputTokens        int
+	totalCacheReadTokens     int
+	totalCacheCreationTokens int
+
 	// Live agent status (updated via AgentStatusMsg)
 	liveStatus         agent.RunStatus // current agent status
 	liveActiveToolName string          // name of active tool (when status is tool_use)
@@ -917,6 +923,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Accumulate live token metrics to totals before clearing
+		m.totalInputTokens += m.liveInputTokens
+		m.totalOutputTokens += m.liveOutputTokens
+		m.totalCacheReadTokens += m.liveCacheReadTokens
+		m.totalCacheCreationTokens += m.liveCacheCreationTokens
+
 		// Clear output, thinking, tool state, metrics, and status for new iteration
 		m.output = ""
 		m.thinking = ""
@@ -966,6 +978,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case RunCompleteMsg:
+		// Accumulate final iteration's token metrics to totals
+		m.totalInputTokens += m.liveInputTokens
+		m.totalOutputTokens += m.liveOutputTokens
+		m.totalCacheReadTokens += m.liveCacheReadTokens
+		m.totalCacheCreationTokens += m.liveCacheCreationTokens
+
 		// Save output for the final task
 		if m.taskID != "" && m.output != "" {
 			m.taskOutputs[m.taskID] = m.output
@@ -2446,19 +2464,20 @@ func placeOverlay(fg, bg string, width, height int) string {
 
 // renderCompleteOverlay renders the run complete modal overlay.
 // Layout:
-// ┌─ Run Complete ───────────────────────┐
-// │                                      │
-// │  ✓ Epic completed successfully       │
-// │                                      │
-// │  Reason:     All tasks closed        │
-// │  Signal:     COMPLETE                │
-// │  Iterations: 12                      │
-// │  Duration:   5m 23s                  │
-// │  Cost:       $2.45                   │
-// │  Tasks:      8/8 completed           │
-// │                                      │
-// │  Press q to quit                     │
-// └──────────────────────────────────────┘
+// ┌─ Run Complete ─────────────────────────────┐
+// │                                            │
+// │  ✓ Epic completed successfully             │
+// │                                            │
+// │  Reason:     All tasks closed              │
+// │  Signal:     COMPLETE                      │
+// │  Iterations: 12                            │
+// │  Duration:   5m 23s                        │
+// │  Cost:       $2.45                         │
+// │  Tokens:     1.5k in | 2.3k out | 5k cache │
+// │  Tasks:      8/8 completed                 │
+// │                                            │
+// │  Press q to quit                           │
+// └────────────────────────────────────────────┘
 func (m Model) renderCompleteOverlay() string {
 	// Determine icon, title, message and colors based on signal
 	var icon, title, message string
@@ -2570,6 +2589,19 @@ func (m Model) renderCompleteOverlay() string {
 	// Cost
 	lines = append(lines, lblStyle.Render("Cost:")+" "+valStyle.Render(fmt.Sprintf("$%.2f", m.cost)))
 
+	// Tokens (if any were tracked)
+	if m.totalInputTokens > 0 || m.totalOutputTokens > 0 {
+		var tokenParts []string
+		tokenParts = append(tokenParts, formatTokens(m.totalInputTokens)+" in")
+		tokenParts = append(tokenParts, formatTokens(m.totalOutputTokens)+" out")
+		if m.totalCacheReadTokens > 0 || m.totalCacheCreationTokens > 0 {
+			cacheTotal := m.totalCacheReadTokens + m.totalCacheCreationTokens
+			tokenParts = append(tokenParts, formatTokens(cacheTotal)+" cache")
+		}
+		tokensStr := strings.Join(tokenParts, " | ")
+		lines = append(lines, lblStyle.Render("Tokens:")+" "+valStyle.Render(tokensStr))
+	}
+
 	// Tasks
 	tasksStr := fmt.Sprintf("%d/%d completed", completedTasks, totalTasks)
 	lines = append(lines, lblStyle.Render("Tasks:")+" "+valStyle.Render(tasksStr))
@@ -2585,7 +2617,7 @@ func (m Model) renderCompleteOverlay() string {
 		BorderForeground(borderColor.GetForeground()).
 		Background(colorSurface).
 		Padding(1, 2).
-		Width(42)
+		Width(48)
 
 	// Title in box
 	titleStyle := headerStyle.Render(title)

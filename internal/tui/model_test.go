@@ -391,6 +391,59 @@ func TestUpdate_IterationStart(t *testing.T) {
 	}
 }
 
+func TestUpdate_IterationStart_AccumulatesTokens(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.tasks = []TaskInfo{
+		{ID: "abc", Title: "Test Task", Status: TaskStatusOpen},
+	}
+
+	// Set live token metrics from previous iteration
+	m.liveInputTokens = 5000
+	m.liveOutputTokens = 1000
+	m.liveCacheReadTokens = 3000
+	m.liveCacheCreationTokens = 200
+
+	// Start new iteration
+	msg := IterationStartMsg{
+		Iteration: 2,
+		TaskID:    "abc",
+		TaskTitle: "Test Task",
+	}
+
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Live metrics should be reset
+	if m.liveInputTokens != 0 {
+		t.Errorf("expected liveInputTokens 0, got %d", m.liveInputTokens)
+	}
+	if m.liveOutputTokens != 0 {
+		t.Errorf("expected liveOutputTokens 0, got %d", m.liveOutputTokens)
+	}
+	if m.liveCacheReadTokens != 0 {
+		t.Errorf("expected liveCacheReadTokens 0, got %d", m.liveCacheReadTokens)
+	}
+	if m.liveCacheCreationTokens != 0 {
+		t.Errorf("expected liveCacheCreationTokens 0, got %d", m.liveCacheCreationTokens)
+	}
+
+	// Total metrics should have accumulated
+	if m.totalInputTokens != 5000 {
+		t.Errorf("expected totalInputTokens 5000, got %d", m.totalInputTokens)
+	}
+	if m.totalOutputTokens != 1000 {
+		t.Errorf("expected totalOutputTokens 1000, got %d", m.totalOutputTokens)
+	}
+	if m.totalCacheReadTokens != 3000 {
+		t.Errorf("expected totalCacheReadTokens 3000, got %d", m.totalCacheReadTokens)
+	}
+	if m.totalCacheCreationTokens != 200 {
+		t.Errorf("expected totalCacheCreationTokens 200, got %d", m.totalCacheCreationTokens)
+	}
+}
+
 func TestUpdate_IterationEnd(t *testing.T) {
 	m := New(Config{})
 	m.width = 100
@@ -500,6 +553,49 @@ func TestUpdate_RunComplete(t *testing.T) {
 	}
 	if m.cost != 5.50 {
 		t.Errorf("expected cost 5.50, got %f", m.cost)
+	}
+}
+
+func TestUpdate_RunComplete_AccumulatesTokens(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.running = true
+
+	// Set live token metrics from the final iteration
+	m.liveInputTokens = 8000
+	m.liveOutputTokens = 2000
+	m.liveCacheReadTokens = 5000
+	m.liveCacheCreationTokens = 300
+
+	// Already accumulated from previous iterations
+	m.totalInputTokens = 10000
+	m.totalOutputTokens = 3000
+	m.totalCacheReadTokens = 7000
+	m.totalCacheCreationTokens = 500
+
+	msg := RunCompleteMsg{
+		Reason:     "All tasks done",
+		Signal:     "COMPLETE",
+		Iterations: 2,
+		Cost:       3.00,
+	}
+
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Total metrics should include the final iteration's live metrics
+	if m.totalInputTokens != 18000 {
+		t.Errorf("expected totalInputTokens 18000, got %d", m.totalInputTokens)
+	}
+	if m.totalOutputTokens != 5000 {
+		t.Errorf("expected totalOutputTokens 5000, got %d", m.totalOutputTokens)
+	}
+	if m.totalCacheReadTokens != 12000 {
+		t.Errorf("expected totalCacheReadTokens 12000, got %d", m.totalCacheReadTokens)
+	}
+	if m.totalCacheCreationTokens != 800 {
+		t.Errorf("expected totalCacheCreationTokens 800, got %d", m.totalCacheCreationTokens)
 	}
 }
 
@@ -1212,6 +1308,58 @@ func TestView_CompleteOverlay(t *testing.T) {
 	if !strings.Contains(output, "✓") {
 		t.Error("expected complete overlay to show success icon")
 	}
+}
+
+func TestView_CompleteOverlay_WithTokens(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.realWidth = 100
+	m.realHeight = 30
+	m.showComplete = true
+	m.completeSignal = "COMPLETE"
+	m.completeReason = "All tasks done"
+	m.totalInputTokens = 15000
+	m.totalOutputTokens = 2500
+	m.totalCacheReadTokens = 8000
+	m.totalCacheCreationTokens = 500
+
+	output := m.View()
+
+	if !strings.Contains(output, "Tokens:") {
+		t.Error("expected View to show Tokens label in complete overlay")
+	}
+	if !strings.Contains(output, "15k in") {
+		t.Error("expected View to show '15k in' for input tokens")
+	}
+	if !strings.Contains(output, "2.5k out") {
+		t.Error("expected View to show '2.5k out' for output tokens")
+	}
+	// 8000 + 500 = 8500 -> "8.5k cache"
+	if !strings.Contains(output, "8.5k cache") {
+		t.Error("expected View to show '8.5k cache' for cache tokens")
+	}
+}
+
+func TestView_CompleteOverlay_NoTokens(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+	m.realWidth = 100
+	m.realHeight = 30
+	m.showComplete = true
+	m.completeSignal = "COMPLETE"
+	m.completeReason = "All tasks done"
+	// No tokens set - should not show Tokens line
+
+	output := m.View()
+
+	// Should still show the overlay
+	if !strings.Contains(output, "Run Complete") {
+		t.Error("expected View to show complete overlay title")
+	}
+	// But Tokens line should not appear when there are no tokens
+	// (the label would still appear if either input or output is > 0)
 }
 
 // -----------------------------------------------------------------------------

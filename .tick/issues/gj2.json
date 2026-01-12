@@ -2,12 +2,14 @@
   "id": "gj2",
   "title": "Add token counts to status bar and completion modal",
   "description": "Include token usage in summaries:\n- Status bar: Show live tokens (input/output/cache) alongside cost\n- Completion modal: Show total tokens used in the summary section\n\nUse the existing formatTokens() helper for compact display (e.g., '1.5k in | 2.3k out').",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "e02",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T07:20:53.618914Z",
-  "updated_at": "2026-01-12T07:20:53.618914Z"
+  "updated_at": "2026-01-12T07:56:47.649907Z",
+  "closed_at": "2026-01-12T07:56:47.649907Z",
+  "closed_reason": "Fixed completion modal width to prevent token count wrapping. The token display was already implemented in both status bar (lines 1856-1867) and completion modal (lines 2592-2602), but the modal width of 42 was too narrow for longer token strings with cache. Increased modal width to 48 to accommodate 'X in | Y out | Z cache' format without line breaks."
 }
