@@ -2437,6 +2437,52 @@ func TestBuildRunRecordContent_WithCache(t *testing.T) {
 	}
 }
 
+func TestBuildRunRecordContent_ToolsDescendingOrder(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+
+	// Tools are stored oldest-first in RunRecord (order: Read, Edit, Bash)
+	// Display should show newest-first (Bash should appear before Edit, Edit before Read)
+	runRecord := &agent.RunRecord{
+		SessionID: "test-session",
+		Model:     "claude-sonnet-4-20250514",
+		StartedAt: time.Now().Add(-time.Minute),
+		EndedAt:   time.Now(),
+		Output:    "Done",
+		NumTurns:  3,
+		Success:   true,
+		Tools: []agent.ToolRecord{
+			{Name: "Read", Duration: 500, IsError: false},  // oldest (used first)
+			{Name: "Edit", Duration: 1200, IsError: false}, // middle
+			{Name: "Bash", Duration: 2500, IsError: false}, // newest (used last)
+		},
+		Metrics: agent.MetricsRecord{
+			InputTokens:  2000,
+			OutputTokens: 1000,
+			CostUSD:      0.10,
+		},
+	}
+
+	content := m.buildRunRecordContent(runRecord, 80)
+
+	// Find positions of each tool in the output
+	bashPos := strings.Index(content, "Bash")
+	editPos := strings.Index(content, "Edit")
+	readPos := strings.Index(content, "Read")
+
+	if bashPos == -1 || editPos == -1 || readPos == -1 {
+		t.Fatal("expected all tools to be present in content")
+	}
+
+	// Bash (newest) should appear first, then Edit, then Read (oldest)
+	if bashPos > editPos {
+		t.Errorf("Bash (newest) should appear before Edit: Bash at %d, Edit at %d", bashPos, editPos)
+	}
+	if editPos > readPos {
+		t.Errorf("Edit should appear before Read (oldest): Edit at %d, Read at %d", editPos, readPos)
+	}
+}
+
 func TestRenderToolRecordLine_Success(t *testing.T) {
 	m := New(Config{})
 	tool := agent.ToolRecord{

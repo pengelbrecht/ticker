@@ -1491,21 +1491,24 @@ func (m *Model) buildRunRecordContent(record *agent.RunRecord, width int) string
 		toolHeader := dimStyle.Render(fmt.Sprintf("─── Tools (%d) ───", len(record.Tools)))
 		sections = append(sections, toolHeader)
 
-		// Show all tools (limit to 10 for display)
+		// Show most recent tools first (limit to 10 for display)
+		// Tools are stored oldest-first, so iterate in reverse
 		maxTools := 10
-		showCount := len(record.Tools)
+		totalTools := len(record.Tools)
+		showCount := totalTools
 		if showCount > maxTools {
 			showCount = maxTools
 		}
 
-		for i := 0; i < showCount; i++ {
+		// Iterate from end (newest) toward start (oldest)
+		for i := totalTools - 1; i >= totalTools-showCount; i-- {
 			tool := record.Tools[i]
 			toolLine := m.renderToolRecordLine(tool)
 			sections = append(sections, toolLine)
 		}
 
-		if len(record.Tools) > maxTools {
-			moreCount := len(record.Tools) - maxTools
+		if totalTools > maxTools {
+			moreCount := totalTools - maxTools
 			moreLine := dimStyle.Render(fmt.Sprintf("  ... and %d more", moreCount))
 			sections = append(sections, moreLine)
 		}
