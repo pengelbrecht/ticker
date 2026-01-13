@@ -143,6 +143,44 @@ tk create "Create Stripe API keys" -manual \
 
 Manual tasks are skipped by `tk next` and ticker automation. They appear in `tk list -manual`.
 
+### Step 3b: Guide User Through Blocking Manual Tasks
+
+**Critical:** If manual tasks block automated tasks, guide the user through them before running ticker.
+
+```bash
+# Check for blocking manual tasks
+tk list -manual
+tk blocked  # See what's waiting on manual tasks
+```
+
+**When manual tasks block automation:**
+
+1. **Identify blocking manual tasks** — Find manual tasks that other tasks depend on
+2. **Guide user step-by-step** — Walk them through each manual task
+3. **Verify completion** — Confirm the task is done before closing
+4. **Close and unblock** — `tk close <id> "reason"` to unblock dependent tasks
+
+**Example guidance flow:**
+
+```
+I see 2 manual tasks that block automated work:
+
+1. **Set up PostgreSQL database** (blocks: API endpoints epic)
+   - Create database instance (RDS, Supabase, or local)
+   - Note the connection string
+   - Run: `tk close abc "Created RDS instance, connection string in .env"`
+
+2. **Create Stripe API keys** (blocks: payment tasks)
+   - Go to dashboard.stripe.com
+   - Create test API keys
+   - Add to .env: STRIPE_SECRET_KEY=sk_test_...
+   - Run: `tk close def "Stripe keys configured in .env"`
+
+Once these are done, I can run the automated epics.
+```
+
+Always resolve blocking manual tasks before starting ticker, otherwise automation will stall.
+
 ### Step 4: Optimize for Parallelization
 
 Review each epic and consider splitting if:
