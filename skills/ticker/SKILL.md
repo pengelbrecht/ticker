@@ -38,32 +38,55 @@ ls .tick/ 2>/dev/null || tk init
 
 Look for a SPEC.md (or similar spec file) in the repo root.
 
-**If no spec exists:**
-- Ask the user what they want to build
-- Create SPEC.md through the interview process below
+**If no spec exists:** → Go to Step 2a (Create Spec)
+**If spec exists but incomplete:** → Go to Step 2b (Complete Spec)
+**If spec is complete:** → Skip to Step 3 (Create Ticks)
 
-**If spec exists but is incomplete:**
-- Read it and identify gaps
-- Interview the user to fill in missing details
-- Update SPEC.md with the answers
+### Step 2a: Create Spec Through Conversation
 
-**If spec is complete:**
-- Skip to Step 3 (Create Ticks)
+Have a natural conversation with the user to understand their idea:
 
-### Step 2: Interview to Complete Spec
+1. **Let them describe it** — Don't interrupt, let them explain the full vision
+2. **Ask clarifying questions** — Dig into unclear areas through back-and-forth dialogue
+3. **Optionally use AskUserQuestion** — For quick multiple-choice decisions
+4. **Write SPEC.md** — Once you have enough detail, generate the spec
 
-Use AskUserQuestion to interview the user in depth. Ask about:
+**Conversation topics to explore:**
+- What problem does this solve? Who's it for?
+- Core features vs nice-to-haves
+- Technical constraints or preferences
+- How will users interact with it?
+- What does "done" look like?
 
-- **Technical implementation** — Architecture, patterns, libraries
-- **UI/UX** — User flows, edge cases, error states
-- **Testing strategy** — What needs tests, coverage expectations
-- **Concerns** — Performance, security, scalability
-- **Tradeoffs** — What's negotiable vs non-negotiable
-- **Scope** — What's in v1 vs future
+**Example flow:**
+```
+User: "I want to build a CLI tool for managing dotfiles"
 
-**Important:** Ask non-obvious questions. Don't ask "What language?" if it's clear from context. Dig into the nuances.
+Claude: "Interesting! A few questions to understand the scope:
+- Should it handle syncing between machines, or just organization?
+- Are you thinking symlinks, copies, or templating?
+- Any existing dotfile managers you like or want to improve on?"
 
-Continue interviewing until you have enough detail to create atomic, implementable tasks. Then update SPEC.md with the gathered information.
+User: "Syncing via git, symlinks, and I want it simpler than chezmoi"
+
+Claude: "Got it - simple git-based syncing with symlinks. What about:
+- Multi-machine configs (work vs personal)?
+- Secret handling (API keys, tokens)?
+- Bootstrap for new machines?"
+...
+```
+
+Continue until you can write a complete SPEC.md with clear features and acceptance criteria.
+
+### Step 2b: Complete Existing Spec
+
+If SPEC.md exists but has gaps:
+
+1. **Read the spec** — Identify what's missing or unclear
+2. **Ask targeted questions** — Focus on the gaps, don't re-ask obvious things
+3. **Update SPEC.md** — Fill in the missing details
+
+Use AskUserQuestion for quick decisions, conversation for complex topics.
 
 ## Test-Driven Development (Critical)
 
