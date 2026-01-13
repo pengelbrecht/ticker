@@ -1,0 +1,19 @@
+{
+  "id": "rof",
+  "title": "Add per-worktree checkpoint support",
+  "description": "Extend checkpoint system to support worktree-aware checkpoints for resume functionality.\n\n## Overview\n\nWhen running in a worktree, checkpoints need to record the worktree path so resume can restore to the correct directory.\n\n## Files to Modify\n\n### internal/checkpoint/checkpoint.go\n\nExtend Checkpoint struct:\n\n```go\ntype Checkpoint struct {\n    // ... existing fields ...\n    WorktreePath string `json:\"worktree_path,omitempty\"` // Path if running in worktree\n    WorktreeBranch string `json:\"worktree_branch,omitempty\"` // Branch name\n}\n```\n\n### Resume Logic\n\nWhen resuming a checkpoint with WorktreePath set:\n\n1. Check if worktree still exists at that path\n2. If exists, resume in that worktree\n3. If not exists (was cleaned up), recreate worktree from branch\n4. If branch also gone, error - cannot resume\n\n```go\nfunc (m *Manager) PrepareResume(cp *Checkpoint) (workDir string, err error) {\n    if cp.WorktreePath == \"\" {\n        return \".\", nil // Normal mode, use current dir\n    }\n    \n    // Check if worktree exists\n    if exists(cp.WorktreePath) {\n        return cp.WorktreePath, nil\n    }\n    \n    // Worktree gone - try to recreate from branch\n    if branchExists(cp.WorktreeBranch) {\n        wt, err := wtManager.CreateFromBranch(cp.EpicID, cp.WorktreeBranch)\n        return wt.Path, err\n    }\n    \n    return \"\", errors.New(\"cannot resume: worktree and branch both gone\")\n}\n```\n\n## Implementation Notes\n\n- Checkpoint directory stays in main repo: `.ticker/checkpoints/`\n- Only the working directory changes to worktree\n- Resume needs to validate worktree state before continuing\n- Consider: should resume auto-recreate missing worktree?\n\n### internal/checkpoint/checkpoint_test.go\n- Test checkpoint saves worktree path when in worktree mode\n- Test resume finds existing worktree\n- Test resume recreates worktree from branch\n- Test resume errors when branch gone",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "xvz"
+  ],
+  "parent": "8my",
+  "acceptance_criteria": "1. Checkpoint struct has WorktreePath and WorktreeBranch fields\n2. Checkpoints saved in worktree mode include worktree info\n3. Resume correctly restores to existing worktree\n4. Resume can recreate worktree from surviving branch\n5. Resume errors clearly when worktree and branch both gone\n6. Checkpoints remain in main repo (not in worktree)\n7. All tests pass",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T10:01:13.676466Z",
+  "updated_at": "2026-01-12T22:08:22.336319511Z",
+  "closed_at": "2026-01-12T22:08:22.336319511Z",
+  "closed_reason": "Added WorktreePath/WorktreeBranch fields to Checkpoint struct, NewCheckpointWithWorktree() helper, and PrepareResume() method for worktree-aware resume. PrepareResume handles 3 cases: normal mode (returns .), existing worktree, and recreating worktree from branch. Added 7 new tests covering all scenarios."
+}

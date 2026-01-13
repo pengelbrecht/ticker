@@ -1,0 +1,24 @@
+{
+  "id": "p1t",
+  "title": "Implement help overlay modal",
+  "description": "Implement renderHelpOverlay() function:\n\nTriggered by pressing '?'\nModal overlay centered on screen\n\nContent:\n┌─ Keyboard Shortcuts ─────────────────┐\n│                                      │\n│  Navigation                          │\n│  j/k, ↑/↓     Move up/down           │\n│  g/G          Top/bottom             │\n│  ^d/^u        Page down/up           │\n│  tab          Switch pane            │\n│                                      │\n│  Actions                             │\n│  p            Pause/Resume           │\n│  ?            Toggle help            │\n│  q            Quit                   │\n│                                      │\n│  Press any key to close              │\n└──────────────────────────────────────┘\n\nStyling:\n- Dark background (surface color)\n- Rounded border\n- Pink header\n- Gray text for descriptions\n- Centered using placeOverlay() helper\n\nImplement placeOverlay(fg, bg) that centers fg over bg preserving ANSI.",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "layout"
+  ],
+  "blocked_by": [
+    "ks2",
+    "hn8",
+    "g9b",
+    "c4r"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:11:02.565031Z",
+  "updated_at": "2026-01-11T20:39:40.398931Z",
+  "closed_at": "2026-01-11T20:39:40.398931Z",
+  "closed_reason": "Implemented renderHelpOverlay() with custom formatted modal showing Navigation (j/k, ↑/↓, g/G, ^d/^u, tab) and Actions (p, ?, q) sections. Added placeOverlay() helper that centers fg modal over bg preserving ANSI by using ansi.Truncate/Cut. Updated key handler to close help on any key press. Also updated renderCompleteOverlay() to use placeOverlay for consistency. Added renderBaseView() to extract common layout code."
+}

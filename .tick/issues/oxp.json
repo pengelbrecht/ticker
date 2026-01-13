@@ -1,0 +1,17 @@
+{
+  "id": "oxp",
+  "title": "Don't show 'blocked by' for closed blockers",
+  "description": "Tasks show 'blocked by: xxx' even when the blocking task has been closed.\n\n## Current Behavior\n\nTask list shows:\n```\n○ xvz - Integrate worktree\n  blocked by: qos\n```\n\nEven when `qos` is already closed.\n\n## Expected Behavior\n\nOnly show 'blocked by' for open blockers. If all blockers are closed, don't show the blocked indicator at all.\n\n```\n○ xvz - Integrate worktree\n```\n\n## Root Cause\n\nThe TUI probably gets blocked_by list from the tick data but doesn't check if those blockers are still open.\n\n## Implementation\n\n### Option 1: Filter in TUI\n\nWhen rendering task list, filter blocked_by to only include open tasks:\n\n```go\nfunc (m *Model) getOpenBlockers(task TaskInfo) []string {\n    var openBlockers []string\n    for _, blockerID := range task.BlockedBy {\n        if blocker, ok := m.tasksMap[blockerID]; ok \u0026\u0026 blocker.Status != \"closed\" {\n            openBlockers = append(openBlockers, blockerID)\n        }\n    }\n    return openBlockers\n}\n```\n\n### Option 2: Fix in ticks client\n\nThe `tk` CLI or ticks client should not return closed tasks in blocked_by.\n\n## Recommendation\n\nOption 1 is simpler - TUI already has task status info, just filter.",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "bug"
+  ],
+  "parent": "xfn",
+  "acceptance_criteria": "1. Closed tasks not shown in 'blocked by' list\n2. Task with all blockers closed shows no blocked indicator\n3. Task with mix of open/closed blockers only shows open ones\n4. Blocked icon (⊘) only shown when actually blocked",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T22:06:57.592987Z",
+  "updated_at": "2026-01-12T22:06:57.592987Z"
+}

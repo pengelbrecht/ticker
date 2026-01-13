@@ -1,0 +1,14 @@
+{
+  "id": "pk2",
+  "title": "Show task ID and title header in details pane",
+  "description": "Add a header to the details pane showing the task ID and title.\n\n## Current Behavior\n\nDetails pane shows task description/content but no clear header identifying which task.\n\n## Desired Behavior\n\nDetails pane has a header:\n\n```\n┌─ Details ─────────────────────────────────────┐\n│ [abc123] Add user authentication              │\n│ ──────────────────────────────────────────    │\n│                                               │\n│ Description:                                  │\n│   Implement OAuth2 authentication flow...     │\n│                                               │\n│ Acceptance Criteria:                          │\n│   1. User can log in with Google              │\n│   2. Session persists across refreshes        │\n└───────────────────────────────────────────────┘\n```\n\n## Implementation\n\n### internal/tui/model.go\n\nIn details pane rendering, add header:\n\n```go\nfunc (m *Model) renderDetailsPane() string {\n    var lines []string\n    \n    // Header with task ID and title\n    if m.selectedTask != nil {\n        header := fmt.Sprintf(\"[%s] %s\", m.selectedTask.ID, m.selectedTask.Title)\n        lines = append(lines, headerStyle.Render(header))\n        lines = append(lines, dividerStyle.Render(strings.Repeat(\"─\", width-2)))\n        lines = append(lines, \"\")\n    }\n    \n    // ... rest of details content ...\n}\n```\n\n## Styling\n\n- Task ID in distinct color (e.g., blue or cyan)\n- Title in bold or highlight\n- Divider line separating header from content",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "xfn",
+  "acceptance_criteria": "1. Details pane shows task ID in header\n2. Details pane shows task title in header\n3. Header has visual separator from content\n4. ID has distinct styling for quick identification\n5. Long titles truncated or wrapped appropriately\n6. Updates when different task selected",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T22:06:41.751243Z",
+  "updated_at": "2026-01-12T22:06:41.751243Z"
+}

@@ -1,0 +1,138 @@
+{
+  "acceptance_criteria": "1. Budget is thread-safe for concurrent Add calls\n2. ShouldStop is thread-safe for concurrent reads\n3. AddForEpic tracks usage per epic\n4. UsageForEpic returns correct per-epic breakdown\n5. AllEpicUsage returns complete breakdown\n6. Total usage is sum of all epic usage\n7. Budget limits apply to total (not per-epic)\n8. Race detector passes on concurrent tests\n9. All tests pass",
+  "blocked_by": [
+    "91k"
+  ],
+  "closed_at": "2026-01-13T08:48:01.173809Z",
+  "closed_reason": "Implementation complete (by previous iteration): EpicUsage type with per-epic tracking, AddForEpic() for thread-safe per-epic usage recording, UsageForEpic() and AllEpicUsage() return copies to avoid races. All 22 budget tests pass including concurrent access tests.",
+  "created_at": "2026-01-12T10:02:41.976538Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Extend budget system to support shared tracking across multiple parallel epics.\n\n## Overview\n\nWhen running multiple epics in parallel, the budget should apply to the total cost across all epics, not per-epic. The budget needs to be thread-safe and provide per-epic breakdowns.\n\n## Files to Modify\n\n### internal/budget/budget.go\n\nAdd thread-safety and per-epic tracking:\n\n```go\ntype Budget struct {\n    mu          sync.RWMutex\n    // ... existing fields ...\n    \n    // Per-epic tracking\n    perEpic     map[string]*EpicUsage\n}\n\n// EpicUsage tracks usage for a single epic.\ntype EpicUsage struct {\n    EpicID     string\n    TokensIn   int\n    TokensOut  int\n    Cost       float64\n    Iterations int\n}\n\n// AddForEpic records usage attributed to a specific epic.\n// Thread-safe for concurrent calls from multiple engines.\nfunc (b *Budget) AddForEpic(epicID string, tokensIn, tokensOut int, cost float64)\n\n// UsageForEpic returns usage for a specific epic.\nfunc (b *Budget) UsageForEpic(epicID string) *EpicUsage\n\n// AllEpicUsage returns breakdown by epic.\nfunc (b *Budget) AllEpicUsage() map[string]*EpicUsage\n```\n\n## Thread Safety\n\nCurrent budget.Add() needs mutex protection:\n\n```go\nfunc (b *Budget) Add(tokensIn, tokensOut int, cost float64) {\n    b.mu.Lock()\n    defer b.mu.Unlock()\n    \n    b.usage.TokensIn += tokensIn\n    b.usage.TokensOut += tokensOut  \n    b.usage.Cost += cost\n    b.usage.Iterations++\n}\n\nfunc (b *Budget) ShouldStop() (bool, string) {\n    b.mu.RLock()\n    defer b.mu.RUnlock()\n    // ... check limits ...\n}\n```\n\n## Usage Display\n\nTUI should show:\n```\nTotal: .45 | 125k tokens | 15 iterations\n├─ epic1: .20 | 60k tokens | 8 iterations\n├─ epic2: /bin/zsh.85 | 45k tokens | 5 iterations  \n└─ epic3: /bin/zsh.40 | 20k tokens | 2 iterations\n```\n\n### internal/budget/budget_test.go\n- Test concurrent Add calls (race detector)\n- Test per-epic tracking\n- Test ShouldStop with concurrent access\n- Test total aggregation across epics",
+  "id": "52w",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "8my",
+  "priority": 2,
+  "run": {
+    "session_id": "8620dbf3-774b-485b-b6a0-2799ff1ce6b8",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-13T09:46:57.51169+01:00",
+    "ended_at": "2026-01-13T09:48:55.116194+01:00",
+    "output": "I'll start by reviewing the current state of the task and what previous iterations have done.\n\nFrom the epic notes, I can see that Iteration 1 completed the implementation but verification failed because `cmd/ticker/main.go` and `scripts/create-test-epic.sh` were modified but not committed. Let me check what was actually implemented and what the current state is.\n\nI see the issue. The budget.go file doesn't exist at the expected path. Let me find it:\n\nThe implementation is in `tracker.go`, not `budget.go`. Let me read the current implementation:\n\nThe implementation is already complete. The previous iteration completed the task but didn't commit the modified files (`cmd/ticker/main.go` and `scripts/create-test-epic.sh`). Let me run the tests to verify everything works:\n\nLet me also run all tests to ensure nothing is broken:\n\nAll tests pass. Now I need to:\n1. Check what files need to be committed\n2. Close the task\n3. Commit all changes\n\nLet me look at the current diff in detail to understand what files are modified:\n\nLet me also check what w7f.json is:\n\nThis is an unrelated change (a test epic that got closed). Let me check the main.go diff again to understand what changes were made - these were enhancements to auto-select that support parallel epic selection:\n\nThe changes in `cmd/ticker/main.go` enhance the `--auto` flag to select multiple epics when `--parallel` is specified, and the changes in `scripts/create-test-epic.sh` create a second test epic for parallel testing. These changes support the multi-epic parallel features but are not core to task 52w (which is about per-epic budget tracking in the budget package).\n\nHowever, looking at the git diff, these files were modified and need to be committed to pass verification. The verification is failing because there are uncommitted changes.\n\nLet me close the task and commit everything:\n\nThe `.tick` directory is in gitignore but we need to commit these files. Let me check the gitignore:\n\nThe `.tick/` is in gitignore but these files are being tracked. Let me check git status more carefully:\n\nThe files show \"M \" (modified) without \" M\" (unstaged modification), meaning the add succeeded after all. Let me check:\n\nThe files are staged. Let me commit them:\n\nGit status is clean. Now let me add an epic note for future iterations:\n\nTask 52w is complete. Summary:\n\n1. **What was done**: The cross-epic shared budget tracking was implemented by the previous iteration (Iteration 1). The implementation includes:\n   - `EpicUsage` type with `EpicID`, `TokensIn`, `TokensOut`, `Cost`, `Iterations` fields\n   - `AddForEpic()` method that atomically updates both total and per-epic usage under a single mutex lock\n   - `UsageForEpic()` returns a copy of usage for a specific epic\n   - `AllEpicUsage()` returns copies of all per-epic usage to avoid races\n   - All methods are thread-safe using `sync.RWMutex`\n\n2. **What I fixed**: The verification was failing because `cmd/ticker/main.go` and `scripts/create-test-epic.sh` had uncommitted changes. These were enhancements related to multi-epic support (auto-selecting multiple epics with `--parallel` flag). I committed all outstanding changes.\n\n3. **Tests**: All 22 budget tests pass, including 10 new tests for per-epic tracking and concurrent access tests that verify thread-safety.",
+    "tools": [
+      {
+        "name": "Bash",
+        "duration_ms": 871
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 528
+      },
+      {
+        "name": "Read",
+        "duration_ms": 682
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 653
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 465
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 358
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 527
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 768
+      },
+      {
+        "name": "Read",
+        "duration_ms": 598
+      },
+      {
+        "name": "Read",
+        "duration_ms": 355
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1018
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 486
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 517
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 659
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2228
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2850
+      },
+      {
+        "name": "Read",
+        "duration_ms": 626
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 662
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 362
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1170
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1126
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3547
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1530
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 944
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 327
+      }
+    ],
+    "metrics": {
+      "input_tokens": 1820,
+      "output_tokens": 3301,
+      "cache_read_tokens": 851651,
+      "cache_creation_tokens": 29512,
+      "cost_usd": 0.7299964999999998,
+      "duration_ms": 117136
+    },
+    "success": true,
+    "num_turns": 26
+  },
+  "status": "closed",
+  "title": "Add cross-epic shared budget tracking",
+  "type": "task",
+  "updated_at": "2026-01-13T08:48:01.173809Z"
+}

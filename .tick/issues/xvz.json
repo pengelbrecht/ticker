@@ -1,0 +1,19 @@
+{
+  "id": "xvz",
+  "title": "Integrate single worktree into engine run",
+  "description": "Add --worktree flag to run a single epic in an isolated git worktree.\n\n## Overview\n\nWhen `--worktree` flag is passed, the engine creates a worktree for the epic and runs inside it. On completion, the worktree is merged to main and cleaned up.\n\n## Files to Modify\n\n### cmd/ticker/main.go (or run.go)\n\nAdd flag:\n```go\nrunCmd.Flags().Bool(\"worktree\", false, \"Run epic in isolated git worktree\")\n```\n\n### internal/engine/engine.go\n\nAdd worktree support to RunConfig and Run():\n\n```go\ntype RunConfig struct {\n    // ... existing fields ...\n    UseWorktree bool   // --worktree flag\n    WorktreeDir string // Set by engine when worktree created (for cleanup)\n}\n```\n\n## Execution Flow\n\n```\n--worktree flag set\n    │\n    ├─→ Create worktree via WorktreeManager.Create(epicID)\n    ├─→ Change engine working directory to worktree path\n    ├─→ Run normal iteration loop\n    │\n    └─→ On completion:\n        ├─→ Merge worktree branch to main (separate task)\n        └─→ Remove worktree via WorktreeManager.Remove(epicID)\n```\n\n## Implementation Notes\n\n- Engine needs access to WorktreeManager\n- Agent runs with working directory set to worktree\n- All file operations happen in worktree\n- Checkpoints should note worktree path (for resume)\n- On EJECT/BLOCKED signals, still cleanup worktree? (probably yes)\n- On error, cleanup worktree to avoid orphans\n\n### Cleanup Strategy\n\nAlways cleanup worktree on engine exit:\n- Success → merge then cleanup\n- EJECT/BLOCKED → cleanup (no merge)\n- Error → cleanup (no merge)\n- Panic → defer cleanup\n\nUse defer in Run() to ensure cleanup happens.\n\n### internal/engine/engine_test.go\n- Test --worktree creates worktree before run\n- Test engine runs in worktree directory\n- Test worktree cleaned up on success\n- Test worktree cleaned up on error\n- Test worktree cleaned up on EJECT",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "qos"
+  ],
+  "parent": "8my",
+  "acceptance_criteria": "1. --worktree flag added to run command\n2. With --worktree, engine creates worktree before running\n3. Agent executes in worktree directory\n4. Worktree cleaned up on successful completion\n5. Worktree cleaned up on EJECT/BLOCKED signals\n6. Worktree cleaned up on errors (no orphaned worktrees)\n7. Worktree path stored in RunConfig for later operations\n8. All tests pass",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T10:00:57.304289Z",
+  "updated_at": "2026-01-12T12:22:57.025924Z",
+  "closed_at": "2026-01-12T12:22:57.025924Z",
+  "closed_reason": "Implemented --worktree flag: added WorkDir to agent.RunOpts, UseWorktree/RepoRoot to engine.RunConfig, engine.Run() creates/cleans up worktrees with defer for all exit paths, CLI passes useWorktree flag. All tests pass."
+}

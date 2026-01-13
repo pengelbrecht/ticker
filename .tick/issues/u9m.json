@@ -1,0 +1,19 @@
+{
+  "id": "u9m",
+  "title": "Implement TestVerifier and BuildVerifier",
+  "description": "Implement TestVerifier and BuildVerifier that use CommandVerifier with commands from config or auto-detection.\n\n## Files to Create\n\n### internal/verify/test_verifier.go\n\n```go\n// TestVerifier runs the project's test suite.\ntype TestVerifier struct {\n    *CommandVerifier\n}\n\n// NewTestVerifier creates a test verifier.\n// Uses config.TestCommand if set, otherwise falls back to detected command.\n// Returns nil if no test command available (config empty + detection failed).\nfunc NewTestVerifier(cfg *Config, detected *DetectedConfig, dir string) *TestVerifier\n```\n\n### internal/verify/build_verifier.go\n\n```go\n// BuildVerifier verifies the project builds successfully.\ntype BuildVerifier struct {\n    *CommandVerifier\n}\n\n// NewBuildVerifier creates a build verifier.\n// Uses config.BuildCommand if set, otherwise falls back to detected command.\n// Returns nil if no build command available.\nfunc NewBuildVerifier(cfg *Config, detected *DetectedConfig, dir string) *BuildVerifier\n```\n\n## Command Resolution Logic\n\n1. If config has command set → use it\n2. Else if detected has command → use it\n3. Else → return nil (skip this verifier)\n\n## Implementation Notes\n\n- These are thin wrappers around CommandVerifier\n- The resolution logic should be clear and testable\n- Name() returns \"test\" or \"build\" respectively\n- Nil return means \"skip this verification\" not \"error\"\n\n### internal/verify/test_verifier_test.go\n### internal/verify/build_verifier_test.go\n- Test config command takes precedence\n- Test fallback to detection\n- Test nil when neither available\n- Test actual execution (integration-style with real commands)",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "w4a",
+    "gce"
+  ],
+  "parent": "t99",
+  "acceptance_criteria": "1. NewTestVerifier uses config.TestCommand when set\n2. NewTestVerifier falls back to detected.TestCommand\n3. NewTestVerifier returns nil when no command available\n4. Same behavior for NewBuildVerifier with build commands\n5. Verifiers correctly inherit CommandVerifier behavior\n6. Name() returns \"test\" or \"build\" appropriately\n7. All unit tests pass",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T09:00:40.112159Z",
+  "updated_at": "2026-01-12T09:01:56.742294Z",
+  "closed_at": "2026-01-12T09:01:56.742294Z"
+}

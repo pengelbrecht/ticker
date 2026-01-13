@@ -1,0 +1,18 @@
+{
+  "id": "gom",
+  "title": "Implement MergeManager for worktree merging",
+  "description": "Create MergeManager to handle merging completed worktree branches back to main.\n\n## Overview\n\nWhen an epic completes in a worktree, its branch needs to be merged back to the main branch. MergeManager handles the merge operation and detects conflicts.\n\n## Files to Create\n\n### internal/worktree/merge.go\n\n```go\n// MergeResult represents the outcome of a merge attempt.\ntype MergeResult struct {\n    Success      bool\n    Merged       bool     // True if merge was performed (not just fast-forward check)\n    Conflicts    []string // List of conflicting files if any\n    MergeCommit  string   // Commit hash of merge commit (if success)\n    ErrorMessage string   // Error details if failed\n}\n\n// MergeManager handles merging worktree branches to main.\ntype MergeManager struct {\n    repoRoot   string\n    mainBranch string // Usually \"main\" or \"master\"\n}\n\n// NewMergeManager creates a merge manager.\n// Auto-detects main branch name.\nfunc NewMergeManager(repoRoot string) (*MergeManager, error)\n\n// Merge merges the worktree branch into main.\n// Must be called from main repo (not worktree).\n// Returns MergeResult with conflict details if merge fails.\nfunc (m *MergeManager) Merge(wt *Worktree) (*MergeResult, error)\n\n// AbortMerge aborts an in-progress merge (if any).\nfunc (m *MergeManager) AbortMerge() error\n\n// HasConflict checks if there's an unresolved merge in progress.\nfunc (m *MergeManager) HasConflict() bool\n```\n\n## Merge Strategy\n\n```\n1. Checkout main branch in main repo\n2. git merge \u003cworktree-branch\u003e --no-ff -m \"Merge ticker/\u003cepic-id\u003e\"\n3. If conflict:\n   - Parse conflicting files from git status\n   - Return MergeResult with Conflicts populated\n4. If success:\n   - Return MergeResult with Success=true, MergeCommit set\n```\n\n## Git Commands\n\n- `git checkout \u003cmain-branch\u003e` - Switch to main\n- `git merge \u003cbranch\u003e --no-ff -m \"...\"` - Merge with commit\n- `git status --porcelain` - Check for conflicts (UU prefix)\n- `git merge --abort` - Abort failed merge\n- `git rev-parse HEAD` - Get merge commit hash\n\n## Implementation Notes\n\n- Detect main branch: check for 'main', fallback to 'master'\n- Use --no-ff to always create merge commit (clearer history)\n- Merge commit message: \"Merge ticker/\u003cepic-id\u003e: \u003cepic-title\u003e\"\n- Parse git status output for conflict detection\n- Consider: should we auto-stash uncommitted changes before merge?\n\n### internal/worktree/merge_test.go\n- Test successful fast-forward merge\n- Test successful merge with commits on both sides\n- Test conflict detection (modify same file in both)\n- Test AbortMerge cleans up conflict state\n- Test HasConflict detection\n- Use temp repos with deliberate conflicts",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "xvz"
+  ],
+  "parent": "8my",
+  "acceptance_criteria": "1. MergeManager.Merge() successfully merges worktree branch to main\n2. Merge uses --no-ff for clear history\n3. Merge commit message includes epic ID\n4. Conflicts detected and returned in MergeResult.Conflicts\n5. AbortMerge cleans up conflict state\n6. HasConflict accurately detects in-progress merge\n7. Auto-detects main/master branch name\n8. All tests pass including conflict scenarios",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T10:01:39.305486Z",
+  "updated_at": "2026-01-12T13:58:49.023757269Z",
+  "closed_at": "2026-01-12T13:58:49.023757269Z"
+}

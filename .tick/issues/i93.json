@@ -1,0 +1,15 @@
+{
+  "id": "i93",
+  "title": "Report repo name",
+  "description": "Read go.mod and report the module name.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "h97",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T21:29:37.609877Z",
+  "updated_at": "2026-01-11T21:30:16.470739Z",
+  "closed_at": "2026-01-11T21:30:16.470739Z",
+  "closed_reason": "Read go.mod and found module name: github.com/pengelbrecht/ticker"
+}

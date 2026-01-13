@@ -1,0 +1,18 @@
+{
+  "id": "60a",
+  "title": "Optimize --headless mode for LLM operators",
+  "description": "Optimize headless mode for use cases where an LLM (like Claude Code) is running ticker programmatically.\n\n## Use Case\n\nUser asks Claude Code to run ticker on an epic. Claude needs to:\n- Monitor progress in real-time\n- Catch errors quickly\n- Understand task transitions\n- Intervene if needed\n\n## Design\n\n### Default: Human-readable streaming (also LLM-friendly)\n\n```bash\nticker run \u003cepic-id\u003e --headless\n```\n\nOutput format:\n```\n[START] Epic: abc123 - Feature Implementation\n[TASK] xyz789 - Add user authentication\n[OUTPUT] Reading existing auth code...\n[OUTPUT] Creating new middleware...\n[TASK_COMPLETE] xyz789 - closed\n[TASK] def456 - Add tests\n[ERROR] Build failed: missing import\n[OUTPUT] Fixing import...\n[TASK_COMPLETE] def456 - closed  \n[COMPLETE] Epic abc123 finished. 3 tasks, 5 iterations, $1.23\n```\n\nKey principles:\n- Clear prefixes: [START], [TASK], [OUTPUT], [ERROR], [TASK_COMPLETE], [COMPLETE], [BLOCKED], [EJECT]\n- Errors are prominent with [ERROR] prefix\n- Skip noisy updates (token counts per chunk, spinners)\n- Show cost/tokens only in summary at end\n- Real-time streaming (flush after each line)\n\n### Optional: JSON Lines format\n\n```bash\nticker run \u003cepic-id\u003e --headless --jsonl\n```\n\nOutput format:\n```json\n{\"type\":\"start\",\"epic_id\":\"abc123\",\"title\":\"Feature Implementation\"}\n{\"type\":\"task\",\"task_id\":\"xyz789\",\"title\":\"Add user authentication\"}\n{\"type\":\"output\",\"text\":\"Reading existing auth code...\"}\n{\"type\":\"error\",\"text\":\"Build failed: missing import\"}\n{\"type\":\"task_complete\",\"task_id\":\"xyz789\"}\n{\"type\":\"complete\",\"epic_id\":\"abc123\",\"iterations\":5,\"cost\":1.23}\n```\n\n## Implementation\n\n### cmd/ticker/main.go\n\nAdd flag:\n```go\nrunCmd.Flags().Bool(\"jsonl\", false, \"Output JSON lines format (use with --headless)\")\n```\n\n### internal/engine/headless_output.go (new file)\n\nCreate output formatter:\n```go\ntype HeadlessOutput struct {\n    jsonl  bool\n    writer io.Writer\n}\n\nfunc (h *HeadlessOutput) Start(epic *ticks.Epic)\nfunc (h *HeadlessOutput) Task(task *ticks.Task)\nfunc (h *HeadlessOutput) Output(text string)\nfunc (h *HeadlessOutput) Error(err error)\nfunc (h *HeadlessOutput) TaskComplete(taskID string)\nfunc (h *HeadlessOutput) Complete(result *RunResult)\n```\n\nWire into engine callbacks in headless mode.",
+  "notes": "2026-01-12 23:13 - Reopened - was prematurely closed without implementation. Current headless mode doesn't match spec (no [PREFIX] tags, no --jsonl flag).",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "enhancement"
+  ],
+  "acceptance_criteria": "1. --headless output uses clear prefixes [START], [TASK], [OUTPUT], [ERROR], etc.\n2. Errors are prominent and easy to grep/detect\n3. Token counts only shown in final summary, not per-chunk\n4. Output is flushed immediately for real-time streaming\n5. --jsonl flag outputs valid JSON lines format\n6. --jsonl without --headless shows warning/error\n7. Human can read default format easily\n8. LLM can parse both formats reliably",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T12:19:59.822386Z",
+  "updated_at": "2026-01-12T22:20:22.536188Z",
+  "closed_at": "2026-01-12T22:20:22.536188Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "cvv",
+  "title": "List CLI commands",
+  "description": "Read cmd/ticker/main.go and list all subcommands defined.",
+  "status": "closed",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "hqj",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T21:25:23.341425Z",
+  "updated_at": "2026-01-11T21:27:10.343926Z",
+  "closed_at": "2026-01-11T21:27:10.343926Z",
+  "closed_reason": "Read cmd/ticker/main.go. Found 4 subcommands: (1) run [epic-id] - Run an epic with AI agent, (2) resume \u003ccheckpoint-id\u003e - Resume from checkpoint, (3) checkpoints [epic-id] - List available checkpoints, (4) upgrade - Upgrade ticker to latest version. Root command 'ticker' also available."
+}

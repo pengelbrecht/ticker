@@ -1,0 +1,13 @@
+{
+  "id": "nun",
+  "title": "Bubbletea scaffolding",
+  "description": "Set up Bubbletea TUI framework with Bubbles components.\n\nDependencies:\n- github.com/charmbracelet/bubbletea\n- github.com/charmbracelet/bubbles\n- github.com/charmbracelet/lipgloss\n\ninternal/tui/tui.go:\n- Model struct with tea.Model interface\n- Init, Update, View methods\n- Embed bubbles: viewport, list, progress\n\ncmd/ticker/main.go:\n- Add TUI mode (default when not --headless)\n- tea.NewProgram setup\n\nVerify: ticker run \u003cepic\u003e shows blank TUI, exits cleanly with q/ctrl-c",
+  "status": "in_progress",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "e8g",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T13:03:47.584311392Z",
+  "updated_at": "2026-01-11T14:24:01.31869862Z"
+}

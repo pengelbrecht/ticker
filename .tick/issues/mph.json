@@ -1,0 +1,114 @@
+{
+  "acceptance_criteria": "1. NewGitVerifier returns nil for non-git directories\n2. Verify passes when working tree is clean\n3. Verify fails when there are uncommitted changes\n4. Verify fails when there are untracked files\n5. Failure output includes list of changed/untracked files\n6. Git not installed is handled gracefully\n7. All unit tests pass with isolated temp repos",
+  "blocked_by": [
+    "194"
+  ],
+  "closed_at": "2026-01-12T09:10:20.534856Z",
+  "closed_reason": "Implemented GitVerifier with NewGitVerifier constructor (returns nil for non-git dirs), Name() returning 'git', and Verify() using git status --porcelain. Tests cover clean repo, modified files, untracked files, staged changes, and context cancellation.",
+  "created_at": "2026-01-12T09:01:05.591615Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Implement GitVerifier that checks for uncommitted changes after the agent completes a task.\n\n## Purpose\n\nCatch cases where the agent made changes but forgot to commit them. This ensures all work is properly committed before moving to the next task.\n\n## Files to Create\n\n### internal/verify/git_verifier.go\n\n```go\n// GitVerifier checks that there are no uncommitted changes.\ntype GitVerifier struct {\n    dir string\n}\n\n// NewGitVerifier creates a git verifier for the given directory.\n// Returns nil if directory is not a git repository.\nfunc NewGitVerifier(dir string) *GitVerifier\n\n// Name returns \"git\".\nfunc (v *GitVerifier) Name() string\n\n// Verify checks for uncommitted changes using git status.\n// Passes if working tree is clean (nothing to commit).\n// Fails if there are uncommitted changes, listing them in output.\nfunc (v *GitVerifier) Verify(ctx context.Context, taskID string, agentOutput string) *Result\n```\n\n## Implementation Notes\n\n- Use `git status --porcelain` to check for changes\n- Empty output = clean working tree = pass\n- Non-empty output = uncommitted changes = fail\n- Include the git status output in Result.Output for context\n- Handle case where git is not installed\n- Handle case where directory is not a git repo\n- Should NOT commit anything, just verify\n\n### internal/verify/git_verifier_test.go\n- Test in clean repo (pass)\n- Test with uncommitted changes (fail)\n- Test with untracked files (fail)\n- Test in non-git directory (NewGitVerifier returns nil)\n- Use temp git repos for isolation",
+  "id": "mph",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "t99",
+  "priority": 2,
+  "run": {
+    "session_id": "cfb3171d-391a-4b42-a782-90fef98fe7d0",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-12T10:08:52.761805+01:00",
+    "ended_at": "2026-01-12T10:10:44.102536+01:00",
+    "output": "I'll start by reviewing the existing code to understand the codebase structure and the Verifier interface that was already created, then implement the GitVerifier.\n\nLet me find the correct location of the verifier interface.\n\nNow I have a good understanding of the Verifier interface. Let me also look at the test file to understand the testing patterns used.\n\nNow I'll implement the GitVerifier. Based on the interface and task requirements:\n\nNow I'll write the tests for GitVerifier.\n\nNow let me run the tests to make sure everything works.\n\nAll tests pass. Let me also run the full test suite to make sure nothing else is broken.\n\nAll tests pass. Now let me close the task, commit the changes, and add an epic note.\n\nTask mph is complete. I implemented:\n\n1. **`internal/verify/git_verifier.go`** - GitVerifier struct with:\n   - `NewGitVerifier(dir)` - Constructor that returns nil if directory is not a git repo (checks for `.git` directory)\n   - `Name()` - Returns \"git\"\n   - `Verify(ctx, taskID, agentOutput)` - Runs `git status --porcelain` and returns a pass if output is empty (clean working tree) or fail if there are uncommitted changes\n\n2. **`internal/verify/git_verifier_test.go`** - Comprehensive tests covering:\n   - Non-git directory returns nil verifier\n   - Git directory returns valid verifier\n   - Edge case: `.git` as file (not directory) returns nil\n   - Clean working tree passes\n   - Uncommitted modified files fail\n   - Untracked files fail\n   - Staged but uncommitted changes fail\n   - Context cancellation is respected",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2577
+      },
+      {
+        "name": "Read",
+        "duration_ms": 685
+      },
+      {
+        "name": "Read",
+        "duration_ms": 462
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 142
+      },
+      {
+        "name": "Read",
+        "duration_ms": 504
+      },
+      {
+        "name": "Read",
+        "duration_ms": 268
+      },
+      {
+        "name": "Read",
+        "duration_ms": 322
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3410
+      },
+      {
+        "name": "Write",
+        "duration_ms": 8209
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1699
+      },
+      {
+        "name": "Write",
+        "duration_ms": 22759
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1960
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 625
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 492
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1735
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2022
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2079
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2920
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1769
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5805,
+      "cache_read_tokens": 513925,
+      "cache_creation_tokens": 19647,
+      "cost_usd": 0.6100025000000001,
+      "duration_ms": 110923
+    },
+    "success": true,
+    "num_turns": 20
+  },
+  "status": "closed",
+  "title": "Implement GitVerifier to check for uncommitted changes",
+  "type": "task",
+  "updated_at": "2026-01-12T09:10:20.534856Z"
+}

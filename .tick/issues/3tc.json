@@ -1,0 +1,18 @@
+{
+  "id": "3tc",
+  "title": "Budget tracker",
+  "description": "Track and enforce budget limits.\n\ninternal/budget/tracker.go:\n- Tracker struct with limits and current usage\n- Limits: MaxIterations, MaxTokens, MaxCost, MaxDuration\n- Add(tokens, cost int) - accumulate usage\n- ShouldStop() (bool, reason string) - check if any limit exceeded\n- Remaining() stats for display\n\ninternal/budget/pricing.go:\n- Claude model pricing table\n- EstimateCost(tokensIn, tokensOut int) float64\n\nVerify: Tracker correctly stops when limits exceeded.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "wkg"
+  ],
+  "parent": "cv5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T09:31:24.768202491Z",
+  "updated_at": "2026-01-11T11:30:28.755456516Z",
+  "closed_at": "2026-01-11T11:30:28.755456516Z",
+  "closed_reason": "Implemented Tracker struct with Limits (MaxIterations, MaxTokens, MaxCost, MaxDuration), Add(), ShouldStop(), Remaining() methods, and pricing.go with Claude model pricing table and EstimateCost(). 22 unit tests passing."
+}

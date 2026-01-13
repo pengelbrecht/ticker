@@ -1,0 +1,14 @@
+{
+  "id": "jmd",
+  "title": "Expand test script to generate parallel execution test epics",
+  "description": "Update the test epic generation script to create multiple epics suitable for testing parallel execution.\n\n## Overview\n\nThe existing `scripts/create-test-epic.sh` creates a single test epic. Expand it to also generate multiple independent epics that can be used to test parallel worktree execution.\n\n## Files to Modify\n\n### scripts/create-test-epic.sh\n\nAdd a new mode or separate function to create parallel test epics:\n\n```bash\n#!/bin/bash\n# Usage:\n#   ./scripts/create-test-epic.sh           # Create single test epic (existing)\n#   ./scripts/create-test-epic.sh parallel  # Create 3 parallel test epics\n\nif [ \"$1\" = \"parallel\" ]; then\n    create_parallel_test_epics\nelse\n    create_single_test_epic\nfi\n```\n\n## Parallel Test Epics Design\n\nCreate 3 independent epics that:\n1. Don't modify the same files (avoid merge conflicts for happy path testing)\n2. Have different task counts (test different completion times)\n3. Are simple enough to complete quickly\n\n### Epic A: Documentation Tasks (2 tasks)\n- Task A1: Create docs/TESTING.md\n- Task A2: Add testing section to README.md\n\n### Epic B: Script Tasks (3 tasks)  \n- Task B1: Create scripts/hello.sh\n- Task B2: Create scripts/goodbye.sh\n- Task B3: Create scripts/README.md\n\n### Epic C: Config Tasks (2 tasks)\n- Task C1: Create .ticker/test-config.json\n- Task C2: Create .ticker/README.md\n\n## Implementation Notes\n\n- Each epic creates files in different directories (no conflicts)\n- Tasks are trivial (create file with content) so they complete fast\n- Output epic IDs at end for easy copy-paste:\n  ```\n  Parallel test epics created:\n    Epic A: abc123\n    Epic B: def456\n    Epic C: ghi789\n  \n  Run with: ticker run abc123 def456 ghi789 --parallel 3\n  ```\n\n## Optional: Conflict Test Epics\n\nAdd a second mode for testing merge conflicts:\n\n```bash\n./scripts/create-test-epic.sh conflict  # Create epics that WILL conflict\n```\n\nThese epics would both modify the same file, guaranteeing a merge conflict for testing the conflict handling workflow.",
+  "status": "open",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "8my",
+  "acceptance_criteria": "1. create-test-epic.sh parallel creates 3 independent epics\n2. Each epic has clear, simple tasks\n3. Epics don't modify overlapping files (no accidental conflicts)\n4. Script outputs epic IDs and example run command\n5. Tasks are trivial enough to complete in \u003c1 minute each\n6. Optional: conflict mode creates epics that will conflict\n7. Script is idempotent (can re-run to recreate)",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T10:04:08.798664Z",
+  "updated_at": "2026-01-12T10:04:08.798664Z"
+}

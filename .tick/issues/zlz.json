@@ -1,0 +1,15 @@
+{
+  "id": "zlz",
+  "title": "Report repo name",
+  "description": "Read go.mod and report the module name.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "hqj",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T21:25:23.280118Z",
+  "updated_at": "2026-01-11T21:26:32.005378Z",
+  "closed_at": "2026-01-11T21:26:32.005378Z",
+  "closed_reason": "Read go.mod file and identified module name: github.com/pengelbrecht/ticker"
+}

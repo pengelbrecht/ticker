@@ -1,0 +1,18 @@
+{
+  "id": "eh5",
+  "title": "Enhance status bar with detailed token metrics",
+  "description": "Enhance status bar to show detailed token metrics from AgentState.Metrics: input tokens, output tokens, cache read tokens, cache creation tokens. Format: 'Tokens: 1.2k in │ 450 out │ 12k cache'. Also show model name (e.g., 'opus' or 'sonnet').",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "b35"
+  ],
+  "parent": "n26",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:42:31.106729Z",
+  "updated_at": "2026-01-11T21:47:58.028016Z",
+  "closed_at": "2026-01-11T21:47:58.028016Z",
+  "closed_reason": "Added formatTokens() and shortModelName() helper functions. Enhanced renderStatusBar() to display token metrics (input, output, cache) and model name when agentState is available. Format: 'Tokens: 1.2k in │ 450 out │ 12k cache │ Model: opus'. Cache tokens only shown when non-zero. Added tests for new helpers and status bar with agent state."
+}

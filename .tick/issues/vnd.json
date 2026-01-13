@@ -1,0 +1,15 @@
+{
+  "id": "vnd",
+  "title": "What is 2+2?",
+  "description": "Calculate 2+2 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "h97",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T21:29:37.57972Z",
+  "updated_at": "2026-01-11T21:29:59.859272Z",
+  "closed_at": "2026-01-11T21:29:59.859272Z",
+  "closed_reason": "Calculated 2+2=4. Simple arithmetic task completed."
+}

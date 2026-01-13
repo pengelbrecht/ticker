@@ -1,0 +1,18 @@
+{
+  "id": "6lh",
+  "title": "Create model.go with Bubble Tea scaffold",
+  "description": "Create internal/tui/model.go with the basic Bubble Tea scaffold. Include:\n- Model struct with minimal fields (width, height, ready, keys, help)\n- Init() returning nil cmd\n- Update() handling tea.WindowSizeMsg and tea.KeyMsg\n- View() returning placeholder string\n- NewModel() constructor function\n- Force COLORTERM=truecolor in init()\n\nFollow ticks pattern of single-file monolithic model. This is the foundation all other ticks build on.",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "foundation"
+  ],
+  "parent": "4pq",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T20:09:43.951787Z",
+  "updated_at": "2026-01-11T20:19:17.431033Z",
+  "closed_at": "2026-01-11T20:19:17.431033Z",
+  "closed_reason": "Created internal/tui/model.go with basic Bubble Tea scaffold following ticks pattern. Includes: Model struct with width/height/ready/keys/help fields, keyMap with navigation bindings and help.KeyMap interface implementation, NewModel() constructor, Init() returning nil, Update() handling WindowSizeMsg and KeyMsg, View() with placeholder and help. Also fixed doc.go to have valid package declaration. TUI package compiles independently; main.go updates will come in task pjf."
+}

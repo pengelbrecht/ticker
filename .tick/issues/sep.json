@@ -1,0 +1,23 @@
+{
+  "id": "sep",
+  "title": "Core engine loop",
+  "description": "Main Ralph iteration loop.\n\ninternal/engine/engine.go:\n- Engine struct (agent, ticks, budget, checkpoint, scratchpad)\n- RunConfig (EpicID, MaxIterations, MaxCost, CheckpointEvery, ResumeFrom)\n- Run(ctx, config) (*RunResult, error)\n\nLoop logic:\n1. Check budget limits\n2. Get next task (tk next epic)\n3. Build prompt with context\n4. Run agent\n5. Parse signals\n6. Update budget\n7. Checkpoint if interval\n8. Exit on signal or budget exceeded\n\ninternal/engine/iteration.go:\n- runIteration(ctx, state) (*IterationResult, error)\n- Single iteration lifecycle\n\nVerify: Can complete a simple epic with multiple tasks.",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "l83",
+    "95d",
+    "7aq",
+    "zqw",
+    "3tc",
+    "bt4"
+  ],
+  "parent": "cv5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-11T09:31:50.24899909Z",
+  "updated_at": "2026-01-11T11:58:05.058589794Z",
+  "closed_at": "2026-01-11T11:58:05.058589794Z",
+  "closed_reason": "Implemented Engine struct with Run() method, RunConfig, RunResult, IterationResult. Core loop: get task, build prompt, run agent, parse signals, update budget, checkpoint. Callbacks for TUI integration."
+}

@@ -1,0 +1,17 @@
+{
+  "id": "exe",
+  "title": "Bug: Engine closes non-epic ticks when run with 'no tasks found'",
+  "description": "## Problem\n\nRunning `ticker run \u003ctask-id\u003e` where the ID is a task (not an epic) causes the engine to close the task with reason \"no tasks found\".\n\nExample: `ticker run lgt` where `lgt` is a task under epic `8my`. Engine finds no child tasks and closes `lgt`.\n\n## Expected Behavior\n\nEngine should validate that the provided ID is an epic before running. If not an epic, error with clear message:\n\n```\nError: 'lgt' is a task, not an epic. Run 'ticker run 8my' to execute the parent epic.\n```\n\n## Fix Location\n\n### internal/engine/engine.go (or cmd/ticker/run.go)\n\nAdd validation before starting the run loop:\n\n```go\n// In Run() or before calling Run()\ntick, err := ticks.Get(epicID)\nif err != nil {\n    return fmt.Errorf(\"getting tick: %w\", err)\n}\nif tick.Type != \"epic\" {\n    return fmt.Errorf(\"'%s' is a %s, not an epic\", epicID, tick.Type)\n}\n```\n\n## Alternative\n\nCould also suggest the parent epic if the task has one:\n\n```\nError: 'lgt' is a task, not an epic.\nIts parent epic is '8my' (Phase 4: Worktrees \u0026 Parallel Execution).\nRun: ticker run 8my\n```",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "bug"
+  ],
+  "acceptance_criteria": "1. Engine rejects non-epic IDs with clear error message\n2. Error message identifies what type the tick actually is\n3. If task has parent epic, error suggests running that instead\n4. No accidental closing of tasks\n5. Unit test covers this validation",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-12T10:09:46.992549Z",
+  "updated_at": "2026-01-12T10:12:33.778973Z",
+  "closed_at": "2026-01-12T10:12:33.778973Z"
+}

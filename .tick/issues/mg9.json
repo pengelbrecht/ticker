@@ -1,0 +1,90 @@
+{
+  "acceptance_criteria": "1. Run command accepts multiple epic IDs\n2. --parallel flag controls max concurrency\n3. Multiple epics automatically implies --worktree mode\n4. --parallel defaults to number of epics\n5. Validation: all epic IDs must exist and be open\n6. Validation: --parallel must be positive\n7. Duplicate epic IDs rejected\n8. Help text documents new usage\n9. All tests pass",
+  "blocked_by": [
+    "91k"
+  ],
+  "closed_at": "2026-01-12T22:05:07.561891131Z",
+  "closed_reason": "Implementation complete: Added --parallel flag, multiple epic ID support, validateEpicIDs for existence/open/unique checks, runParallelWithTUI/runParallelHeadless integration. Multiple epics implies --worktree. All 10 CLI tests pass.",
+  "created_at": "2026-01-12T10:03:49.281265Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Extend CLI to accept multiple epic IDs and add --parallel flag for controlling concurrency.\n\n## Overview\n\nUpdate the `run` command to accept multiple epic IDs and add a --parallel flag to control max concurrency.\n\n## CLI Changes\n\n```bash\n# Single epic (existing, unchanged)\nticker run abc123\n\n# Single epic in worktree\nticker run abc123 --worktree\n\n# Multiple epics (implies --worktree)\nticker run abc123 def456 ghi789\n\n# Multiple epics with explicit concurrency\nticker run abc123 def456 ghi789 --parallel 2\n\n# Sequential but isolated (parallel=1)\nticker run abc123 def456 --parallel 1\n```\n\n## Files to Modify\n\n### cmd/ticker/main.go (or run.go)\n\n```go\n// Change epic-id from single arg to variadic\n// Before: ticker run \u003cepic-id\u003e\n// After:  ticker run \u003cepic-id\u003e [epic-id...]\n\nrunCmd.Flags().Int(\"parallel\", 0, \"Max parallel epics (default: number of epics)\")\nrunCmd.Flags().Bool(\"worktree\", false, \"Run in isolated git worktree\")\n\n// In run handler:\nepicIDs := args // All positional args are epic IDs\n\nif len(epicIDs) \u003e 1 {\n    // Multiple epics - use ParallelRunner\n    // Implies --worktree\n    maxParallel := parallel\n    if maxParallel == 0 {\n        maxParallel = len(epicIDs)\n    }\n    // ... setup ParallelRunner ...\n} else {\n    // Single epic - use existing Engine\n    // --worktree optional\n}\n```\n\n## Validation\n\n- At least one epic ID required\n- --parallel must be \u003e 0 if specified\n- --parallel without multiple epics is warning (ignored)\n- All epic IDs must exist and be open\n- All epic IDs must be unique (no duplicates)\n\n## Help Text\n\n```\nUsage:\n  ticker run \u003cepic-id\u003e [epic-id...] [flags]\n\nFlags:\n      --worktree      Run epic(s) in isolated git worktree\n      --parallel int  Max parallel epics (default: number of epics)\n      --headless      Run without TUI\n      --skip-verify   Skip verification after task completion\n  -h, --help          help for run\n\nExamples:\n  ticker run abc123                      # Single epic with TUI\n  ticker run abc123 --worktree           # Single epic in worktree\n  ticker run abc def ghi                 # Three epics in parallel\n  ticker run abc def ghi --parallel 2    # Three epics, max 2 at a time\n```\n\n### cmd/ticker/main_test.go\n- Test single epic ID parsing\n- Test multiple epic IDs parsing\n- Test --parallel flag parsing\n- Test validation errors\n- Test multiple epics implies worktree",
+  "id": "mg9",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "8my",
+  "priority": 1,
+  "run": {
+    "session_id": "2c95aeac-5fe8-46a8-8f2f-d7557ea7ad4f",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-12T22:04:27.643441306Z",
+    "ended_at": "2026-01-12T22:05:39.762729845Z",
+    "output": "I'll review the epic notes and current task status first.\n\nFrom the notes, I can see:\n- Iteration 2 completed [mg9] multi-epic CLI support with commit 6aeea27\n- Verification failed because the `ticker` binary wasn't committed\n\nLet me check the current state of the task and what needs to be fixed.\n\nThe task is still in_progress and the verification failed because the `ticker` binary wasn't committed. However, looking at the notes and git status, I see the implementation was done but the files weren't properly committed.\n\nLet me check the current state of the implementation and then properly close and commit everything.\n\nI see the commit for mg9 was already made (`b800145 feat(cli): Add multi-epic support with --parallel flag [mg9]`), but there are still uncommitted changes to the `ticker` binary and the .tick/issues files. \n\nThe issue is that the verification expects a clean git status. The `ticker` binary was rebuilt after the commit, causing the verification failure. Let me:\n\n1. Rebuild the ticker binary to ensure it matches current code\n2. Close the task properly\n3. Commit everything in one go\n\nAll CLI tests pass. Now let me close the task and commit everything properly.\n\nGit status is now clean. Let me add an epic note for the next iteration.\n\nTask mg9 is now closed, git status is clean, and the epic note has been added. The implementation is complete with:\n\n1. Run command accepts multiple epic IDs (variadic args)\n2. --parallel flag controls max concurrency (defaults to number of epics)\n3. Multiple epics automatically implies --worktree mode\n4. validateEpicIDs checks existence, open status, and uniqueness\n5. All 10 CLI tests pass",
+    "tools": [
+      {
+        "name": "Bash",
+        "duration_ms": 863
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 811
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 886
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1186
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 948
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1210
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2912
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 818
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2658
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 787
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3804
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2345
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 992
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 1733,
+      "cache_read_tokens": 314567,
+      "cache_creation_tokens": 13372,
+      "cost_usd": 0.4430305000000001,
+      "duration_ms": 71576
+    },
+    "success": true,
+    "num_turns": 14
+  },
+  "status": "closed",
+  "title": "Add CLI support for multiple epics and --parallel flag",
+  "type": "task",
+  "updated_at": "2026-01-12T22:05:07.561891131Z"
+}
