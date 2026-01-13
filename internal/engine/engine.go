@@ -355,7 +355,10 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			if state.iteration == 0 {
 				reason = "no tasks found"
 			}
-			_ = e.ticks.CloseEpic(config.EpicID, reason)
+			if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
+				// Log but don't fail - epic may already be closed or race condition
+				fmt.Fprintf(os.Stderr, "warning: failed to close epic %s: %v\n", config.EpicID, err)
+			}
 			return state.toResult(reason, e.budget.Usage()), nil
 		}
 
