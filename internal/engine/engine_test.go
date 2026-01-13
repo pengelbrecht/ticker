@@ -262,7 +262,7 @@ func TestRunState_ToResult(t *testing.T) {
 		signalReason:   "",
 	}
 
-	result := state.toResult("test reason")
+	result := state.toResult("test reason", budget.Usage{Cost: 1.50, TokensIn: 1000, TokensOut: 500})
 
 	if result.EpicID != "epic-1" {
 		t.Errorf("EpicID = %q, want %q", result.EpicID, "epic-1")
@@ -278,6 +278,12 @@ func TestRunState_ToResult(t *testing.T) {
 	}
 	if result.Duration < time.Minute {
 		t.Error("Duration should be at least 1 minute")
+	}
+	if result.TotalCost != 1.50 {
+		t.Errorf("TotalCost = %v, want %v", result.TotalCost, 1.50)
+	}
+	if result.TotalTokens != 1500 {
+		t.Errorf("TotalTokens = %d, want %d", result.TotalTokens, 1500)
 	}
 }
 

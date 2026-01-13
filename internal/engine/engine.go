@@ -292,12 +292,12 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Check context cancellation
 		if ctx.Err() != nil {
 			e.writeInterruptionNotes(state, config.EpicID)
-			return state.toResult("context cancelled"), ctx.Err()
+			return state.toResult("context cancelled", e.budget.Usage()), ctx.Err()
 		}
 
 		// Check budget limits before starting iteration
 		if shouldStop, reason := e.budget.ShouldStop(); shouldStop {
-			return state.toResult(reason), nil
+			return state.toResult(reason, e.budget.Usage()), nil
 		}
 
 		// Check for pause signal
@@ -310,7 +310,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 						select {
 						case <-ctx.Done():
 							e.writeInterruptionNotes(state, config.EpicID)
-							return state.toResult("context cancelled while paused"), ctx.Err()
+							return state.toResult("context cancelled while paused", e.budget.Usage()), ctx.Err()
 						case paused = <-config.PauseChan:
 						}
 					}
@@ -336,7 +336,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 
 			if hasOpen {
 				// There are tasks but they're all blocked - don't close epic
-				return state.toResult("no ready tasks (remaining tasks are blocked)"), nil
+				return state.toResult("no ready tasks (remaining tasks are blocked)", e.budget.Usage()), nil
 			}
 
 			// All tasks are closed - epic complete
@@ -346,14 +346,14 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 				reason = "no tasks found"
 			}
 			_ = e.ticks.CloseEpic(config.EpicID, reason)
-			return state.toResult(reason), nil
+			return state.toResult(reason, e.budget.Usage()), nil
 		}
 
 		// Stuck loop detection - catch agent forgetting to close tasks
 		if task.ID == state.lastTaskID {
 			state.sameTaskCount++
 			if state.sameTaskCount > config.MaxTaskRetries {
-				return state.toResult(fmt.Sprintf("stuck on task %s after %d iterations - may need manual review", task.ID, state.sameTaskCount)), nil
+				return state.toResult(fmt.Sprintf("stuck on task %s after %d iterations - may need manual review", task.ID, state.sameTaskCount), e.budget.Usage()), nil
 			}
 		} else {
 			state.lastTaskID = task.ID
@@ -434,9 +434,9 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 				}
 				// Continue to next iteration - don't close epic
 			case SignalEject:
-				return state.toResult(fmt.Sprintf("agent ejected: %s", iterResult.SignalReason)), nil
+				return state.toResult(fmt.Sprintf("agent ejected: %s", iterResult.SignalReason), e.budget.Usage()), nil
 			case SignalBlocked:
-				return state.toResult(fmt.Sprintf("agent blocked: %s", iterResult.SignalReason)), nil
+				return state.toResult(fmt.Sprintf("agent blocked: %s", iterResult.SignalReason), e.budget.Usage()), nil
 			}
 		}
 
@@ -481,7 +481,7 @@ type runState struct {
 }
 
 // toResult converts run state to a RunResult.
-func (s *runState) toResult(exitReason string) *RunResult {
+func (s *runState) toResult(exitReason string, budgetUsage budget.Usage) *RunResult {
 	return &RunResult{
 		EpicID:         s.epicID,
 		Iterations:     s.iteration,
@@ -490,6 +490,8 @@ func (s *runState) toResult(exitReason string) *RunResult {
 		Signal:         s.signal,
 		SignalReason:   s.signalReason,
 		ExitReason:     exitReason,
+		TotalCost:      budgetUsage.Cost,
+		TotalTokens:    budgetUsage.TotalTokens(),
 	}
 }
 
