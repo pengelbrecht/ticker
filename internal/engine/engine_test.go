@@ -463,7 +463,7 @@ func TestIterationResult_IsTimeout(t *testing.T) {
 	}
 }
 
-func TestSetVerifyRunner(t *testing.T) {
+func TestEnableVerification(t *testing.T) {
 	dir := t.TempDir()
 	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
 	c := checkpoint.NewManagerWithDir(dir)
@@ -476,20 +476,16 @@ func TestSetVerifyRunner(t *testing.T) {
 		prompt:     NewPromptBuilder(),
 	}
 
-	// Initially nil
-	if e.verifyRunner != nil {
-		t.Error("verifyRunner should be nil initially")
+	// Initially disabled
+	if e.verifyEnabled {
+		t.Error("verifyEnabled should be false initially")
 	}
 
-	// Set a runner
-	runner := verify.NewRunner(dir)
-	e.SetVerifyRunner(runner)
+	// Enable verification
+	e.EnableVerification()
 
-	if e.verifyRunner == nil {
-		t.Error("verifyRunner should be set")
-	}
-	if e.verifyRunner != runner {
-		t.Error("verifyRunner should match the set runner")
+	if !e.verifyEnabled {
+		t.Error("verifyEnabled should be true after EnableVerification()")
 	}
 }
 
