@@ -382,13 +382,25 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		if err != nil {
 			return
 		}
+		// Build map of task statuses to filter closed blockers
+		taskStatus := make(map[string]string, len(tasks))
+		for _, t := range tasks {
+			taskStatus[t.ID] = t.Status
+		}
 		taskInfos := make([]tui.TaskInfo, len(tasks))
 		for i, t := range tasks {
+			// Filter BlockedBy to only include open blockers
+			var openBlockers []string
+			for _, blockerID := range t.BlockedBy {
+				if taskStatus[blockerID] == "open" {
+					openBlockers = append(openBlockers, blockerID)
+				}
+			}
 			taskInfos[i] = tui.TaskInfo{
 				ID:        t.ID,
 				Title:     t.Title,
 				Status:    tui.TaskStatus(t.Status),
-				BlockedBy: t.BlockedBy,
+				BlockedBy: openBlockers,
 			}
 		}
 		p.Send(tui.EpicTasksUpdateMsg{EpicID: epicID, Tasks: taskInfos})
@@ -798,13 +810,25 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		if err != nil {
 			return // Silently ignore errors
 		}
+		// Build map of task statuses to filter closed blockers
+		taskStatus := make(map[string]string, len(tasks))
+		for _, t := range tasks {
+			taskStatus[t.ID] = t.Status
+		}
 		taskInfos := make([]tui.TaskInfo, len(tasks))
 		for i, t := range tasks {
+			// Filter BlockedBy to only include open blockers
+			var openBlockers []string
+			for _, blockerID := range t.BlockedBy {
+				if taskStatus[blockerID] == "open" {
+					openBlockers = append(openBlockers, blockerID)
+				}
+			}
 			taskInfos[i] = tui.TaskInfo{
 				ID:        t.ID,
 				Title:     t.Title,
 				Status:    tui.TaskStatus(t.Status),
-				BlockedBy: t.BlockedBy,
+				BlockedBy: openBlockers,
 			}
 		}
 		p.Send(tui.TasksUpdateMsg{Tasks: taskInfos})
