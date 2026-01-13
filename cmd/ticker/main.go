@@ -514,7 +514,12 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusFailed})
 		},
 		OnEpicConflict: func(epicID string, conflict *parallel.ConflictState) {
-			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusConflict})
+			p.Send(tui.EpicConflictMsg{
+				EpicID:       epicID,
+				Files:        conflict.Files,
+				Branch:       conflict.Branch,
+				WorktreePath: conflict.Worktree,
+			})
 		},
 		OnStatusChange: func(epicID string, status string) {
 			// Refresh tasks when status changes (task completed, etc.)

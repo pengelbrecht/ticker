@@ -227,6 +227,13 @@ func (m *Model) syncFromActiveTab() {
 	m.verifyPassed = tab.VerifyPassed
 	m.verifySummary = tab.VerifySummary
 
+	// Sync conflict state
+	m.showConflict = tab.ShowConflict
+	m.conflictEpicID = tab.EpicID
+	m.conflictFiles = tab.ConflictFiles
+	m.conflictBranch = tab.ConflictBranch
+	m.conflictPath = tab.ConflictPath
+
 	// Update viewport content
 	m.updateOutputViewport()
 }
@@ -284,6 +291,12 @@ func (m *Model) syncToActiveTab() {
 	tab.VerifyTaskID = m.verifyTaskID
 	tab.VerifyPassed = m.verifyPassed
 	tab.VerifySummary = m.verifySummary
+
+	// Sync conflict state
+	tab.ShowConflict = m.showConflict
+	tab.ConflictFiles = m.conflictFiles
+	tab.ConflictBranch = m.conflictBranch
+	tab.ConflictPath = m.conflictPath
 }
 
 // findTabByEpicID returns the index of the tab with the given epic ID, or -1 if not found.

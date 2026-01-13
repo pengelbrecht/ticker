@@ -232,6 +232,12 @@ type EpicTab struct {
 	VerifyTaskID  string
 	VerifyPassed  bool
 	VerifySummary string
+
+	// Per-tab conflict state
+	ConflictFiles   []string // Conflicting files
+	ConflictBranch  string   // Branch that failed to merge
+	ConflictPath    string   // Worktree path for inspection
+	ShowConflict    bool     // Show conflict overlay
 }
 
 // NewEpicTab creates a new EpicTab with initialized maps.
@@ -256,6 +262,14 @@ type EpicAddedMsg struct {
 type EpicStatusMsg struct {
 	EpicID string
 	Status EpicTabStatus
+}
+
+// EpicConflictMsg signals a merge conflict for a specific epic.
+type EpicConflictMsg struct {
+	EpicID       string
+	Files        []string // Conflicting files
+	Branch       string   // Branch that failed to merge
+	WorktreePath string   // Path to worktree for inspection
 }
 
 // SwitchTabMsg requests switching to a different tab.
@@ -583,6 +597,13 @@ type Model struct {
 	showComplete   bool
 	completeReason string
 	completeSignal string
+
+	// Conflict overlay state (multi-epic)
+	showConflict    bool
+	conflictEpicID  string
+	conflictFiles   []string
+	conflictBranch  string
+	conflictPath    string
 
 	// Components
 	viewport         viewport.Model
@@ -1363,6 +1384,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// Priority 0: If conflict overlay is showing, handle dismissal
+		if m.showConflict {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			case "d", "esc":
+				// Dismiss conflict overlay
+				m.showConflict = false
+				return m, nil
+			default:
+				// Ignore other keys while conflict overlay is showing
+				return m, nil
+			}
+		}
+
 		// Priority 1: If complete overlay is showing, any key except 'q' dismisses, 'q' quits
 		if m.showComplete {
 			switch msg.String() {
@@ -1565,6 +1602,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case EpicStatusMsg:
 		// Update the status of a specific epic's tab
 		m.updateTabStatus(msg.EpicID, msg.Status)
+
+	case EpicConflictMsg:
+		// Update conflict state for a specific epic's tab
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.Status = EpicTabStatusConflict
+			tab.ConflictFiles = msg.Files
+			tab.ConflictBranch = msg.Branch
+			tab.ConflictPath = msg.WorktreePath
+			tab.ShowConflict = true
+			// If this is the active tab, show conflict overlay
+			if idx == m.activeTab {
+				m.showConflict = true
+				m.conflictEpicID = msg.EpicID
+				m.conflictFiles = msg.Files
+				m.conflictBranch = msg.Branch
+				m.conflictPath = msg.WorktreePath
+			}
+		}
 
 	case SwitchTabMsg:
 		// Switch to a specific tab
@@ -2330,6 +2387,11 @@ func (m Model) View() string {
 		return m.renderCompleteOverlay()
 	}
 
+	// If showing conflict overlay, render it on top
+	if m.showConflict {
+		return m.renderConflictOverlay()
+	}
+
 	// Build main layout
 	statusBar := m.renderStatusBar()
 	footer := m.renderFooter()
@@ -2830,7 +2892,11 @@ func (m Model) renderFooter() string {
 	// Build hint pairs based on current state
 	var hints []string
 
-	if m.showComplete {
+	if m.showConflict {
+		// Conflict overlay: dismiss or quit
+		hints = append(hints, keyStyle.Render("d")+descStyle.Render(":dismiss"))
+		hints = append(hints, keyStyle.Render("q")+descStyle.Render(":quit"))
+	} else if m.showComplete {
 		// Completion overlay: only quit
 		hints = append(hints, keyStyle.Render("q")+descStyle.Render(":quit"))
 	} else if m.showHelp {
@@ -3416,6 +3482,91 @@ func (m Model) renderCompleteOverlay() string {
 		Background(colorSurface).
 		Padding(1, 2).
 		Width(48)
+
+	// Title in box
+	titleStyle := headerStyle.Render(title)
+	boxContent := lipgloss.JoinVertical(lipgloss.Left, titleStyle, "", content)
+
+	box := boxStyle.Render(boxContent)
+
+	// Render the base view and place the modal on top
+	baseView := m.renderBaseView()
+	return placeOverlay(box, baseView, m.width, m.height)
+}
+
+// renderConflictOverlay renders a modal showing merge conflict details.
+// ┌─────────────────────────────────────────────────────────────┐
+// │                    ⚠ Merge Conflict                         │
+// │                                                             │
+// │  Epic abc123 completed but cannot merge to main.            │
+// │                                                             │
+// │  Conflicting files:                                         │
+// │    • src/engine/engine.go                                   │
+// │    • internal/tui/model.go                                  │
+// │                                                             │
+// │  To resolve:                                                │
+// │    1. cd /path/to/repo                                      │
+// │    2. git checkout main                                     │
+// │    3. git merge ticker/abc123                               │
+// │    4. Resolve conflicts and commit                          │
+// │                                                             │
+// │  Worktree preserved at: .worktrees/abc123/                  │
+// │                                                             │
+// │  Press 'd' to dismiss                                       │
+// └─────────────────────────────────────────────────────────────┘
+func (m Model) renderConflictOverlay() string {
+	title := "Merge Conflict"
+	icon := "⚠"
+	iconStyle := lipgloss.NewStyle().Bold(true).Foreground(colorPeach)
+	borderColor := lipgloss.NewStyle().Foreground(colorPeach)
+
+	lblStyle := dimStyle.Width(12)
+	valStyle := lipgloss.NewStyle().Foreground(colorBlue)
+	fileStyle := lipgloss.NewStyle().Foreground(colorRed)
+
+	var lines []string
+
+	// Icon + message line
+	message := fmt.Sprintf("Epic %s completed but cannot merge to main", m.conflictEpicID)
+	iconLine := iconStyle.Render(icon) + " " + valStyle.Bold(true).Render(message)
+	lines = append(lines, iconLine)
+	lines = append(lines, "")
+
+	// Conflicting files
+	lines = append(lines, lblStyle.Render("Conflicts:"))
+	if len(m.conflictFiles) == 0 {
+		lines = append(lines, "  "+fileStyle.Render("(unknown files)"))
+	} else {
+		for _, f := range m.conflictFiles {
+			lines = append(lines, "  • "+fileStyle.Render(f))
+		}
+	}
+	lines = append(lines, "")
+
+	// Resolution instructions
+	lines = append(lines, dimStyle.Render("To resolve:"))
+	lines = append(lines, dimStyle.Render("  1. git checkout main"))
+	lines = append(lines, dimStyle.Render("  2. git merge "+m.conflictBranch))
+	lines = append(lines, dimStyle.Render("  3. Resolve conflicts and commit"))
+	lines = append(lines, "")
+
+	// Worktree path
+	if m.conflictPath != "" {
+		lines = append(lines, lblStyle.Render("Worktree:")+" "+valStyle.Render(m.conflictPath))
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, footerStyle.Render("Press 'd' to dismiss"))
+
+	content := strings.Join(lines, "\n")
+
+	// Create styled box with border color
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor.GetForeground()).
+		Background(colorSurface).
+		Padding(1, 2).
+		Width(60)
 
 	// Title in box
 	titleStyle := headerStyle.Render(title)
