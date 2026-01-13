@@ -3,3 +3,6 @@
 
 # Build artifacts
 ticker
+
+# Ticks issue tracker data (local)
+.tick/
