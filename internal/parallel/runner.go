@@ -37,8 +37,8 @@ type RunnerConfig struct {
 }
 
 // EngineFactory creates Engine instances for parallel runs.
-// Each epic gets its own Engine to avoid shared state issues.
-type EngineFactory func() *engine.Engine
+// Receives the epicID to allow setting up per-epic callbacks.
+type EngineFactory func(epicID string) *engine.Engine
 
 // EpicStatus represents the status of a single epic in parallel run.
 type EpicStatus struct {
@@ -194,7 +194,7 @@ func (r *Runner) runEpic(ctx context.Context, epicID string) {
 	// Run engine
 	var result *engine.RunResult
 	if r.config.EngineFactory != nil {
-		eng := r.config.EngineFactory()
+		eng := r.config.EngineFactory(epicID)
 
 		// Configure engine for this epic
 		cfg := r.config.EngineConfig

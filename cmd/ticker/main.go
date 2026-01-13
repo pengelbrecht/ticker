@@ -410,22 +410,6 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 
 	runner := parallel.NewRunner(runnerConfig)
 
-	// Set up callbacks to send messages to TUI
-	runner.SetCallbacks(parallel.RunnerCallbacks{
-		OnEpicStart: func(epicID string) {
-			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusRunning})
-		},
-		OnEpicComplete: func(epicID string, result *engine.RunResult) {
-			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusComplete})
-		},
-		OnEpicFailed: func(epicID string, err error) {
-			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusFailed})
-		},
-		OnEpicConflict: func(epicID string, conflict *parallel.ConflictState) {
-			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusConflict})
-		},
-	})
-
 	// Helper to load tasks for an epic
 	loadTasksForEpic := func(epicID string) {
 		tasks, err := ticksClient.ListTasks(epicID)
@@ -444,6 +428,28 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		p.Send(tui.EpicTasksUpdateMsg{EpicID: epicID, Tasks: taskInfos})
 	}
 
+	// Set up callbacks to send messages to TUI
+	runner.SetCallbacks(parallel.RunnerCallbacks{
+		OnEpicStart: func(epicID string) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusRunning})
+			loadTasksForEpic(epicID)
+		},
+		OnEpicComplete: func(epicID string, result *engine.RunResult) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusComplete})
+			loadTasksForEpic(epicID)
+		},
+		OnEpicFailed: func(epicID string, err error) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusFailed})
+		},
+		OnEpicConflict: func(epicID string, conflict *parallel.ConflictState) {
+			p.Send(tui.EpicStatusMsg{EpicID: epicID, Status: tui.EpicTabStatusConflict})
+		},
+		OnStatusChange: func(epicID string, status string) {
+			// Refresh tasks when status changes (task completed, etc.)
+			loadTasksForEpic(epicID)
+		},
+	})
+
 	// Run parallel runner in background
 	go func() {
 		// Brief delay to let TUI initialize, then add epic tabs
@@ -457,6 +463,22 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		for _, id := range epicIDs {
 			loadTasksForEpic(id)
 		}
+
+		// Start task refresh ticker (updates task status every 2 seconds while running)
+		refreshTicker := time.NewTicker(2 * time.Second)
+		defer refreshTicker.Stop()
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-refreshTicker.C:
+					for _, id := range epicIDs {
+						loadTasksForEpic(id)
+					}
+				}
+			}
+		}()
 
 		result, err := runner.Run(ctx)
 		if err != nil {

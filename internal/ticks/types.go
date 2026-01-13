@@ -17,6 +17,7 @@ type Task struct {
 	Owner       string    `json:"owner"`
 	BlockedBy   []string  `json:"blocked_by,omitempty"`
 	Parent      string    `json:"parent,omitempty"`
+	Manual      bool      `json:"manual,omitempty"`
 	CreatedBy   string    `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

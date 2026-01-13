@@ -58,7 +58,34 @@ tk create "Task title" -l "bug,urgent"
 
 # Create blocked by another task
 tk create "Task title" -blocked-by <task-id>
+
+# Create a manual task (requires human intervention, skipped by ticker)
+tk create "Configure AWS credentials" --manual -parent <epic-id>
 ```
+
+### Manual Tasks (Human Intervention)
+
+Tasks marked with `--manual` require human intervention and are automatically skipped by ticker. Use this for tasks that cannot be completed by AI agents (e.g., configuring credentials, physical setup, external approvals).
+
+```bash
+# Create a manual task
+tk create "Set up AWS IAM role" --manual -parent <epic-id>
+
+# View all manual tasks
+tk list --manual
+
+# Mark existing task as manual
+tk update <id> --manual=true
+
+# Remove manual flag
+tk update <id> --manual=false
+
+# Include manual tasks in ready/next queries (not recommended for automation)
+tk ready --include-manual
+tk next <epic-id> --include-manual
+```
+
+**Important**: `tk next` and `tk ready` exclude manual tasks by default. Ticker uses `tk next` to get work, so manual tasks are automatically skipped.
 
 ### Listing and Querying
 
