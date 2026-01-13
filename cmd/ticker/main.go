@@ -406,13 +406,65 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 				eng.SetVerifyRunner(runner)
 			}
 		}
-		// Wire up callbacks for task refresh (like single-epic mode)
+
+		// Track previous snapshot state for delta-based TUI updates (per-engine)
+		var prevOutput string
+
+		// Rich streaming callback - converts AgentStateSnapshot to TUI messages
+		eng.OnAgentState = func(snap agent.AgentStateSnapshot) {
+			// Send text deltas (only new content since last update)
+			if snap.Output != prevOutput {
+				delta := snap.Output[len(prevOutput):]
+				if delta != "" {
+					p.Send(tui.EpicOutputMsg{EpicID: epicID, Text: delta})
+				}
+				prevOutput = snap.Output
+			}
+		}
+
+		// Legacy output callback
+		eng.OnOutput = func(chunk string) {
+			p.Send(tui.EpicOutputMsg{EpicID: epicID, Text: chunk})
+		}
+
+		eng.OnIterationStart = func(ctx engine.IterationContext) {
+			prevOutput = "" // Reset for new iteration
+			p.Send(tui.EpicIterationStartMsg{
+				EpicID:    epicID,
+				Iteration: ctx.Iteration,
+				TaskID:    ctx.Task.ID,
+				TaskTitle: ctx.Task.Title,
+			})
+		}
+
 		eng.OnIterationEnd = func(result *engine.IterationResult) {
+			p.Send(tui.EpicIterationEndMsg{
+				EpicID:    epicID,
+				Iteration: result.Iteration,
+				Cost:      result.Cost,
+			})
 			loadTasksForEpic(epicID)
 		}
+
+		eng.OnVerificationStart = func(taskID string) {
+			p.Send(tui.VerifyStartMsg{TaskID: taskID})
+		}
+
 		eng.OnVerificationEnd = func(taskID string, results *verify.Results) {
+			summary := ""
+			passed := true
+			if results != nil {
+				passed = results.AllPassed
+				summary = results.Summary()
+			}
+			p.Send(tui.VerifyResultMsg{
+				TaskID:  taskID,
+				Passed:  passed,
+				Summary: summary,
+			})
 			loadTasksForEpic(epicID)
 		}
+
 		return eng
 	}
 
