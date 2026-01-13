@@ -442,6 +442,7 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 				EpicID:    epicID,
 				Iteration: result.Iteration,
 				Cost:      result.Cost,
+				Tokens:    result.TokensIn + result.TokensOut,
 			})
 			loadTasksForEpic(epicID)
 		}
