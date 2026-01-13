@@ -285,3 +285,42 @@ func (m *Manager) parseWorktreeList(output []byte) ([]*Worktree, error) {
 
 	return worktrees, nil
 }
+
+// IsDirty checks if the main repository has uncommitted changes.
+// Returns true if there are modified, staged, or untracked files (excluding .worktrees/).
+func (m *Manager) IsDirty() (bool, []string, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = m.repoRoot
+
+	output, err := cmd.Output()
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to check git status: %w", err)
+	}
+
+	if len(output) == 0 {
+		return false, nil, nil
+	}
+
+	// Parse output and filter out .worktrees/ and .ticker/ (expected to be dirty)
+	var dirtyFiles []string
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) < 3 {
+			continue
+		}
+		// Format: "XY filename" where XY is 2-char status
+		filename := strings.TrimSpace(line[2:])
+		// Skip .worktrees/ and .ticker/ directories
+		if strings.HasPrefix(filename, ".worktrees/") || strings.HasPrefix(filename, ".ticker/") {
+			continue
+		}
+		dirtyFiles = append(dirtyFiles, filename)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return false, nil, fmt.Errorf("failed to parse git status: %w", err)
+	}
+
+	return len(dirtyFiles) > 0, dirtyFiles, nil
+}

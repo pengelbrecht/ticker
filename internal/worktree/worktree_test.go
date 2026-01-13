@@ -480,6 +480,131 @@ func TestBranchNaming(t *testing.T) {
 	})
 }
 
+func TestManager_IsDirty(t *testing.T) {
+	t.Run("returns false for clean repo", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		isDirty, files, err := m.IsDirty()
+		if err != nil {
+			t.Fatalf("IsDirty() error = %v", err)
+		}
+		if isDirty {
+			t.Errorf("IsDirty() = true, want false for clean repo")
+		}
+		if len(files) != 0 {
+			t.Errorf("IsDirty() files = %v, want empty", files)
+		}
+	})
+
+	t.Run("returns true for modified files", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		// Modify a tracked file
+		if err := os.WriteFile(filepath.Join(dir, "initial.txt"), []byte("modified"), 0644); err != nil {
+			t.Fatalf("failed to modify file: %v", err)
+		}
+
+		isDirty, files, err := m.IsDirty()
+		if err != nil {
+			t.Fatalf("IsDirty() error = %v", err)
+		}
+		if !isDirty {
+			t.Error("IsDirty() = false, want true for modified file")
+		}
+		if len(files) != 1 || files[0] != "initial.txt" {
+			t.Errorf("IsDirty() files = %v, want [initial.txt]", files)
+		}
+	})
+
+	t.Run("returns true for untracked files", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		// Create untracked file
+		if err := os.WriteFile(filepath.Join(dir, "untracked.txt"), []byte("new"), 0644); err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+
+		isDirty, files, err := m.IsDirty()
+		if err != nil {
+			t.Fatalf("IsDirty() error = %v", err)
+		}
+		if !isDirty {
+			t.Error("IsDirty() = false, want true for untracked file")
+		}
+		if len(files) != 1 || files[0] != "untracked.txt" {
+			t.Errorf("IsDirty() files = %v, want [untracked.txt]", files)
+		}
+	})
+
+	t.Run("ignores .worktrees/ directory", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		// Create .worktrees/ directory with file
+		wtDir := filepath.Join(dir, ".worktrees")
+		if err := os.MkdirAll(wtDir, 0755); err != nil {
+			t.Fatalf("failed to create .worktrees: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(wtDir, "test.txt"), []byte("ignored"), 0644); err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+
+		isDirty, files, err := m.IsDirty()
+		if err != nil {
+			t.Fatalf("IsDirty() error = %v", err)
+		}
+		if isDirty {
+			t.Errorf("IsDirty() = true, want false (should ignore .worktrees/)")
+		}
+		if len(files) != 0 {
+			t.Errorf("IsDirty() files = %v, want empty", files)
+		}
+	})
+
+	t.Run("ignores .ticker/ directory", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		// Create .ticker/ directory with file
+		tickDir := filepath.Join(dir, ".ticker")
+		if err := os.MkdirAll(tickDir, 0755); err != nil {
+			t.Fatalf("failed to create .ticker: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tickDir, "checkpoint.json"), []byte("{}"), 0644); err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+
+		isDirty, files, err := m.IsDirty()
+		if err != nil {
+			t.Fatalf("IsDirty() error = %v", err)
+		}
+		if isDirty {
+			t.Errorf("IsDirty() = true, want false (should ignore .ticker/)")
+		}
+		if len(files) != 0 {
+			t.Errorf("IsDirty() files = %v, want empty", files)
+		}
+	})
+}
+
 // createTempGitRepo creates a temporary directory with an initialized git repo.
 // Returns the directory path. The repo has one initial commit.
 func createTempGitRepo(t *testing.T) string {

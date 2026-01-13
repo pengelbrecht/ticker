@@ -359,6 +359,22 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		os.Exit(ExitError)
 	}
 
+	// Check for uncommitted changes on main before starting
+	isDirty, dirtyFiles, err := wtManager.IsDirty()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error checking git status: %v\n", err)
+		os.Exit(ExitError)
+	}
+	if isDirty {
+		fmt.Fprintf(os.Stderr, "Error: Cannot start parallel run - main branch has uncommitted changes\n\n")
+		fmt.Fprintf(os.Stderr, "Dirty files:\n")
+		for _, f := range dirtyFiles {
+			fmt.Fprintf(os.Stderr, "  %s\n", f)
+		}
+		fmt.Fprintf(os.Stderr, "\nPlease commit, stash, or discard these changes before running.\n")
+		os.Exit(ExitError)
+	}
+
 	// Initialize merge manager
 	mergeManager, err := worktree.NewMergeManager(cwd)
 	if err != nil {
@@ -630,6 +646,22 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 	wtManager, err := worktree.NewManager(cwd)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Error initializing worktree manager: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Check for uncommitted changes on main before starting
+	isDirty, dirtyFiles, err := wtManager.IsDirty()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Error checking git status: %v\n", err)
+		os.Exit(ExitError)
+	}
+	if isDirty {
+		fmt.Fprintf(os.Stderr, "[ERROR] Cannot start parallel run: main branch has uncommitted changes\n")
+		fmt.Fprintf(os.Stderr, "\nDirty files:\n")
+		for _, f := range dirtyFiles {
+			fmt.Fprintf(os.Stderr, "  %s\n", f)
+		}
+		fmt.Fprintf(os.Stderr, "\nPlease commit, stash, or discard these changes before running.\n")
 		os.Exit(ExitError)
 	}
 
