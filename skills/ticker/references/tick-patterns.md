@@ -94,6 +94,86 @@ Test cases needed:
 Coverage target: [percentage or specific paths]
 ```
 
+## Test-Driven Development (TDD)
+
+**Critical for AI agent success.** Tests give agents:
+- Unambiguous success criteria
+- Immediate feedback loop
+- Regression protection
+
+### TDD Tick Pattern
+
+```
+Title: Add [feature]
+
+Description:
+Implement [feature] with these test cases:
+
+Test cases:
+- Input: [x] → Expected: [y]
+- Input: [a] → Expected: [b]
+- Edge case: [condition] → Expected: [behavior]
+- Error case: [bad input] → Expected: [error handling]
+
+Run tests: [command, e.g., go test ./pkg/...]
+Acceptance: All tests pass, no regressions in existing tests
+```
+
+### TDD Feature Example
+
+```
+Title: Add password strength validator
+
+Description:
+Implement password validation with scoring:
+
+Test cases:
+- "abc" → score 1 (weak), reasons: ["too short", "no numbers"]
+- "abc12345" → score 2 (medium), reasons: ["no special chars"]
+- "Abc123!@#" → score 3 (strong), reasons: []
+- "" → error: "password required"
+
+Run tests: go test ./internal/auth/... -v
+Acceptance: All tests pass, validator integrated in registration flow
+```
+
+### TDD Bug Fix Example
+
+```
+Title: Fix email parsing for plus addresses
+
+Description:
+Plus addresses (user+tag@domain.com) are rejected incorrectly.
+
+Test cases to add:
+- "user+newsletter@gmail.com" → valid
+- "user+shop@example.org" → valid
+- "user++double@test.com" → valid
+
+Current failing behavior: Returns "invalid email format"
+Expected: All plus addresses should validate
+
+Run tests: npm test -- --grep "email"
+Acceptance: New tests pass, existing email tests still pass
+```
+
+### Why TDD Matters for Agents
+
+1. **Clear completion signal** — "Tests pass" vs "looks right"
+2. **Prevents scope creep** — Agent knows exactly what to implement
+3. **Catches regressions** — Agent can verify it didn't break other code
+4. **Self-documenting** — Tests show intended behavior
+
+### Anti-Pattern: No Test Criteria
+
+Bad:
+```
+Title: Add input validation
+Description: Validate user inputs appropriately
+```
+
+The agent has no way to verify "appropriately" — it will guess and may be wrong.
+
 ## Anti-Patterns
 
 ### Vague Titles

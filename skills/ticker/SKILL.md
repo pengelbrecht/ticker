@@ -23,10 +23,10 @@ which tk && which ticker
 
 ```bash
 # Install ticks (tk CLI)
-curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticks/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticks/main/scripts/install.sh | sh
 
 # Install ticker
-curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticker/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticker/main/scripts/install.sh | sh
 ```
 
 Also verify the repo has ticks initialized:
@@ -56,6 +56,7 @@ Use AskUserQuestion to interview the user in depth. Ask about:
 
 - **Technical implementation** — Architecture, patterns, libraries
 - **UI/UX** — User flows, edge cases, error states
+- **Testing strategy** — What needs tests, coverage expectations
 - **Concerns** — Performance, security, scalability
 - **Tradeoffs** — What's negotiable vs non-negotiable
 - **Scope** — What's in v1 vs future
@@ -63,6 +64,42 @@ Use AskUserQuestion to interview the user in depth. Ask about:
 **Important:** Ask non-obvious questions. Don't ask "What language?" if it's clear from context. Dig into the nuances.
 
 Continue interviewing until you have enough detail to create atomic, implementable tasks. Then update SPEC.md with the gathered information.
+
+## Test-Driven Development (Critical)
+
+**AI agents work best with test-driven tasks.** Tests provide:
+- Clear acceptance criteria the agent can verify
+- Immediate feedback on correctness
+- Guard rails against regressions
+
+When creating ticks, structure them for TDD:
+
+1. **Write test first** — Each feature tick should specify expected test cases
+2. **Include test commands** — Tell the agent how to run tests (`go test`, `npm test`, etc.)
+3. **Define success criteria** — "Tests pass" is unambiguous; "looks good" is not
+
+**Good tick (test-driven):**
+```
+Title: Add email validation to registration
+
+Description:
+Implement email validation with these test cases:
+- valid@example.com → valid
+- invalid@ → invalid
+- @nodomain.com → invalid
+- empty string → invalid
+
+Run tests: go test ./internal/validation/...
+Acceptance: All tests pass, no regressions
+```
+
+**Bad tick (no tests):**
+```
+Title: Add email validation
+Description: Make sure emails are valid
+```
+
+See `references/tick-patterns.md` for more TDD patterns.
 
 ### Step 3: Create Ticks from Spec
 
