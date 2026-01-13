@@ -146,10 +146,11 @@ These notes were left by previous iterations. Read them carefully before startin
 1. **One task per iteration** - Focus only on the current task. Do not work on other tasks.
 2. **No questions** - You are autonomous. Make reasonable decisions based on the context provided.
 3. **Always leave notes** - Before finishing, add a note summarizing what you did and any context for the next iteration.
-4. **Exit signals** - Use these signals ONLY when necessary:
+4. **Don't modify ticker internals** - Never modify .tick/, .ticker/, or .gitignore unless explicitly required by the task. These are managed by ticker.
+5. **Exit signals** - Use these signals ONLY when necessary:
    - ` + "`<promise>EJECT: reason</promise>`" + ` - Exit for large install (>1GB) or external dependency you cannot install
    - ` + "`<promise>BLOCKED: reason</promise>`" + ` - Cannot proceed (missing credentials, unclear requirements, etc.)
-5. **Task completion** - Just close your task with ` + "`tk close`" + ` when done. Ticker automatically detects when all tasks in the epic are complete.
+6. **Task completion** - Just close your task with ` + "`tk close`" + ` when done. Ticker automatically detects when all tasks in the epic are complete.
 
 Begin working on the task now.
 `
