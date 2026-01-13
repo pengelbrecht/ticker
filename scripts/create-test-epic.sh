@@ -1,56 +1,63 @@
 #!/bin/bash
-# Create a test epic with simple tasks for TUI testing
+# Create test epics with simple tasks for TUI and parallel testing
 # Usage: ./scripts/create-test-epic.sh
 
 set -e
 
-# Delete existing test epic if it exists
-echo "Cleaning up old test epic..."
-existing=$(tk list -t epic --json 2>/dev/null | jq -r '.ticks[]? | select(.title == "TUI Test Epic") | .id' || true)
-if [ -n "$existing" ]; then
-    echo "Deleting existing test epic: $existing"
-    # Delete child tasks first
-    tk list -parent "$existing" --json 2>/dev/null | jq -r '.ticks[]?.id' | while read -r task_id; do
-        [ -n "$task_id" ] && tk delete "$task_id" -y 2>/dev/null || true
-    done
-    tk delete "$existing" -y 2>/dev/null || true
-fi
+# Delete existing test epics if they exist
+echo "Cleaning up old test epics..."
+for title in "TUI Test Epic" "Parallel Test Epic"; do
+    existing=$(tk list -t epic --json 2>/dev/null | jq -r ".ticks[]? | select(.title == \"$title\") | .id" || true)
+    if [ -n "$existing" ]; then
+        echo "Deleting existing epic: $existing ($title)"
+        # Delete child tasks first
+        tk list -parent "$existing" --json 2>/dev/null | jq -r '.ticks[]?.id' | while read -r task_id; do
+            [ -n "$task_id" ] && tk delete "$task_id" -y 2>/dev/null || true
+        done
+        tk delete "$existing" -y 2>/dev/null || true
+    fi
+done
 
-echo "Creating test epic..."
-EPIC_ID=$(tk create "TUI Test Epic" -d "Simple tasks for testing the ticker TUI" -t epic -p 2)
-echo "Created epic: $EPIC_ID"
+# Create first test epic
+echo ""
+echo "Creating test epic 1..."
+EPIC1=$(tk create "TUI Test Epic" -d "Simple tasks for testing the ticker TUI" -t epic -p 2)
+echo "Created epic: $EPIC1"
 
-echo "Creating test tasks..."
-
-# Simple tasks Claude can complete quickly
-T1=$(tk create "What is 2+2?" -d "Calculate 2+2 and report the answer." -t task -parent "$EPIC_ID" -p 2)
+echo "Creating test tasks for epic 1..."
+T1=$(tk create "What is 2+2?" -d "Calculate 2+2 and report the answer." -t task -parent "$EPIC1" -p 2)
 echo "  Task $T1: Math question"
 
-T2=$(tk create "Report repo name" -d "Read go.mod and report the module name." -t task -parent "$EPIC_ID" -p 2)
+T2=$(tk create "Report repo name" -d "Read go.mod and report the module name." -t task -parent "$EPIC1" -p 2)
 echo "  Task $T2: Repo name"
 
-T3=$(tk create "Count Go files" -d "Count how many .go files are in the internal/ directory." -t task -parent "$EPIC_ID" -p 2)
+T3=$(tk create "Count Go files" -d "Count how many .go files are in the internal/ directory." -t task -parent "$EPIC1" -p 2)
 echo "  Task $T3: Count files"
 
-T4=$(tk create "List CLI commands" -d "Read cmd/ticker/main.go and list all subcommands defined." -t task -parent "$EPIC_ID" -p 3)
+T4=$(tk create "List CLI commands" -d "Read cmd/ticker/main.go and list all subcommands defined." -t task -parent "$EPIC1" -p 3)
 echo "  Task $T4: List commands"
 
-T5=$(tk create "What day is it?" -d "Report today's date." -t task -parent "$EPIC_ID" -p 3)
-echo "  Task $T5: Date question"
+# Create second test epic
+echo ""
+echo "Creating test epic 2..."
+EPIC2=$(tk create "Parallel Test Epic" -d "Simple tasks for testing parallel execution" -t epic -p 2)
+echo "Created epic: $EPIC2"
 
-# Rich markdown output test
-T6=$(tk create "Generate project summary with rich markdown" -d "Create a summary of this project using rich markdown formatting. Include:
-- A table comparing the main packages (name, purpose, key files)
-- Code snippets showing key type definitions
-- A bullet list of features
-- Headers and subheaders
-Output should exercise markdown rendering: tables, code blocks, lists, emphasis, etc." -t task -parent "$EPIC_ID" -p 2)
-echo "  Task $T6: Rich markdown output"
+echo "Creating test tasks for epic 2..."
+T5=$(tk create "What is 3+3?" -d "Calculate 3+3 and report the answer." -t task -parent "$EPIC2" -p 2)
+echo "  Task $T5: Math question"
 
-# A blocked task to test blocked display
-T7=$(tk create "Summarize after counting" -d "Summarize findings after the count task is done." -t task -parent "$EPIC_ID" -p 3 -blocked-by "$T3")
-echo "  Task $T7: Blocked task (blocked by $T3)"
+T6=$(tk create "Report Go version" -d "Check go.mod and report the Go version required." -t task -parent "$EPIC2" -p 2)
+echo "  Task $T6: Go version"
+
+T7=$(tk create "Count test files" -d "Count how many _test.go files are in the internal/ directory." -t task -parent "$EPIC2" -p 2)
+echo "  Task $T7: Count test files"
 
 echo ""
-echo "Test epic ready: $EPIC_ID"
-echo "Run with: ./ticker run $EPIC_ID"
+echo "Test epics ready:"
+echo "  Epic 1: $EPIC1 (TUI Test Epic)"
+echo "  Epic 2: $EPIC2 (Parallel Test Epic)"
+echo ""
+echo "Run single:   ./ticker run $EPIC1"
+echo "Run parallel: ./ticker run $EPIC1 $EPIC2"
+echo "Run auto:     ./ticker run --auto --parallel 2"

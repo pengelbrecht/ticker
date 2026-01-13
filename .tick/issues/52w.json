@@ -13,7 +13,7 @@
   "acceptance_criteria": "1. Budget is thread-safe for concurrent Add calls\n2. ShouldStop is thread-safe for concurrent reads\n3. AddForEpic tracks usage per epic\n4. UsageForEpic returns correct per-epic breakdown\n5. AllEpicUsage returns complete breakdown\n6. Total usage is sum of all epic usage\n7. Budget limits apply to total (not per-epic)\n8. Race detector passes on concurrent tests\n9. All tests pass",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:02:41.976538Z",
-  "updated_at": "2026-01-13T08:45:59.886814Z",
-  "closed_at": "2026-01-13T08:45:59.886814Z",
-  "closed_reason": "Added EpicUsage type for per-epic tracking. Added AddForEpic() method to record usage attributed to specific epics (also updates totals). Added UsageForEpic() and AllEpicUsage() methods to retrieve per-epic breakdowns. All methods are thread-safe. Added 10 new tests covering per-epic tracking, concurrent access, and copy semantics."
+  "updated_at": "2026-01-13T08:48:01.173809Z",
+  "closed_at": "2026-01-13T08:48:01.173809Z",
+  "closed_reason": "Implementation complete (by previous iteration): EpicUsage type with per-epic tracking, AddForEpic() for thread-safe per-epic usage recording, UsageForEpic() and AllEpicUsage() return copies to avoid races. All 22 budget tests pass including concurrent access tests."
 }

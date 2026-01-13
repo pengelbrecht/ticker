@@ -197,18 +197,27 @@ func runRun(cmd *cobra.Command, args []string) {
 	if len(args) > 0 {
 		epicIDs = args
 	} else if auto {
-		// Auto-select: use tk to find a ready epic
-		selected, err := autoSelectEpic()
+		// Auto-select: use tk to find ready epics
+		// If --parallel is specified, select up to that many epics
+		selectCount := 1
+		if maxParallel > 0 {
+			selectCount = maxParallel
+		}
+		selected, err := autoSelectEpics(selectCount)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error auto-selecting epic: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error auto-selecting epics: %v\n", err)
 			os.Exit(ExitError)
 		}
-		if selected == "" {
+		if len(selected) == 0 {
 			fmt.Fprintln(os.Stderr, "No ready epics found")
 			os.Exit(ExitError)
 		}
-		epicIDs = []string{selected}
-		fmt.Printf("Auto-selected epic: %s\n", selected)
+		epicIDs = selected
+		if len(epicIDs) == 1 {
+			fmt.Printf("Auto-selected epic: %s\n", epicIDs[0])
+		} else {
+			fmt.Printf("Auto-selected %d epics: %v\n", len(epicIDs), epicIDs)
+		}
 	} else if !headless {
 		// Interactive mode: show epic picker
 		selected := runPicker()
@@ -1127,17 +1136,29 @@ func runCheckpoints(cmd *cobra.Command, args []string) {
 	}
 }
 
-// autoSelectEpic uses tk to find a ready epic
-func autoSelectEpic() (string, error) {
+// autoSelectEpics uses tk to find up to max ready epics.
+// Returns epic IDs sorted by priority.
+func autoSelectEpics(max int) ([]string, error) {
 	ticksClient := ticks.NewClient()
-	epic, err := ticksClient.NextReadyEpic()
+	epics, err := ticksClient.ListReadyEpics()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if epic == nil {
-		return "", nil
+	if len(epics) == 0 {
+		return nil, nil
 	}
-	return epic.ID, nil
+
+	// Take up to max epics
+	count := len(epics)
+	if count > max {
+		count = max
+	}
+
+	ids := make([]string, count)
+	for i := 0; i < count; i++ {
+		ids[i] = epics[i].ID
+	}
+	return ids, nil
 }
 
 // runPicker shows the interactive epic picker and returns the selected epic
