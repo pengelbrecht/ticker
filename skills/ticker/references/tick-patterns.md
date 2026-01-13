@@ -1,0 +1,138 @@
+# Tick Patterns
+
+Patterns for creating effective ticks that AI agents can complete autonomously.
+
+## The Ideal Tick
+
+A well-formed tick has:
+
+1. **Clear title** — Action verb + specific target
+2. **Context** — What exists, what's needed
+3. **Acceptance criteria** — How to verify done
+4. **Bounded scope** — Completable in 1-3 iterations
+
+## Tick Sizing
+
+### Too Small
+```
+Title: Add semicolon to line 42
+```
+Waste of overhead. Fix inline.
+
+### Too Large
+```
+Title: Build complete user management system
+```
+Break into epic with tasks.
+
+### Just Right
+```
+Title: Add email validation to registration form
+Description:
+- Validate email format on blur
+- Show error message below input
+- Prevent form submission if invalid
+- Add unit tests for validation
+```
+
+## Pattern: Bug Fix
+
+```
+Title: Fix [specific symptom]
+
+Description:
+Current behavior: [what happens now]
+Expected behavior: [what should happen]
+Reproduction: [steps to reproduce]
+
+Files likely involved: [paths if known]
+```
+
+## Pattern: Feature Addition
+
+```
+Title: Add [feature name] to [component]
+
+Description:
+User story: As a [user], I want [action] so that [benefit]
+
+Requirements:
+- [Requirement 1]
+- [Requirement 2]
+
+Acceptance criteria:
+- [ ] [Testable criterion 1]
+- [ ] [Testable criterion 2]
+```
+
+## Pattern: Refactor
+
+```
+Title: Refactor [component] to [goal]
+
+Description:
+Current state: [what's wrong/suboptimal]
+Target state: [desired architecture]
+
+Constraints:
+- Must maintain backward compatibility
+- No behavior changes
+- Tests must pass
+```
+
+## Pattern: Test Addition
+
+```
+Title: Add tests for [component/function]
+
+Description:
+Test cases needed:
+- [ ] Happy path: [scenario]
+- [ ] Edge case: [scenario]
+- [ ] Error case: [scenario]
+
+Coverage target: [percentage or specific paths]
+```
+
+## Anti-Patterns
+
+### Vague Titles
+- Bad: "Improve performance"
+- Good: "Add database index for user lookup query"
+
+### Missing Context
+- Bad: "Fix the bug in auth"
+- Good: "Fix OAuth callback failing when user has no email"
+
+### Unbounded Scope
+- Bad: "Make the app better"
+- Good: "Add loading spinner to dashboard data fetch"
+
+### Implicit Dependencies
+- Bad: Create tasks without explicit blockers
+- Good: Use `-blocked-by` to make order clear
+
+## Epic Structure
+
+Group related tasks under an epic:
+
+```bash
+# Create epic
+tk create "Search Feature" -t epic -d "Full-text search for documents"
+
+# Create tasks with dependencies
+tk create "Add search index schema" -parent <epic>
+tk create "Implement indexing service" -parent <epic> -blocked-by <schema-task>
+tk create "Add search API endpoint" -parent <epic> -blocked-by <indexing-task>
+tk create "Add search UI component" -parent <epic> -blocked-by <api-task>
+```
+
+## Priority Guidelines
+
+| Priority | Use For |
+|----------|---------|
+| P0 Critical | Production down, security issues |
+| P1 High | Blocking other work, user-facing bugs |
+| P2 Medium | Normal feature work (default) |
+| P3 Low | Nice-to-have, minor improvements |
+| P4 Backlog | Future consideration |
