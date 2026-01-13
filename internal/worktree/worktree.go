@@ -61,6 +61,19 @@ func NewManager(repoRoot string) (*Manager, error) {
 	}, nil
 }
 
+// Prune removes references to worktrees that no longer exist on disk.
+// This cleans up orphaned entries in .git/worktrees/ that can occur when
+// worktree directories are deleted without using `git worktree remove`.
+func (m *Manager) Prune() error {
+	cmd := exec.Command("git", "worktree", "prune")
+	cmd.Dir = m.repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to prune worktrees: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
 // Create creates a new worktree for an epic.
 // Branch name: ticker/<epic-id>
 // Path: <repoRoot>/.worktrees/<epic-id>
@@ -68,6 +81,11 @@ func NewManager(repoRoot string) (*Manager, error) {
 func (m *Manager) Create(epicID string) (*Worktree, error) {
 	wtPath := m.worktreePath(epicID)
 	branch := m.branchName(epicID)
+
+	// Prune orphaned worktree references before checking/creating.
+	// This handles cases where a previous run crashed and left the worktree
+	// directory deleted but git's internal tracking still has it registered.
+	_ = m.Prune()
 
 	// Check if worktree path already exists
 	if _, err := os.Stat(wtPath); err == nil {
