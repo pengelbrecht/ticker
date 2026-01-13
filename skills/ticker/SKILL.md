@@ -104,6 +104,14 @@ See `references/tick-patterns.md` for more TDD patterns.
 
 Transform the spec into ticks organized by epic.
 
+**For phased specs:** Focus on creating ticks for the current/next phase only. Don't create ticks for future phases—they may change based on learnings from earlier phases.
+
+**Use AskUserQuestion** if questions arise while creating ticks:
+- Unclear requirements or edge cases
+- Missing acceptance criteria
+- Ambiguous priorities or dependencies
+- Implementation approach decisions
+
 **Epic organization:**
 1. Group related tasks into logical epics (auth, API, UI, etc.)
 2. Create a **"Manual Tasks"** epic for anything requiring human intervention

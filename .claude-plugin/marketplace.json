@@ -1,0 +1,15 @@
+{
+  "name": "ticker-marketplace",
+  "description": "Ticker - AI agent loop runner with Ticks issue tracker",
+  "owner": {
+    "name": "Peter Engelbrecht"
+  },
+  "plugins": [
+    {
+      "name": "ticker",
+      "source": "./",
+      "description": "Create specs, generate ticks, run autonomous coding agents on epics",
+      "version": "0.3.3"
+    }
+  ]
+}

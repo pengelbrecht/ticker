@@ -1,0 +1,21 @@
+{
+  "name": "ticker",
+  "description": "AI agent loop runner with Ticks issue tracker - create specs, generate ticks, run autonomous coding agents",
+  "version": "0.3.3",
+  "author": {
+    "name": "Peter Engelbrecht",
+    "url": "https://github.com/pengelbrecht"
+  },
+  "repository": "https://github.com/pengelbrecht/ticker",
+  "license": "MIT",
+  "homepage": "https://github.com/pengelbrecht/ticker",
+  "keywords": [
+    "ticker",
+    "ticks",
+    "issue-tracker",
+    "ai-agents",
+    "automation",
+    "epic",
+    "task-runner"
+  ]
+}
