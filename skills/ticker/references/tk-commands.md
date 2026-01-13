@@ -11,17 +11,34 @@ tk create "Title" [flags]
 | Flag | Description |
 |------|-------------|
 | `-d, --description` | Tick description |
+| `-acceptance` | Acceptance criteria (how to verify done) |
 | `-t, --type` | Type: `task` (default) or `epic` |
 | `-p, --priority` | Priority: 0=Critical, 1=High, 2=Medium, 3=Low, 4=Backlog |
 | `-l, --labels` | Comma-separated labels |
 | `-parent` | Parent epic ID |
 | `-blocked-by` | Blocking tick ID(s) |
+| `-manual` | Mark as requiring human intervention (skipped by automation) |
+| `-defer` | Defer until date (YYYY-MM-DD) |
+| `-external-ref` | External reference (e.g., gh-42) |
 
 **Examples:**
 ```bash
+# Basic task
 tk create "Fix login bug" -d "Users can't login with special chars" -p 1
+
+# Task with acceptance criteria (recommended for AI agents)
+tk create "Add email validation" \
+  -d "Validate email format on registration form" \
+  -acceptance "All validation tests pass"
+
+# Epic
 tk create "Auth System" -t epic -d "Complete authentication implementation"
+
+# Task with dependencies
 tk create "Add OAuth" -parent abc -blocked-by def,ghi
+
+# Manual task (requires human intervention)
+tk create "Set up Stripe account" -manual -d "Create account and get API keys"
 ```
 
 ## Listing Ticks

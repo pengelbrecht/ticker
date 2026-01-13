@@ -79,24 +79,23 @@ When creating ticks, structure them for TDD:
 3. **Define success criteria** — "Tests pass" is unambiguous; "looks good" is not
 
 **Good tick (test-driven):**
-```
-Title: Add email validation to registration
-
-Description:
-Implement email validation with these test cases:
+```bash
+tk create "Add email validation to registration" \
+  -d "Implement email validation with test cases:
 - valid@example.com → valid
 - invalid@ → invalid
 - @nodomain.com → invalid
 - empty string → invalid
 
-Run tests: go test ./internal/validation/...
-Acceptance: All tests pass, no regressions
+Run: go test ./internal/validation/..." \
+  -acceptance "All validation tests pass, no regressions" \
+  -parent <epic-id>
 ```
 
 **Bad tick (no tests):**
-```
-Title: Add email validation
-Description: Make sure emails are valid
+```bash
+tk create "Add email validation" -d "Make sure emails are valid"
+# No acceptance criteria, no test cases - agent will guess
 ```
 
 See `references/tick-patterns.md` for more TDD patterns.
@@ -114,19 +113,35 @@ Transform the spec into ticks organized by epic.
 # Create epics
 tk create "Authentication" -t epic
 tk create "API Endpoints" -t epic
-tk create "Manual Tasks" -t epic -d "Tasks requiring human intervention"
 
-# Create tasks under epics
-tk create "Add JWT token generation" -parent <auth-epic>
-tk create "Add login endpoint" -parent <api-epic> -blocked-by <jwt-task>
-tk create "Set up production database" -parent <manual-epic>
+# Create tasks with acceptance criteria
+tk create "Add JWT token generation" \
+  -d "Implement JWT signing and verification" \
+  -acceptance "JWT tests pass, tokens validate correctly" \
+  -parent <auth-epic>
+
+tk create "Add login endpoint" \
+  -d "POST /api/login with email/password" \
+  -acceptance "Login endpoint tests pass, returns valid JWT" \
+  -parent <api-epic> \
+  -blocked-by <jwt-task>
+
+# Manual tasks - use -manual flag (skipped by tk next)
+tk create "Set up production database" -manual \
+  -d "Create RDS instance and configure access" \
+  -acceptance "Database accessible, migrations run"
+
+tk create "Create Stripe API keys" -manual \
+  -d "Set up Stripe account and get API credentials"
 ```
 
-**Manual tasks** (require `--manual` flag in ticker):
+**Manual tasks** (use `-manual` flag):
 - Setting up external services (databases, auth providers)
 - Creating accounts or API keys
 - Design decisions needing human judgment
 - Anything requiring credentials or secrets
+
+Manual tasks are skipped by `tk next` and ticker automation. They appear in `tk list -manual`.
 
 ### Step 4: Optimize for Parallelization
 
@@ -180,10 +195,11 @@ ticker run <epic1> <epic2>
 
 ```bash
 # Create ticks
-tk create "Title" -d "Description"           # Create task
-tk create "Title" -t epic                    # Create epic
-tk create "Title" -parent <epic-id>          # Task under epic
-tk create "Title" -blocked-by <task-id>      # Blocked task
+tk create "Title" -d "Description" -acceptance "Tests pass"  # Task with acceptance criteria
+tk create "Title" -t epic                                    # Create epic
+tk create "Title" -parent <epic-id>                          # Task under epic
+tk create "Title" -blocked-by <task-id>                      # Blocked task
+tk create "Title" -manual                                    # Manual task (skipped by automation)
 
 # List and query
 tk list                                      # All open ticks

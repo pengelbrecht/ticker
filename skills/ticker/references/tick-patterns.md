@@ -103,58 +103,50 @@ Coverage target: [percentage or specific paths]
 
 ### TDD Tick Pattern
 
-```
-Title: Add [feature]
-
-Description:
-Implement [feature] with these test cases:
-
-Test cases:
+```bash
+tk create "Add [feature]" \
+  -d "Implement [feature] with test cases:
 - Input: [x] → Expected: [y]
 - Input: [a] → Expected: [b]
 - Edge case: [condition] → Expected: [behavior]
 - Error case: [bad input] → Expected: [error handling]
 
-Run tests: [command, e.g., go test ./pkg/...]
-Acceptance: All tests pass, no regressions in existing tests
+Run: [test command]" \
+  -acceptance "All tests pass, no regressions"
 ```
 
 ### TDD Feature Example
 
-```
-Title: Add password strength validator
-
-Description:
-Implement password validation with scoring:
+```bash
+tk create "Add password strength validator" \
+  -d "Implement password validation with scoring:
 
 Test cases:
-- "abc" → score 1 (weak), reasons: ["too short", "no numbers"]
-- "abc12345" → score 2 (medium), reasons: ["no special chars"]
-- "Abc123!@#" → score 3 (strong), reasons: []
-- "" → error: "password required"
+- \"abc\" → score 1 (weak), reasons: [\"too short\", \"no numbers\"]
+- \"abc12345\" → score 2 (medium), reasons: [\"no special chars\"]
+- \"Abc123!@#\" → score 3 (strong), reasons: []
+- \"\" → error: \"password required\"
 
-Run tests: go test ./internal/auth/... -v
-Acceptance: All tests pass, validator integrated in registration flow
+Run: go test ./internal/auth/... -v" \
+  -acceptance "All password tests pass, validator integrated in registration"
 ```
 
 ### TDD Bug Fix Example
 
-```
-Title: Fix email parsing for plus addresses
-
-Description:
-Plus addresses (user+tag@domain.com) are rejected incorrectly.
+```bash
+tk create "Fix email parsing for plus addresses" \
+  -d "Plus addresses (user+tag@domain.com) are rejected incorrectly.
 
 Test cases to add:
-- "user+newsletter@gmail.com" → valid
-- "user+shop@example.org" → valid
-- "user++double@test.com" → valid
+- \"user+newsletter@gmail.com\" → valid
+- \"user+shop@example.org\" → valid
+- \"user++double@test.com\" → valid
 
-Current failing behavior: Returns "invalid email format"
+Current failing: Returns \"invalid email format\"
 Expected: All plus addresses should validate
 
-Run tests: npm test -- --grep "email"
-Acceptance: New tests pass, existing email tests still pass
+Run: npm test -- --grep \"email\"" \
+  -acceptance "New plus-address tests pass, existing email tests pass"
 ```
 
 ### Why TDD Matters for Agents
