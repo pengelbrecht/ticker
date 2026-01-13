@@ -305,6 +305,13 @@ type EpicTasksUpdateMsg struct {
 	Tasks  []TaskInfo
 }
 
+// EpicTaskRunRecordMsg contains a RunRecord for a completed task in a specific epic (multi-epic mode).
+type EpicTaskRunRecordMsg struct {
+	EpicID    string           // The epic this task belongs to
+	TaskID    string           // The task ID this record belongs to
+	RunRecord *agent.RunRecord // The completed run record (nil to clear)
+}
+
 // EpicRunCompleteMsg signals run completion for a specific epic (multi-epic mode).
 type EpicRunCompleteMsg struct {
 	EpicID     string
@@ -1742,6 +1749,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if idx == m.activeTab {
 				m.tasks = tab.Tasks
 				m.updateViewportSize()
+			}
+		}
+
+	case EpicTaskRunRecordMsg:
+		// Store run record for a completed task in a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			if tab.TaskRunRecords == nil {
+				tab.TaskRunRecords = make(map[string]*agent.RunRecord)
+			}
+			if msg.RunRecord != nil {
+				tab.TaskRunRecords[msg.TaskID] = msg.RunRecord
+			} else {
+				delete(tab.TaskRunRecords, msg.TaskID)
+			}
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.taskRunRecords = tab.TaskRunRecords
 			}
 		}
 
