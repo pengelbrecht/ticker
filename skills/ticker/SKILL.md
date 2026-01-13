@@ -1,11 +1,141 @@
 ---
 name: ticker
-description: Work with Ticks issue tracker and Ticker AI agent runner. Use when managing tasks/issues with `tk` commands, running AI agents on epics, or working in a repo with a `.tick/` directory. Triggers on phrases like "create a tick", "tk", "run ticker", "epic", "close the task".
+description: Work with Ticks issue tracker and Ticker AI agent runner. Use when managing tasks/issues with `tk` commands, running AI agents on epics, creating ticks from a SPEC.md, or working in a repo with a `.tick/` directory. Triggers on phrases like "create ticks", "tk", "run ticker", "epic", "close the task", "plan this", "break this down".
 ---
 
 # Ticker & Ticks Workflow
 
 Ticker runs AI agents (Claude Code, Codex, Gemini CLI) in continuous loops to complete coding tasks from the Ticks issue tracker.
+
+## Skill Workflow
+
+When invoked, follow this workflow:
+
+### Step 0: Check Prerequisites
+
+Verify `tk` and `ticker` are installed:
+
+```bash
+which tk && which ticker
+```
+
+**If not installed**, install them:
+
+```bash
+# Install ticks (tk CLI)
+curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticks/main/install.sh | sh
+
+# Install ticker
+curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticker/main/install.sh | sh
+```
+
+Also verify the repo has ticks initialized:
+```bash
+ls .tick/ 2>/dev/null || tk init
+```
+
+### Step 1: Check for SPEC.md
+
+Look for a SPEC.md (or similar spec file) in the repo root.
+
+**If no spec exists:**
+- Ask the user what they want to build
+- Create SPEC.md through the interview process below
+
+**If spec exists but is incomplete:**
+- Read it and identify gaps
+- Interview the user to fill in missing details
+- Update SPEC.md with the answers
+
+**If spec is complete:**
+- Skip to Step 3 (Create Ticks)
+
+### Step 2: Interview to Complete Spec
+
+Use AskUserQuestion to interview the user in depth. Ask about:
+
+- **Technical implementation** — Architecture, patterns, libraries
+- **UI/UX** — User flows, edge cases, error states
+- **Concerns** — Performance, security, scalability
+- **Tradeoffs** — What's negotiable vs non-negotiable
+- **Scope** — What's in v1 vs future
+
+**Important:** Ask non-obvious questions. Don't ask "What language?" if it's clear from context. Dig into the nuances.
+
+Continue interviewing until you have enough detail to create atomic, implementable tasks. Then update SPEC.md with the gathered information.
+
+### Step 3: Create Ticks from Spec
+
+Transform the spec into ticks organized by epic.
+
+**Epic organization:**
+1. Group related tasks into logical epics (auth, API, UI, etc.)
+2. Create a **"Manual Tasks"** epic for anything requiring human intervention
+3. Set up dependencies between tasks using `-blocked-by`
+
+```bash
+# Create epics
+tk create "Authentication" -t epic
+tk create "API Endpoints" -t epic
+tk create "Manual Tasks" -t epic -d "Tasks requiring human intervention"
+
+# Create tasks under epics
+tk create "Add JWT token generation" -parent <auth-epic>
+tk create "Add login endpoint" -parent <api-epic> -blocked-by <jwt-task>
+tk create "Set up production database" -parent <manual-epic>
+```
+
+**Manual tasks** (require `--manual` flag in ticker):
+- Setting up external services (databases, auth providers)
+- Creating accounts or API keys
+- Design decisions needing human judgment
+- Anything requiring credentials or secrets
+
+### Step 4: Optimize for Parallelization
+
+Review each epic and consider splitting if:
+- Epic has many independent tasks (no dependencies between them)
+- Tasks could run in parallel but are grouped together
+
+**Split large epics:**
+```
+Before: "Build Dashboard" (8 independent tasks)
+After:  "Build Dashboard (1/2)" (4 tasks)
+        "Build Dashboard (2/2)" (4 tasks)
+```
+
+This allows ticker to run both epic halves in parallel.
+
+**Guidelines:**
+- Aim for 3-5 tasks per epic for optimal parallelization
+- Keep dependent task chains in the same epic
+- Independent tasks can be split across epics
+
+### Step 5: Run Ticker
+
+Ask the user how they want to run:
+
+```
+How would you like to run these epics?
+
+1. Headless (I'll run ticker for you)
+   - Runs in background, I'll report results
+
+2. Interactive TUI (you run it)
+   - You get real-time visibility and control
+   - Command: ticker run <epic-ids...>
+```
+
+**If headless:**
+```bash
+ticker run <epic1> <epic2> --headless --parallel <n>
+```
+
+**If TUI:**
+Provide the command for the user to run:
+```bash
+ticker run <epic1> <epic2>
+```
 
 ## Quick Reference
 
@@ -15,8 +145,8 @@ Ticker runs AI agents (Claude Code, Codex, Gemini CLI) in continuous loops to co
 # Create ticks
 tk create "Title" -d "Description"           # Create task
 tk create "Title" -t epic                    # Create epic
-tk create "Title" -parent <epic-id>          # Create task under epic
-tk create "Title" -blocked-by <task-id>      # Create blocked task
+tk create "Title" -parent <epic-id>          # Task under epic
+tk create "Title" -blocked-by <task-id>      # Blocked task
 
 # List and query
 tk list                                      # All open ticks
@@ -24,33 +154,26 @@ tk list -t epic                              # Epics only
 tk list -parent <epic-id>                    # Tasks in epic
 tk ready                                     # Unblocked tasks
 tk next <epic-id>                            # Next task to work on
-tk blocked                                   # Blocked tasks
 
-# Manage ticks
+# Manage
 tk show <id>                                 # Show details
 tk close <id> "reason"                       # Close tick
-tk reopen <id>                               # Reopen tick
 tk note <id> "note text"                     # Add note
-tk block <id> -b <blocker>                   # Add blocker
-tk unblock <id> -b <blocker>                 # Remove blocker
 ```
 
-See `references/tk-commands.md` for full command reference.
+See `references/tk-commands.md` for full reference.
 
 ### Running Ticker
 
 ```bash
 # Interactive TUI
-ticker                                       # Epic picker
-ticker run <epic-id>                         # Run specific epic
+ticker run <epic-id>                         # Single epic
+ticker run <epic1> <epic2>                   # Multiple epics
 
-# Headless mode
+# Headless
 ticker run <epic-id> --headless              # Single epic
 ticker run <epic1> <epic2> --headless        # Parallel epics
-
-# Auto-select
-ticker run --auto                            # Next ready epic
-ticker run --auto --parallel 3               # Multiple epics
+ticker run --auto --parallel 3               # Auto-select epics
 ```
 
 ## Signal Protocol
@@ -60,10 +183,8 @@ When working on a tick, signal completion with XML tags:
 | Signal | Tag | When to Use |
 |--------|-----|-------------|
 | COMPLETE | `<promise>COMPLETE</promise>` | All work done, tests pass |
-| EJECT | `<promise>EJECT: reason</promise>` | Need human help (large install, unclear requirements) |
-| BLOCKED | `<promise>BLOCKED: reason</promise>` | Missing credentials, external dependency |
-
-**Important:** Only signal COMPLETE when the task is truly done. If tests fail or work remains, fix it first.
+| EJECT | `<promise>EJECT: reason</promise>` | Need human help |
+| BLOCKED | `<promise>BLOCKED: reason</promise>` | Missing credentials |
 
 ## Creating Good Ticks
 
@@ -77,48 +198,15 @@ See `references/tick-patterns.md` for detailed patterns.
 
 **Bad tick:**
 ```
-Title: Improve the codebase
+Title: Build the feature
 ```
 
 **Good tick:**
 ```
-Title: Add input validation to user registration form
+Title: Add email validation to registration form
 Description:
-- Validate email format (RFC 5322)
-- Require password 8+ chars with number
-- Show inline error messages
-- Add unit tests for validation functions
+- Validate email format on blur
+- Show error message below input
+- Prevent form submission if invalid
+- Add unit tests for validation
 ```
-
-## Working on a Tick
-
-When assigned a tick:
-
-1. **Read the tick** — `tk show <id>` for full context
-2. **Check blockers** — Are dependencies resolved?
-3. **Implement** — Make changes, write tests
-4. **Verify** — Run tests, check lint
-5. **Add notes** — `tk note <id> "what you did"`
-6. **Close** — `tk close <id> "summary of solution"`
-
-## Epic Workflow
-
-Epics group related tasks:
-
-```bash
-# Create epic with tasks
-tk create "User Authentication" -t epic
-tk create "Add login form" -parent <epic-id>
-tk create "Add password reset" -parent <epic-id> -blocked-by <login-task-id>
-tk create "Add OAuth support" -parent <epic-id> -blocked-by <login-task-id>
-```
-
-Ticker runs tasks in dependency order, closing the epic when all tasks complete.
-
-## Parallel Execution
-
-When running multiple epics:
-- Each epic runs in an isolated git worktree
-- All worktrees share the same `.tick/` database
-- Merges happen automatically on completion
-- Conflicts are flagged for manual resolution
