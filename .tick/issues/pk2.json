@@ -1,14 +1,171 @@
 {
-  "id": "pk2",
-  "title": "Show task ID and title header in details pane",
+  "acceptance_criteria": "1. Details pane shows task ID in header\n2. Details pane shows task title in header\n3. Header has visual separator from content\n4. ID has distinct styling for quick identification\n5. Long titles truncated or wrapped appropriately\n6. Updates when different task selected",
+  "closed_at": "2026-01-13T15:34:44.06352Z",
+  "closed_reason": "Added [taskID] Title header to renderTaskDetail() with divider line. Styled ID brackets with colorBlueAlt and title with colorBlue, both bold. Removed redundant ID/Title label fields. Added 2 tests.",
+  "created_at": "2026-01-12T22:06:41.751243Z",
+  "created_by": "peter@engelbrecht.dk",
   "description": "Add a header to the details pane showing the task ID and title.\n\n## Current Behavior\n\nDetails pane shows task description/content but no clear header identifying which task.\n\n## Desired Behavior\n\nDetails pane has a header:\n\n```\n┌─ Details ─────────────────────────────────────┐\n│ [abc123] Add user authentication              │\n│ ──────────────────────────────────────────    │\n│                                               │\n│ Description:                                  │\n│   Implement OAuth2 authentication flow...     │\n│                                               │\n│ Acceptance Criteria:                          │\n│   1. User can log in with Google              │\n│   2. Session persists across refreshes        │\n└───────────────────────────────────────────────┘\n```\n\n## Implementation\n\n### internal/tui/model.go\n\nIn details pane rendering, add header:\n\n```go\nfunc (m *Model) renderDetailsPane() string {\n    var lines []string\n    \n    // Header with task ID and title\n    if m.selectedTask != nil {\n        header := fmt.Sprintf(\"[%s] %s\", m.selectedTask.ID, m.selectedTask.Title)\n        lines = append(lines, headerStyle.Render(header))\n        lines = append(lines, dividerStyle.Render(strings.Repeat(\"─\", width-2)))\n        lines = append(lines, \"\")\n    }\n    \n    // ... rest of details content ...\n}\n```\n\n## Styling\n\n- Task ID in distinct color (e.g., blue or cyan)\n- Title in bold or highlight\n- Divider line separating header from content",
-  "status": "open",
-  "priority": 2,
-  "type": "task",
+  "id": "pk2",
   "owner": "peter@engelbrecht.dk",
   "parent": "xfn",
-  "acceptance_criteria": "1. Details pane shows task ID in header\n2. Details pane shows task title in header\n3. Header has visual separator from content\n4. ID has distinct styling for quick identification\n5. Long titles truncated or wrapped appropriately\n6. Updates when different task selected",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-12T22:06:41.751243Z",
-  "updated_at": "2026-01-13T15:29:29.506081Z"
+  "priority": 2,
+  "run": {
+    "session_id": "dcf36af2-0a2d-4c52-9410-8484c848c89d",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-13T16:32:07.632244+01:00",
+    "ended_at": "2026-01-13T16:34:59.312829+01:00",
+    "output": "I'll start by reviewing the epic notes to understand the context. It seems task pk2 has had multiple verification failures. Let me investigate the current state of the codebase.\n\nThe notes mention commit b69263b but I don't see it in the recent history. Let me check if the task header implementation exists in model.go.\n\nThe file is too large. Let me search for the `renderTaskDetail` function to see if the header has been implemented.\n\nI can see the current implementation doesn't have the task ID + title header at the top. According to the task requirements, I need to add a header line showing `[taskID] Title` followed by a divider line. The previous notes mention this was supposed to be done but the implementation doesn't show it.\n\nLet me check if there are tests for this feature:\n\nNow let me understand the styling used in the codebase:\n\nGood. Now let me see the `labelStyle` and `headerStyle` definitions:\n\nNow I understand the styling. Let me implement the changes. I'll add a header with `[taskID] Title` at the top of `renderTaskDetail`, styled with colorBlueAlt for the ID brackets and colorBlue for the title, followed by a divider. I'll also remove the redundant ID and Title label fields since they'll be in the header.\n\nAll tests pass. Now let me add a test for the new header functionality:\n\nLet me check the TestRenderTaskPane test to see its structure:\n\nLet me find a good place to add my test. First, let me search for the end of the test file to understand its structure better:\n\nNow let me add a test for the new header in renderTaskDetail:\n\nNow let's run the new tests:\n\nLet's run all the tests to make sure nothing is broken:\n\nAll tests pass. Now let me update the todo list and commit:\n\nThe working tree is clean (only .tick is untracked which is expected). Now let me close the task:\n\nNow let me add an epic note for future iterations:\n\nTask pk2 is complete. I've:\n\n1. Added a header to `renderTaskDetail()` showing `[taskID] Title` styled with colorBlueAlt for the ID brackets and colorBlue for the title, both bold\n2. Added a gray divider line below the header\n3. Removed the redundant ID and Title label fields (they were showing separately before)\n4. Added 2 test cases to verify the header functionality\n5. All tests pass\n6. Committed changes (d4a1b07)\n7. Closed the task with `tk close`\n8. Added an epic note for future iterations",
+    "tools": [
+      {
+        "name": "Bash",
+        "duration_ms": 278
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 647
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 965
+      },
+      {
+        "name": "Read",
+        "duration_ms": 527
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1057
+      },
+      {
+        "name": "Read",
+        "duration_ms": 646
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 998
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 798
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1027
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 953
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1126
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1187
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1566
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5767
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1224
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1468
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 856
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 769
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1305
+      },
+      {
+        "name": "Read",
+        "duration_ms": 784
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 755
+      },
+      {
+        "name": "Read",
+        "duration_ms": 695
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 8240
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 432
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 567
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1404
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 598
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 345
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 454
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3553
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 512
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1569
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1569
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1019
+      }
+    ],
+    "metrics": {
+      "input_tokens": 121,
+      "output_tokens": 5974,
+      "cache_read_tokens": 1052348,
+      "cache_creation_tokens": 24862,
+      "cost_usd": 0.8535025,
+      "duration_ms": 171232
+    },
+    "success": true,
+    "num_turns": 35
+  },
+  "status": "closed",
+  "title": "Show task ID and title header in details pane",
+  "type": "task",
+  "updated_at": "2026-01-13T15:34:44.06352Z"
 }

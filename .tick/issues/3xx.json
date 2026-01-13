@@ -1,13 +1,206 @@
 {
-  "id": "3xx",
-  "title": "Load RunRecords for closed tasks in parallel mode",
+  "closed_at": "2026-01-13T15:38:33.678086Z",
+  "closed_reason": "Added EpicTaskRunRecordMsg message type and handler. Modified loadTasksForEpic in main.go to fetch RunRecords for closed tasks via ticksClient.GetRunRecord() and send them via EpicTaskRunRecordMsg. Added 1 test case covering add/delete/unknown epic scenarios.",
+  "created_at": "2026-01-13T15:07:37.527054Z",
+  "created_by": "peter@engelbrecht.dk",
   "description": "Parallel mode's loadTasksForEpic only sends EpicTasksUpdateMsg but doesn't fetch/send RunRecords for closed tasks. This means the 'Run Summary' detail view (duration, tokens, cost, tools, etc.) is missing in parallel mode.\n\nFix: Add RunRecord loading to loadTasksForEpic similar to single-epic mode's refreshTasks (main.go:836-843). May need new EpicTaskRunRecordMsg message type.",
-  "status": "open",
-  "priority": 2,
-  "type": "task",
+  "id": "3xx",
   "owner": "peter@engelbrecht.dk",
   "parent": "xfn",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-13T15:07:37.527054Z",
-  "updated_at": "2026-01-13T15:07:37.527054Z"
+  "priority": 2,
+  "run": {
+    "session_id": "ad810c58-03d0-499b-8a3b-4db3f44c5d7f",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-13T16:35:02.712461+01:00",
+    "ended_at": "2026-01-13T16:38:53.314506+01:00",
+    "output": "I'll start by reviewing the current task and understanding the codebase structure. Let me first look at the relevant code to understand how RunRecords are loaded in single-epic mode vs parallel mode.\n\nNow I can see how single-epic mode loads RunRecords for closed tasks (lines 902-909). Let me find the parallel mode's `loadTasksForEpic` function.\n\nLet me read the `loadTasksForEpic` function in parallel mode.\n\nNow I understand the issue:\n\n1. **Single-epic mode** (lines 902-909): After loading tasks, it iterates through closed tasks and sends `tui.TaskRunRecordMsg` for each one.\n\n2. **Parallel mode** (line 426): `loadTasksForEpic` only sends `tui.EpicTasksUpdateMsg` but doesn't fetch/send RunRecords for closed tasks.\n\nLet me check what messages are available in the TUI to understand the message types.\n\nNow let me check the multi-epic messages and how they handle task updates.\n\nLet me see more of the `EpicTasksUpdateMsg` handler and check if there's already an EpicTaskRunRecordMsg.\n\nGood, so `EpicTaskRunRecordMsg` doesn't exist yet. Let me check how `TaskRunRecordMsg` is handled and also understand the data model for epics.\n\nNow let me see the EpicTab structure and how it stores data.\n\nI can see that `EpicTab` already has a `TaskRunRecords map[string]*agent.RunRecord` field (line 202). Now let me check the handler for `EpicTasksUpdateMsg` fully to see if there's a place to add RunRecord loading.\n\nNow I understand the structure. The solution is to:\n\n1. Create a new `EpicTaskRunRecordMsg` message type (similar to `TaskRunRecordMsg` but with EpicID)\n2. Add a handler for it in the Update function\n3. Modify `loadTasksForEpic` in `main.go` to fetch and send RunRecords for closed tasks\n\nLet me first check where the multi-epic messages are defined.\n\nNow I'll implement the changes. First, let me add the `EpicTaskRunRecordMsg` message type after `EpicRunCompleteMsg`:\n\nNow I need to add a handler for `EpicTaskRunRecordMsg` in the Update function. Let me find where the `EpicTasksUpdateMsg` handler ends.\n\nNow I need to add the handler for `EpicTaskRunRecordMsg` after the `EpicTasksUpdateMsg` case and before `EpicRunCompleteMsg`. Let me add it:\n\nNow I need to update the `loadTasksForEpic` function in `main.go` to fetch and send RunRecords for closed tasks. Let me read the current implementation again:\n\nNow I need to add the RunRecord fetching after sending the tasks update, similar to how it's done in single-epic mode. Let me update the `loadTasksForEpic` function:\n\nNow let me run the tests to make sure everything compiles and passes:\n\nAll tests pass. Now let me add a test for the new `EpicTaskRunRecordMsg` handler to ensure it works correctly:\n\nNow let me add a test for `EpicTaskRunRecordMsg`. First, let me find where to add the test (near the existing epic tests):\n\nLet me search for tests related to multi-epic:\n\nLet me check if there are any multi-epic tests in the test file to understand the pattern:\n\nLet me read around line 3539 to understand how multi-epic tests are structured:\n\nNow I understand the pattern. Let me add a test for `EpicTaskRunRecordMsg` after the existing TaskRunRecordMsg test:\n\nNow let me run the tests again to make sure the new test passes:\n\nNow let me run all tests to ensure nothing is broken:\n\nAll tests pass. Now let me update the todo list and commit the changes:\n\nNow let me close the task and add a note:\n\nTask complete. Here's a summary of what I did:\n\n**Task 3xx: Load RunRecords for closed tasks in parallel mode**\n\n**Problem**: Parallel mode's `loadTasksForEpic` function only sent `EpicTasksUpdateMsg` but didn't fetch/send RunRecords for closed tasks, meaning the 'Run Summary' detail view (duration, tokens, cost, tools, etc.) was missing in parallel mode.\n\n**Solution**:\n1. **Added `EpicTaskRunRecordMsg`** in `internal/tui/model.go` (lines 317-322) - a new message type for multi-epic mode similar to `TaskRunRecordMsg` but with an `EpicID` field\n2. **Added handler** in `Update()` (lines 1755-1772) that stores the RunRecord to the epic tab's `TaskRunRecords` map and syncs to the main model if it's the active tab\n3. **Modified `loadTasksForEpic`** in `cmd/ticker/main.go` (lines 428-435) to iterate through closed tasks and send RunRecords via `EpicTaskRunRecordMsg`\n4. **Added test** `TestUpdate_EpicTaskRunRecordMsg` covering store, delete, and unknown epic scenarios\n\nAll tests pass.",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2826
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1099
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 866
+      },
+      {
+        "name": "Read",
+        "duration_ms": 796
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 650
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 677
+      },
+      {
+        "name": "Read",
+        "duration_ms": 576
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3087
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1090
+      },
+      {
+        "name": "Read",
+        "duration_ms": 694
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1072
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 806
+      },
+      {
+        "name": "Read",
+        "duration_ms": 483
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1071
+      },
+      {
+        "name": "Read",
+        "duration_ms": 638
+      },
+      {
+        "name": "Read",
+        "duration_ms": 658
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3026
+      },
+      {
+        "name": "Read",
+        "duration_ms": 670
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3639
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1297
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6027
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2083
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 824
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 925
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1053
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1049
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1640
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 506
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1319
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1518
+      },
+      {
+        "name": "Read",
+        "duration_ms": 661
+      },
+      {
+        "name": "Read",
+        "duration_ms": 827
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 8464
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 762
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 551
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2019
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 689
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 326
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 803
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3435
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2084
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3117
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1631
+      }
+    ],
+    "metrics": {
+      "input_tokens": 95,
+      "output_tokens": 9380,
+      "cache_read_tokens": 1512282,
+      "cache_creation_tokens": 34282,
+      "cost_usd": 1.2211205000000005,
+      "duration_ms": 230152
+    },
+    "success": true,
+    "num_turns": 44
+  },
+  "status": "closed",
+  "title": "Load RunRecords for closed tasks in parallel mode",
+  "type": "task",
+  "updated_at": "2026-01-13T15:38:33.678086Z"
 }

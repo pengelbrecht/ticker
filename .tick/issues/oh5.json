@@ -1,14 +1,179 @@
 {
-  "id": "oh5",
-  "title": "Show selected task cursor when task list not focused",
+  "acceptance_criteria": "1. Selected task remains visually indicated when task list loses focus\n2. Active vs inactive selection have different styles\n3. Clear which pane has focus\n4. Doesn't break existing keyboard navigation",
+  "closed_at": "2026-01-13T15:42:21.512371Z",
+  "closed_reason": "Added inactive selection styling when task pane is unfocused. Modified renderTaskLine to accept paneFocused parameter - uses colorGray for cursor/title when unfocused vs colorBlue when focused. Selection cursor (▶) remains visible but dimmed when user tabs to output/details pane.",
+  "created_at": "2026-01-12T22:06:15.254497Z",
+  "created_by": "peter@engelbrecht.dk",
   "description": "Keep the selection cursor visible in the task list even when focus is on another pane.\n\n## Current Behavior\n\nWhen user presses Tab to move focus to details/output pane, the highlight/cursor on the selected task in the task list disappears.\n\n## Desired Behavior\n\n- Cursor remains visible but with different styling (e.g., dimmed, different color, or outline instead of filled)\n- Focused pane has bright/active cursor style\n- Unfocused pane has dim/inactive cursor style\n\n## Implementation\n\n### internal/tui/model.go\n\nIn task list rendering, check if pane is focused:\n\n```go\nfunc (m *Model) renderTaskLine(task TaskInfo, selected bool, width int) string {\n    if selected {\n        if m.focusedPane == PaneTaskList {\n            // Active selection - bright highlight\n            return activeSelectedStyle.Render(line)\n        } else {\n            // Inactive selection - dimmed highlight  \n            return inactiveSelectedStyle.Render(line)\n        }\n    }\n    // ...\n}\n```\n\n## Nice to Have\n\nThis is lower priority - implement if straightforward, skip if complex.",
-  "status": "open",
-  "priority": 3,
-  "type": "task",
+  "id": "oh5",
   "owner": "peter@engelbrecht.dk",
   "parent": "xfn",
-  "acceptance_criteria": "1. Selected task remains visually indicated when task list loses focus\n2. Active vs inactive selection have different styles\n3. Clear which pane has focus\n4. Doesn't break existing keyboard navigation",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-12T22:06:15.254497Z",
-  "updated_at": "2026-01-12T22:06:15.254497Z"
+  "priority": 3,
+  "run": {
+    "session_id": "1fc8ed0e-fcb7-4170-8a3a-eaafacaa080e",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-13T16:38:55.708975+01:00",
+    "ended_at": "2026-01-13T16:43:00.855639+01:00",
+    "output": "I'll start by reviewing the current task and understanding the codebase structure for implementing the inactive selection style.\n\nLet me look at the `renderTaskLine` function and understand how selection is currently handled.\n\nNow let me understand the focus mechanism and pane handling. Let me look at the pane constants and focus-related styles.\n\nI see! At line 2645, the selection (`selected := i == m.selectedTask \u0026\u0026 m.focusedPane == PaneTasks`) is only true when the task list has focus. This is the problem - it completely disables the selection visualization when another pane is focused. Let me look at this area more closely.\n\nNow I understand the issue. The `selected` variable at line 2645 only becomes true when `focusedPane == PaneTasks`. The solution is to:\n\n1. Pass information about whether the pane is focused to `renderTaskLine`\n2. Modify `renderTaskLine` to show a dimmed/inactive selection style when the task is selected but the pane is not focused\n\nLet me look at the colors defined in the file to understand what styling options exist.\n\nI see there's a `colorGray` for muted items. Now I understand the color palette and styling system well. Let me check `focusBorderColor` to understand the focus pattern:\n\nNow I understand the pattern. I need to:\n\n1. Add a new inactive selected style using `colorGray` (dimmed) instead of `colorBlue` (active)\n2. Modify the task list rendering to pass whether it's focused\n3. Modify `renderTaskLine` to accept a `focused` parameter and use the appropriate style\n\nLet me implement this. First, let me add the inactive selected style:\n\nNow I'll add an inactive selected style. I'll use `colorGray` for the inactive selection to match the border color pattern when unfocused:\n\nNow I need to update `renderTaskLine` to accept a `paneFocused` parameter and use the inactive style when the pane is not focused. Let me update the function signature and logic:\n\nNow I need to:\n1. Update `renderTaskLine` signature to add `paneFocused bool` parameter\n2. Update the cursor and title styling to use inactive style when not focused\n3. Update the call site in renderTaskPane to pass the focused state\n\nNow I need to update the call site in `renderTaskPane`. Let me find and update it:\n\nI need to update line 2646-2647 to:\n1. Make `selected` only depend on `i == m.selectedTask` (not on focus)\n2. Pass `m.focusedPane == PaneTasks` as the `paneFocused` parameter\n\nNow let me check if there are any other call sites for `renderTaskLine`:\n\nThere's only one call site, which I've already updated. Now let me run the tests to make sure everything works:\n\nLet me see if there are any failures or if I need to add new tests:\n\nAll tests pass. Now let me add a specific test for the inactive selection style behavior. Let me look at the existing task line tests:\n\nLet me look at the TestTaskInfo_RenderTask test to see how task line tests are structured:\n\nI see there's a `RenderTask` method on `TaskInfo` that's different from `renderTaskLine`. Let me also check if there are existing tests that verify the cursor/selection rendering:\n\nLet me find the end of the test file to add new tests:\n\nNow I'll add tests for the `renderTaskLine` function to verify the active/inactive selection behavior. I'll add tests after line 4009:\n\nNow let me run the tests to make sure they all pass:\n\nAll tests pass. Now let me run the full test suite to make sure nothing is broken:\n\nAll tests pass. Now let me update the todo list and proceed with closing the task and committing:\n\nNow let me add an epic note for future iterations:\n\nTask completed. Summary:\n\n**Task [oh5]: Show selected task cursor when task list not focused**\n\n**Solution:**\n- Added `inactiveSelectedStyle` using `colorGray` for dimmed selection\n- Modified `renderTaskLine()` to accept a `paneFocused` bool parameter\n- When pane is focused: cursor (▶) and title use `colorBlue` (bright)\n- When pane is unfocused: cursor and title use `colorGray` (dimmed)\n- Selection cursor now remains visible when user tabs to output/details pane\n\n**Files modified:**\n- `internal/tui/model.go:708-711` - Added `inactiveSelectedStyle`\n- `internal/tui/model.go:2645-2648` - Updated call site with `paneFocused` parameter\n- `internal/tui/model.go:2679-2741` - Updated `renderTaskLine` function signature and styling logic\n- `internal/tui/model_test.go:4011-4097` - Added 4 test cases\n\n**Commit:** cc2ea5f",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2684
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1063
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1789
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1237
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 2479
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1058
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 2699
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1837
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2359
+      },
+      {
+        "name": "Read",
+        "duration_ms": 985
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2312
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1163
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 19636
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1852
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3485
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1612
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2785
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2256
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1447
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 2024
+      },
+      {
+        "name": "Read",
+        "duration_ms": 645
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1929
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1523
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1132
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1164
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 13955
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1820
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 966
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3111
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3929
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 806
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 984
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 5491
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 769
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2233
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2881
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 8813,
+      "cache_read_tokens": 1458528,
+      "cache_creation_tokens": 37406,
+      "cost_usd": 1.2068934999999998,
+      "duration_ms": 244717
+    },
+    "success": true,
+    "num_turns": 37
+  },
+  "status": "closed",
+  "title": "Show selected task cursor when task list not focused",
+  "type": "task",
+  "updated_at": "2026-01-13T15:42:21.512371Z"
 }
