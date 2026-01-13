@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -128,6 +129,24 @@ var upgradeCmd = &cobra.Command{
 	},
 }
 
+var mergeCmd = &cobra.Command{
+	Use:   "merge <epic-id>",
+	Short: "Retry merging a conflicted epic's worktree branch",
+	Long: `Retry merging an epic that previously failed due to merge conflicts.
+
+After manually resolving conflicts in the main repository:
+  1. git checkout main
+  2. git merge ticker/<epic-id>
+  3. Resolve conflicts and commit
+
+Then run 'ticker merge <epic-id>' to verify the merge and clean up the worktree.
+
+If the branch hasn't been merged yet, this command will attempt to merge it
+and show any remaining conflicts.`,
+	Args: cobra.ExactArgs(1),
+	Run:  runMerge,
+}
+
 func init() {
 	// Run command flags
 	runCmd.Flags().IntP("max-iterations", "n", 50, "Maximum number of iterations")
@@ -146,6 +165,7 @@ func init() {
 	rootCmd.AddCommand(resumeCmd)
 	rootCmd.AddCommand(checkpointsCmd)
 	rootCmd.AddCommand(upgradeCmd)
+	rootCmd.AddCommand(mergeCmd)
 }
 
 func main() {
@@ -698,9 +718,32 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 		OnEpicConflict: func(epicID string, conflict *parallel.ConflictState) {
 			if jsonl {
 				// Conflict as JSON
-				fmt.Printf(`{"type":"conflict","epic_id":"%s","files":%q}`+"\n", epicID, conflict.Files)
+				fmt.Printf(`{"type":"conflict","epic_id":"%s","branch":"%s","worktree":"%s","files":%q}`+"\n",
+					epicID, conflict.Branch, conflict.Worktree, conflict.Files)
 			} else {
-				fmt.Printf("[%s] [CONFLICT] Merge conflict in: %v\n", epicID, conflict.Files)
+				// Print prominent conflict banner
+				fmt.Println()
+				fmt.Println("══════════════════════════════════════════════════════════════")
+				fmt.Printf("  MERGE CONFLICT - Epic %s\n", epicID)
+				fmt.Println("══════════════════════════════════════════════════════════════")
+				fmt.Println()
+				fmt.Printf("  Branch:   %s\n", conflict.Branch)
+				fmt.Printf("  Worktree: %s\n", conflict.Worktree)
+				fmt.Println()
+				fmt.Println("  Conflicting files:")
+				for _, f := range conflict.Files {
+					fmt.Printf("    • %s\n", f)
+				}
+				fmt.Println()
+				fmt.Println("  To resolve:")
+				fmt.Println("    1. git checkout main")
+				fmt.Printf("    2. git merge %s\n", conflict.Branch)
+				fmt.Println("    3. Resolve conflicts and commit")
+				fmt.Println()
+				fmt.Printf("  Then run: ticker merge %s\n", epicID)
+				fmt.Println()
+				fmt.Println("══════════════════════════════════════════════════════════════")
+				fmt.Println()
 			}
 		},
 	})
@@ -733,9 +776,13 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 
 	// Print per-epic results
 	allSuccess := true
+	var conflicts []*parallel.EpicStatus
 	for _, status := range result.Statuses {
 		if status.Status != "completed" {
 			allSuccess = false
+		}
+		if status.Status == "conflict" {
+			conflicts = append(conflicts, status)
 		}
 		if jsonl {
 			errStr := ""
@@ -753,10 +800,24 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 			if status.Error != nil {
 				fmt.Printf("[COMPLETE]   Error: %v\n", status.Error)
 			}
+		}
+	}
+
+	// Print final conflict summary if any
+	if len(conflicts) > 0 && !jsonl {
+		fmt.Println()
+		fmt.Println("════════════════════════════════════════════════════════════════")
+		fmt.Printf("  %d EPIC(S) NEED MANUAL MERGE RESOLUTION\n", len(conflicts))
+		fmt.Println("════════════════════════════════════════════════════════════════")
+		for _, status := range conflicts {
+			fmt.Printf("\n  Epic: %s\n", status.EpicID)
 			if status.Conflict != nil {
-				fmt.Printf("[COMPLETE]   Conflict: %v\n", status.Conflict.Files)
+				fmt.Printf("  Branch: %s\n", status.Conflict.Branch)
+				fmt.Printf("  Run: ticker merge %s\n", status.EpicID)
 			}
 		}
+		fmt.Println()
+		fmt.Println("════════════════════════════════════════════════════════════════")
 	}
 
 	if allSuccess {
@@ -1399,4 +1460,124 @@ func runVerifyOnly() {
 		os.Exit(ExitSuccess)
 	}
 	os.Exit(1) // Exit code 1 for verification failure
+}
+
+// runMerge attempts to merge a previously conflicted epic's worktree branch.
+func runMerge(cmd *cobra.Command, args []string) {
+	epicID := args[0]
+
+	// Get current working directory
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Create worktree manager
+	wtManager, err := worktree.NewManager(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Check if worktree exists for this epic
+	wt, err := wtManager.Get(epicID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(ExitError)
+	}
+	if wt == nil {
+		fmt.Fprintf(os.Stderr, "No worktree found for epic %s\n", epicID)
+		fmt.Fprintln(os.Stderr, "The worktree may have already been cleaned up, or the epic ID is incorrect.")
+		os.Exit(ExitError)
+	}
+
+	// Create merge manager
+	mergeManager, err := worktree.NewMergeManager(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	// Check if branch is already merged (user resolved manually)
+	branch := worktree.BranchPrefix + epicID
+	if isBranchMerged(dir, branch, mergeManager.MainBranch()) {
+		fmt.Printf("Branch %s is already merged into %s\n", branch, mergeManager.MainBranch())
+		fmt.Println("Cleaning up worktree...")
+
+		if err := wtManager.Remove(epicID); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove worktree: %v\n", err)
+		} else {
+			fmt.Println("Worktree cleaned up successfully")
+		}
+		os.Exit(ExitSuccess)
+	}
+
+	// Attempt merge
+	fmt.Printf("Attempting to merge %s into %s...\n", branch, mergeManager.MainBranch())
+	result, err := mergeManager.Merge(wt)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(ExitError)
+	}
+
+	if !result.Success {
+		// Still has conflicts
+		fmt.Println()
+		fmt.Println("══════════════════════════════════════════════════════════════")
+		fmt.Println("  MERGE CONFLICT - Manual resolution required")
+		fmt.Println("══════════════════════════════════════════════════════════════")
+		fmt.Println()
+		if len(result.Conflicts) > 0 {
+			fmt.Println("  Conflicting files:")
+			for _, f := range result.Conflicts {
+				fmt.Printf("    • %s\n", f)
+			}
+			fmt.Println()
+		}
+		if result.ErrorMessage != "" {
+			fmt.Printf("  Error: %s\n", result.ErrorMessage)
+			fmt.Println()
+		}
+		fmt.Println("  To resolve:")
+		fmt.Println("    1. git checkout", mergeManager.MainBranch())
+		fmt.Printf("    2. git merge %s\n", branch)
+		fmt.Println("    3. Resolve conflicts and commit")
+		fmt.Println()
+		fmt.Printf("  Then run: ticker merge %s\n", epicID)
+		fmt.Println()
+		fmt.Println("══════════════════════════════════════════════════════════════")
+
+		// Abort the failed merge to clean up state
+		_ = mergeManager.AbortMerge()
+		os.Exit(ExitError)
+	}
+
+	// Success!
+	fmt.Printf("Successfully merged %s (commit: %s)\n", branch, result.MergeCommit[:8])
+	fmt.Println("Cleaning up worktree...")
+
+	if err := wtManager.Remove(epicID); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove worktree: %v\n", err)
+	} else {
+		fmt.Println("Worktree cleaned up successfully")
+	}
+
+	os.Exit(ExitSuccess)
+}
+
+// isBranchMerged checks if a branch has been merged into main.
+func isBranchMerged(repoRoot, branch, mainBranch string) bool {
+	// Check if branch still exists
+	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
+	cmd.Dir = repoRoot
+	if cmd.Run() != nil {
+		// Branch doesn't exist - consider it merged (or deleted)
+		return true
+	}
+
+	// Check if branch is ancestor of main (i.e., merged)
+	cmd = exec.Command("git", "merge-base", "--is-ancestor", branch, mainBranch)
+	cmd.Dir = repoRoot
+	return cmd.Run() == nil
 }

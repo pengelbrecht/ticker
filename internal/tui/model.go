@@ -1384,18 +1384,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		// Priority 0: If conflict overlay is showing, handle dismissal
+		// Priority 0: If conflict overlay is showing, only allow quit (no dismiss)
 		if m.showConflict {
 			switch msg.String() {
 			case "q", "ctrl+c":
 				m.quitting = true
 				return m, tea.Quit
-			case "d", "esc":
-				// Dismiss conflict overlay
-				m.showConflict = false
-				return m, nil
 			default:
-				// Ignore other keys while conflict overlay is showing
+				// Ignore all other keys - conflict overlay is blocking
+				// User must resolve conflict manually and use 'ticker merge <epic-id>' to retry
 				return m, nil
 			}
 		}
@@ -3556,7 +3553,9 @@ func (m Model) renderConflictOverlay() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, footerStyle.Render("Press 'd' to dismiss"))
+	lines = append(lines, dimStyle.Render("After resolving, run: ticker merge "+m.conflictEpicID))
+	lines = append(lines, "")
+	lines = append(lines, footerStyle.Render("Press 'q' to quit"))
 
 	content := strings.Join(lines, "\n")
 

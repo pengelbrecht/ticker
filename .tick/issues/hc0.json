@@ -1,14 +1,167 @@
 {
-  "id": "hc0",
-  "title": "Show current task ID and title in status pane",
+  "acceptance_criteria": "1. Status pane shows selected task ID\n2. Status pane shows selected task title (truncated if needed)\n3. Updates when selection changes\n4. Gracefully handles no selection (e.g., during startup)\n5. Doesn't overflow status pane width",
+  "closed_at": "2026-01-13T15:23:40.716396Z",
+  "closed_reason": "Added current task display to status bar progress line. Shows 'Current: [taskID] title' with truncation for long titles (25 char max). Modified renderStatusBar() in model.go and added 3 new tests for coverage.",
+  "created_at": "2026-01-12T22:06:29.042019Z",
+  "created_by": "peter@engelbrecht.dk",
   "description": "Display the currently selected/displayed task's ID and title in the status pane.\n\n## Current Behavior\n\nStatus pane shows iteration, cost, tokens but no indication of which task is selected.\n\n## Desired Behavior\n\nStatus pane includes current task info:\n\n```\nIteration 5 | Task: abc123 - Add authentication | $0.45 | 12.3k tokens\n```\n\nOr if space is limited:\n```\nIteration 5 | [abc123] Add authentication | $0.45\n```\n\n## Implementation\n\n### internal/tui/model.go\n\nIn status pane rendering, include selected task:\n\n```go\nfunc (m *Model) renderStatusPane() string {\n    // ... existing status info ...\n    \n    if m.selectedTask \\!= nil {\n        status += fmt.Sprintf(\" | Task: %s - %s\", \n            m.selectedTask.ID, \n            truncate(m.selectedTask.Title, 30))\n    }\n    \n    // ...\n}\n```\n\n## Truncation\n\nIf title is long, truncate with ellipsis to fit available width.",
-  "status": "open",
-  "priority": 2,
-  "type": "task",
+  "id": "hc0",
   "owner": "peter@engelbrecht.dk",
   "parent": "xfn",
-  "acceptance_criteria": "1. Status pane shows selected task ID\n2. Status pane shows selected task title (truncated if needed)\n3. Updates when selection changes\n4. Gracefully handles no selection (e.g., during startup)\n5. Doesn't overflow status pane width",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-12T22:06:29.042019Z",
-  "updated_at": "2026-01-12T22:06:29.042019Z"
+  "priority": 2,
+  "run": {
+    "session_id": "de90a472-aa2e-4697-a7b8-03b62573266e",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-13T16:20:39.170236+01:00",
+    "ended_at": "2026-01-13T16:24:15.434116+01:00",
+    "output": "I'll start by understanding the current TUI implementation, specifically the status pane rendering.\n\nThe file is large. Let me search for the status pane rendering function.\n\nLet me read the `renderStatusBar` function.\n\nNow I understand the status bar structure. Looking at the task description, I need to add the currently selected task to the status pane. Let me check how the selected task is tracked in the model.\n\nThe selected task is tracked via `m.selectedTask` which is an integer index into `m.tasks`. Let me also check the Task struct to see its fields.\n\nLet me read the TaskInfo struct.\n\nNow I have a clear understanding:\n- `TaskInfo` has `ID` and `Title` fields\n- `m.selectedTask` is an integer index into `m.tasks`\n- The status bar has a progress line (Line 2) that shows various stats\n\nLooking at the task requirements, I need to add the current task info to the status pane. The example shows it as part of the progress line. Let me update the todo and implement this.\n\nNow I need to add the selected task to the progress line. Looking at the structure, I should add it after the \"Tasks\" count. Let me create a helper function for truncating strings and add the task info.\n\nFirst, let me check if there's already a truncate helper function in the codebase.\n\nThere's a local truncate helper inside `renderCompactView`. I'll create a similar one for the status bar, or better yet, I could make it a package-level helper. Let me check if `ansi.Truncate` is available globally.\n\nThe `ansi` package is imported. Now let me implement the change. I'll add the selected task info to the progress line, after the \"Tasks\" count.\n\nLooking at line 2441-2442, after the tasks completed/total is added, I'll add the current task info. The format from the task description suggests: `Task: abc123 - Add authentication` or `[abc123] Add authentication`.\n\nNow I'll add the current task display after the Tasks count line (2442). I'll use a concise format like `[abc123] Task title` and truncate the title if needed.\n\nNow let me run the tests to make sure the changes work correctly.\n\nAll tests pass. Let me also run the full test suite to make sure.\n\nAll tests pass. Now let me add a test for the new functionality to ensure the current task is displayed in the status bar.\n\nI see the existing test. Let me add a test specifically for the current task display. Let me find where to add it.\n\nLet me add a new test for the current task display. I'll add it after `TestRenderStatusBar_Stopped`.\n\nNow let me run the tests again to make sure the new tests pass.\n\nAll tests pass. Let me also verify the full test suite still works.\n\nAll tests pass. Now let me update the todos and close the task.\n\nTask **hc0** is complete.\n\n**Summary:**\n- Added current task display to the status bar progress line in `internal/tui/model.go:2444-2457`\n- Format: `Current: [taskID] title` with title truncation at 25 characters for long titles\n- Added 3 new tests: `TestRenderStatusBar_CurrentTask`, `TestRenderStatusBar_CurrentTask_Truncation`, and `TestRenderStatusBar_NoTasks`\n- All tests pass\n- Changes committed with task ID in message",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2126
+      },
+      {
+        "name": "Read",
+        "duration_ms": 521
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1255
+      },
+      {
+        "name": "Read",
+        "duration_ms": 658
+      },
+      {
+        "name": "Read",
+        "duration_ms": 874
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1152
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 993
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1294
+      },
+      {
+        "name": "Read",
+        "duration_ms": 631
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1657
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 959
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1130
+      },
+      {
+        "name": "Read",
+        "duration_ms": 655
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1074
+      },
+      {
+        "name": "Read",
+        "duration_ms": 671
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4325
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1143
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 807
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1291
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1011
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1976
+      },
+      {
+        "name": "Read",
+        "duration_ms": 629
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 9782
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1361
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 782
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1697
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2322
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 805
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 530
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 565
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2969
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2570
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1166
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 6480,
+      "cache_read_tokens": 1175590,
+      "cache_creation_tokens": 32124,
+      "cost_usd": 0.9757830000000002,
+      "duration_ms": 215809
+    },
+    "success": true,
+    "num_turns": 34
+  },
+  "status": "closed",
+  "title": "Show current task ID and title in status pane",
+  "type": "task",
+  "updated_at": "2026-01-13T15:23:40.716396Z"
 }
