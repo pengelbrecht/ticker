@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -364,11 +365,6 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 	// Create program
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
-	// Add tabs for all epics by sending messages
-	for i, id := range epicIDs {
-		p.Send(tui.EpicAddedMsg{EpicID: id, Title: epicTitles[i]})
-	}
-
 	// Check claude availability
 	claudeAgent := agent.NewClaudeAgent()
 	if !claudeAgent.Available() {
@@ -430,8 +426,38 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		},
 	})
 
+	// Helper to load tasks for an epic
+	loadTasksForEpic := func(epicID string) {
+		tasks, err := ticksClient.ListTasks(epicID)
+		if err != nil {
+			return
+		}
+		taskInfos := make([]tui.TaskInfo, len(tasks))
+		for i, t := range tasks {
+			taskInfos[i] = tui.TaskInfo{
+				ID:        t.ID,
+				Title:     t.Title,
+				Status:    tui.TaskStatus(t.Status),
+				BlockedBy: t.BlockedBy,
+			}
+		}
+		p.Send(tui.EpicTasksUpdateMsg{EpicID: epicID, Tasks: taskInfos})
+	}
+
 	// Run parallel runner in background
 	go func() {
+		// Brief delay to let TUI initialize, then add epic tabs
+		time.Sleep(100 * time.Millisecond)
+		for i, id := range epicIDs {
+			p.Send(tui.EpicAddedMsg{EpicID: id, Title: epicTitles[i]})
+		}
+
+		// Load tasks for all epics
+		time.Sleep(50 * time.Millisecond)
+		for _, id := range epicIDs {
+			loadTasksForEpic(id)
+		}
+
 		result, err := runner.Run(ctx)
 		if err != nil {
 			p.Send(tui.ErrorMsg{Err: err})
