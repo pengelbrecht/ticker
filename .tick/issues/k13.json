@@ -1,0 +1,14 @@
+{
+  "id": "k13",
+  "title": "Report repo name",
+  "description": "Read go.mod and report the module name.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "7sl",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T12:13:58.732022Z",
+  "updated_at": "2026-01-13T15:03:41.871252Z",
+  "closed_at": "2026-01-13T15:03:41.871252Z"
+}

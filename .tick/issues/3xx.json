@@ -1,0 +1,13 @@
+{
+  "id": "3xx",
+  "title": "Load RunRecords for closed tasks in parallel mode",
+  "description": "Parallel mode's loadTasksForEpic only sends EpicTasksUpdateMsg but doesn't fetch/send RunRecords for closed tasks. This means the 'Run Summary' detail view (duration, tokens, cost, tools, etc.) is missing in parallel mode.\n\nFix: Add RunRecord loading to loadTasksForEpic similar to single-epic mode's refreshTasks (main.go:836-843). May need new EpicTaskRunRecordMsg message type.",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "xfn",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T15:07:37.527054Z",
+  "updated_at": "2026-01-13T15:07:37.527054Z"
+}

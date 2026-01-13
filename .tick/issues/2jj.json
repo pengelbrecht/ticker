@@ -1,0 +1,14 @@
+{
+  "id": "2jj",
+  "title": "What is 2+2?",
+  "description": "Calculate 2+2 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "u80",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:42:28.010349Z",
+  "updated_at": "2026-01-13T15:03:40.146285Z",
+  "closed_at": "2026-01-13T15:03:40.146285Z"
+}

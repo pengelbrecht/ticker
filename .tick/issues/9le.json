@@ -1,0 +1,14 @@
+{
+  "id": "9le",
+  "title": "What is 2+2?",
+  "description": "Calculate 2+2 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "xop",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T11:10:05.574179Z",
+  "updated_at": "2026-01-13T15:03:41.409297Z",
+  "closed_at": "2026-01-13T15:03:41.409297Z"
+}

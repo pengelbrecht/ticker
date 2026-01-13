@@ -1,0 +1,14 @@
+{
+  "id": "n5z",
+  "title": "Report Go version",
+  "description": "Check go.mod and report the Go version required.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "b0x",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T10:50:28.747511Z",
+  "updated_at": "2026-01-13T15:03:41.091455Z",
+  "closed_at": "2026-01-13T15:03:41.091455Z"
+}

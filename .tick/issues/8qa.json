@@ -1,0 +1,14 @@
+{
+  "id": "8qa",
+  "title": "What day is it?",
+  "description": "Report today's date.",
+  "status": "closed",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "cbj",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:38:43.649901Z",
+  "updated_at": "2026-01-13T15:03:42.268402Z",
+  "closed_at": "2026-01-13T15:03:42.268402Z"
+}

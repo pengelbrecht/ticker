@@ -1,0 +1,14 @@
+{
+  "id": "8jh",
+  "title": "Generate project summary with rich markdown",
+  "description": "Create a summary of this project using rich markdown formatting. Include:\n- A table comparing the main packages (name, purpose, key files)\n- Code snippets showing key type definitions\n- A bullet list of features\n- Headers and subheaders\nOutput should exercise markdown rendering: tables, code blocks, lists, emphasis, etc.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "cbj",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:38:43.681775Z",
+  "updated_at": "2026-01-13T15:03:40.073617Z",
+  "closed_at": "2026-01-13T15:03:40.073617Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "4t6",
+  "title": "What is 3+3?",
+  "description": "Calculate 3+3 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "ze9",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T11:07:14.902538Z",
+  "updated_at": "2026-01-13T11:09:07.182465Z",
+  "closed_at": "2026-01-13T11:09:07.182465Z",
+  "closed_reason": "3+3=6. Pure arithmetic calculation - no code changes required."
+}

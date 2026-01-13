@@ -1,0 +1,14 @@
+{
+  "id": "xo8",
+  "title": "What is 3+3?",
+  "description": "Calculate 3+3 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "mv5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:48:57.48112Z",
+  "updated_at": "2026-01-13T15:03:40.424783Z",
+  "closed_at": "2026-01-13T15:03:40.424783Z"
+}

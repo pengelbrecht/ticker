@@ -1,0 +1,14 @@
+{
+  "id": "zvh",
+  "title": "What day is it?",
+  "description": "Report today's date.",
+  "status": "closed",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "85a",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:29:54.477968Z",
+  "updated_at": "2026-01-13T15:03:42.171168Z",
+  "closed_at": "2026-01-13T15:03:42.171168Z"
+}

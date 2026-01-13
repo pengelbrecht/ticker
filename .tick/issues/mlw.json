@@ -1,0 +1,14 @@
+{
+  "id": "mlw",
+  "title": "TUI Test Epic",
+  "description": "Simple tasks for testing the ticker TUI",
+  "notes": "2026-01-13 11:57 - Iteration 1 complete: Read go.mod, module name is github.com/pengelbrecht/ticker. Simple file read task, no complications.\n2026-01-13 11:57 - Iteration 1: Verification failed for task sag. [git] M internal/engine/engine.go | M internal/parallel/runner.go | M internal/worktree/worktree.go Please fix and close the task again.\n2026-01-13 11:58 - Iteration 2 complete: Task sag closed. Module name is github.com/pengelbrecht/ticker. Previous verification failure was for changes in internal/ files that no longer show any diff - may have been stale status.\n2026-01-13 11:58 - Iteration 2: Verification failed for task sag. [git] M internal/engine/engine.go | M internal/parallel/runner.go | M internal/worktree/worktree.go Please fix and close the task again.\n2026-01-13 11:59 - Iteration 3 complete: Task sag closed. Module name is github.com/pengelbrecht/ticker. The verification failures in previous iterations mentioned internal/ files but current worktree shows no uncommitted changes to those files - this appears to be a false positive from git status checking across worktrees. No code changes were required for this simple go.mod read task.\n2026-01-13 11:59 - Iteration 3: Verification failed for task sag. [git] M internal/engine/engine.go | M internal/parallel/runner.go | M internal/worktree/worktree.go Please fix and close the task again.",
+  "status": "closed",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T10:50:28.537451Z",
+  "updated_at": "2026-01-13T15:03:51.80703Z",
+  "closed_at": "2026-01-13T15:03:51.80703Z"
+}

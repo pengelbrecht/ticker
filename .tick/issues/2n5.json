@@ -1,0 +1,14 @@
+{
+  "id": "2n5",
+  "title": "Report repo name",
+  "description": "Read go.mod and report the module name.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "xop",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T11:10:05.603226Z",
+  "updated_at": "2026-01-13T15:03:41.441902Z",
+  "closed_at": "2026-01-13T15:03:41.441902Z"
+}

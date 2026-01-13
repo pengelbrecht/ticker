@@ -265,10 +265,14 @@ func CheckPeriodically(currentVersion string) string {
 	// Check cache first
 	cache := loadCache()
 	if cache != nil && time.Since(cache.LastCheck) < checkInterval {
-		// Use cached result
+		// Use cached result, but verify cached version is actually newer than current
+		// This handles the case where user upgraded since the cache was saved
 		if cache.UpdateAvailable && cache.LatestVersion != "" {
-			method := DetectInstallMethod()
-			return formatUpdateNotice(currentVersion, cache.LatestVersion, method)
+			cachedLatest := strings.TrimPrefix(cache.LatestVersion, "v")
+			if cachedLatest != current && isNewerVersion(cachedLatest, current) {
+				method := DetectInstallMethod()
+				return formatUpdateNotice(currentVersion, cache.LatestVersion, method)
+			}
 		}
 		return ""
 	}
@@ -293,6 +297,37 @@ func CheckPeriodically(currentVersion string) string {
 
 	method := DetectInstallMethod()
 	return formatUpdateNotice(currentVersion, release.Version, method)
+}
+
+// isNewerVersion returns true if version a is newer than version b.
+// Simple semver comparison: compares major.minor.patch numerically.
+func isNewerVersion(a, b string) bool {
+	parseVersion := func(v string) (int, int, int) {
+		v = strings.TrimPrefix(v, "v")
+		parts := strings.Split(v, ".")
+		var major, minor, patch int
+		if len(parts) >= 1 {
+			fmt.Sscanf(parts[0], "%d", &major)
+		}
+		if len(parts) >= 2 {
+			fmt.Sscanf(parts[1], "%d", &minor)
+		}
+		if len(parts) >= 3 {
+			fmt.Sscanf(parts[2], "%d", &patch)
+		}
+		return major, minor, patch
+	}
+
+	aMajor, aMinor, aPatch := parseVersion(a)
+	bMajor, bMinor, bPatch := parseVersion(b)
+
+	if aMajor != bMajor {
+		return aMajor > bMajor
+	}
+	if aMinor != bMinor {
+		return aMinor > bMinor
+	}
+	return aPatch > bPatch
 }
 
 func formatUpdateNotice(current, latest string, method InstallMethod) string {

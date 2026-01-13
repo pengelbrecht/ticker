@@ -1,0 +1,14 @@
+{
+  "id": "wi0",
+  "title": "List CLI commands",
+  "description": "Read cmd/ticker/main.go and list all subcommands defined.",
+  "status": "closed",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "7sl",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T12:13:58.791363Z",
+  "updated_at": "2026-01-13T15:03:42.556539Z",
+  "closed_at": "2026-01-13T15:03:42.556539Z"
+}

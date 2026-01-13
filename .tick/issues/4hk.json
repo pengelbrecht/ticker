@@ -1,0 +1,14 @@
+{
+  "id": "4hk",
+  "title": "Parallel Test Epic 2",
+  "description": "Second test epic for parallel execution testing",
+  "notes": "2026-01-13 09:39 - Completed task 1pg: Simple math question (3+3=6). No code changes required - this was a test task for parallel execution testing.\n2026-01-13 09:39 - Iteration 1: Verification failed for task 1pg. [git] M internal/engine/engine.go | M internal/engine/engine_test.go Please fix and close the task again.\n2026-01-13 09:39 - Iteration 2: Completed task 1pg (3+3=6). Also committed pre-existing engine changes that added TotalCost/TotalTokens to RunResult - these were left uncommitted from a previous task and caused the verification failure in iteration 1.\n2026-01-13 09:40 - Iteration 3: Completed task vk0 (Echo hello). Simple output task - printed 'Hello World'. No code changes required, this was a test task for parallel execution testing.",
+  "status": "closed",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:38:49.528847Z",
+  "updated_at": "2026-01-13T15:02:41.748907Z",
+  "closed_at": "2026-01-13T15:02:41.748907Z"
+}

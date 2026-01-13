@@ -1,0 +1,14 @@
+{
+  "id": "ivm",
+  "title": "Count test files",
+  "description": "Count how many _test.go files are in the internal/ directory.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "b0x",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T10:50:28.777013Z",
+  "updated_at": "2026-01-13T15:03:41.123935Z",
+  "closed_at": "2026-01-13T15:03:41.123935Z"
+}

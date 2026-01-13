@@ -2,12 +2,13 @@
   "id": "h2x",
   "title": "Auto-commit after each successful iteration",
   "description": "Ticker should commit changes after each successful iteration to preserve incremental progress. This ensures that if a later iteration times out or fails, the previous work isn't lost.\n\nImplementation:\n- After iteration completes successfully (no error)\n- Run git add -A \u0026\u0026 git commit with iteration info in message\n- Only if there are actual changes to commit\n- Include task ID and iteration number in commit message\n- Skip if no changes detected (git status clean)",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "2os",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T08:37:09.744263Z",
-  "updated_at": "2026-01-12T08:37:09.744263Z"
+  "updated_at": "2026-01-13T15:02:32.676141Z",
+  "closed_at": "2026-01-13T15:02:32.676141Z"
 }

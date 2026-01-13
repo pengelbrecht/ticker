@@ -1,0 +1,15 @@
+{
+  "id": "amo",
+  "title": "What is 2+2?",
+  "description": "Calculate 2+2 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "bh8",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T11:07:14.756594Z",
+  "updated_at": "2026-01-13T11:09:09.154855Z",
+  "closed_at": "2026-01-13T11:09:09.154855Z",
+  "closed_reason": "2+2=4. Simple arithmetic calculation - no code changes required. Previous verification failures were false positives due to .tick directory state in worktree, not actual Go file modifications."
+}

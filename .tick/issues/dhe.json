@@ -1,0 +1,14 @@
+{
+  "id": "dhe",
+  "title": "Count test files",
+  "description": "Count how many _test.go files are in the internal/ directory.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "vwr",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T09:39:53.151679Z",
+  "updated_at": "2026-01-13T15:03:40.703319Z",
+  "closed_at": "2026-01-13T15:03:40.703319Z"
+}

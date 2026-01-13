@@ -1,0 +1,15 @@
+{
+  "id": "woa",
+  "title": "What is 3+3?",
+  "description": "Calculate 3+3 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "n5w",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T10:47:24.442934Z",
+  "updated_at": "2026-01-13T15:03:51.764565Z",
+  "closed_at": "2026-01-13T15:03:51.764565Z",
+  "closed_reason": "closed with parent epic (--force)"
+}

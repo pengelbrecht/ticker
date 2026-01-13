@@ -1,0 +1,42 @@
+{
+  "closed_at": "2026-01-13T12:18:13.02274Z",
+  "closed_reason": "Calculated 2+2 = 4. Simple arithmetic task completed.",
+  "created_at": "2026-01-13T12:17:23.785553Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Calculate 2+2 and report the answer.",
+  "id": "q6y",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "5wo",
+  "priority": 2,
+  "run": {
+    "session_id": "2488b4e3-de86-4781-9df4-e3c026417436",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-13T13:18:06.802219+01:00",
+    "ended_at": "2026-01-13T13:18:20.968759+01:00",
+    "output": "I'll complete this simple task of calculating 2+2.\n\nThe answer to 2+2 is **4**.\n\nLet me close this task with the solution.\n\nNow let me add a note to the epic for future iterations.\n\nTask completed. The answer to 2+2 is 4. No code changes were required for this calculation task, so no commit is needed.",
+    "tools": [
+      {
+        "name": "Bash",
+        "duration_ms": 1160
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 951
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 308,
+      "cache_read_tokens": 62770,
+      "cache_creation_tokens": 7331,
+      "cost_usd": 0.08821775,
+      "duration_ms": 13719
+    },
+    "success": true,
+    "num_turns": 3
+  },
+  "status": "closed",
+  "title": "What is 2+2?",
+  "type": "task",
+  "updated_at": "2026-01-13T12:18:13.02274Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "wsg",
+  "title": "Report repo name",
+  "description": "Read go.mod and report the module name.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "u80",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:42:28.043172Z",
+  "updated_at": "2026-01-13T15:03:40.178631Z",
+  "closed_at": "2026-01-13T15:03:40.178631Z"
+}

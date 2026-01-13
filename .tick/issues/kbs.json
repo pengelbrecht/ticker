@@ -1,0 +1,15 @@
+{
+  "id": "kbs",
+  "title": "What is 2+2?",
+  "description": "Calculate 2+2 and report the answer.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "jk0",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T09:39:52.940038Z",
+  "updated_at": "2026-01-13T09:40:35.57097Z",
+  "closed_at": "2026-01-13T09:40:35.57097Z",
+  "closed_reason": "Calculated 2+2 = 4. Simple arithmetic computation."
+}

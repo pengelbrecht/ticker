@@ -1,0 +1,15 @@
+{
+  "id": "5wo",
+  "title": "TUI Test Epic",
+  "description": "Simple tasks for testing the ticker TUI",
+  "notes": "2026-01-13 13:18 - Completed task q6y: 2+2=4. Simple arithmetic calculation, no code changes needed.\n2026-01-13 13:18 - Completed task r3n: Module name is github.com/pengelbrecht/ticker (from go.mod line 1). Simple read-only task, no code changes needed.\n2026-01-13 13:18 - Completed task kkq: Found 58 .go files in internal/ directory. Simple counting task using find command, no code changes needed.\n2026-01-13 13:19 - Completed task ybb: Listed all 4 CLI subcommands in cmd/ticker/main.go - run, resume, checkpoints, upgrade. Uses cobra framework. Read-only task, no code changes made.",
+  "status": "closed",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T12:17:23.756371Z",
+  "updated_at": "2026-01-13T12:19:25.214115Z",
+  "closed_at": "2026-01-13T12:19:25.214115Z",
+  "closed_reason": "all tasks completed"
+}

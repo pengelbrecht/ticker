@@ -1,0 +1,14 @@
+{
+  "id": "j3c",
+  "title": "Count test files",
+  "description": "Count how many _test.go files are in the internal/ directory.",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "2d7",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T08:42:28.239439Z",
+  "updated_at": "2026-01-13T15:03:40.349681Z",
+  "closed_at": "2026-01-13T15:03:40.349681Z"
+}

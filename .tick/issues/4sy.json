@@ -1,0 +1,15 @@
+{
+  "id": "4sy",
+  "title": "Parallel Test Epic",
+  "description": "Simple tasks for testing parallel execution",
+  "notes": "2026-01-13 14:13 - Task snz complete: 3+3=6. Simple arithmetic calculation, no code changes needed.\n2026-01-13 14:13 - Task x39 complete: Go version is 1.24.11 (per go.mod line 3). No code changes needed - reporting task only.\n2026-01-13 14:13 - Task k2j complete: Found 26 _test.go files in internal/ directory. No code changes needed - reporting task only.",
+  "status": "closed",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-13T13:12:55.403204Z",
+  "updated_at": "2026-01-13T13:14:00.741552Z",
+  "closed_at": "2026-01-13T13:14:00.741552Z",
+  "closed_reason": "all tasks completed"
+}
