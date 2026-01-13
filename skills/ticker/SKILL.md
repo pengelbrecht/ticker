@@ -13,14 +13,23 @@ When invoked, follow this workflow:
 
 ### Step 0: Check Prerequisites
 
-Verify `tk` and `ticker` are installed:
+**1. Git repository:**
+```bash
+git status 2>/dev/null || git init
+```
 
+**2. GitHub remote (optional but recommended):**
+```bash
+gh repo view 2>/dev/null || gh repo create <name> --private --source=. --push
+```
+Ask user for repo name if creating new. Skip if they prefer local-only.
+
+**3. Tools installed:**
 ```bash
 which tk && which ticker
 ```
 
-**If not installed**, install them:
-
+If not installed:
 ```bash
 # Install ticks (tk CLI)
 curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticks/main/scripts/install.sh | sh
@@ -29,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticks/main/scripts/ins
 curl -fsSL https://raw.githubusercontent.com/pengelbrecht/ticker/main/scripts/install.sh | sh
 ```
 
-Also verify the repo has ticks initialized:
+**4. Ticks initialized:**
 ```bash
 ls .tick/ 2>/dev/null || tk init
 ```
