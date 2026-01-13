@@ -669,6 +669,49 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 				eng.EnableVerification()
 			}
 		}
+
+		// Get the output formatter for this epic
+		out := outputs[epicID]
+
+		// Track verification pass status for task_complete output
+		var verifyPassed bool = true
+
+		// Set up task-level callbacks for headless output
+		eng.OnOutput = func(chunk string) {
+			if out != nil {
+				out.Output(chunk)
+			}
+		}
+
+		eng.OnIterationStart = func(iterCtx engine.IterationContext) {
+			verifyPassed = true // Reset for new task
+			if out != nil {
+				out.Task(iterCtx.Task, iterCtx.Iteration)
+			}
+		}
+
+		eng.OnSignal = func(sig engine.Signal, reason string) {
+			if out != nil {
+				out.Signal(sig, reason)
+			}
+		}
+
+		eng.OnVerificationStart = func(taskID string) {
+			if out != nil {
+				out.VerifyStart(taskID)
+			}
+		}
+
+		eng.OnVerificationEnd = func(taskID string, results *verify.Results) {
+			if results != nil {
+				verifyPassed = results.AllPassed
+			}
+			if out != nil {
+				out.VerifyEnd(taskID, results)
+				out.TaskComplete(taskID, verifyPassed)
+			}
+		}
+
 		return eng
 	}
 
