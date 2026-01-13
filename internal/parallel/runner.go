@@ -206,7 +206,7 @@ func (r *Runner) runEpic(ctx context.Context, epicID string) {
 		cfg.EpicID = epicID
 		if wt != nil {
 			cfg.UseWorktree = false // We already created the worktree
-			// Set the working directory via the agent's WorkDir
+			cfg.WorkDir = wt.Path   // Pass the worktree path to the engine
 		}
 
 		result, err = eng.Run(ctx, cfg)

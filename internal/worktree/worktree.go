@@ -102,6 +102,36 @@ func (m *Manager) Create(epicID string) (*Worktree, error) {
 		return nil, fmt.Errorf("failed to create worktree: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 
+	// Symlink .tick/ from main repo into worktree so agent can access tick data.
+	// This ensures all worktrees share the same tick database as the main repo.
+	// Steps:
+	// 1. Mark .tick files as skip-worktree so git ignores the deletion
+	// 2. Remove the copied .tick directory (git copies tracked files to worktree)
+	// 3. Create symlink to main repo's .tick
+	tickSource := filepath.Join(m.repoRoot, ".tick")
+	tickTarget := filepath.Join(wtPath, ".tick")
+	if _, err := os.Stat(tickSource); err == nil {
+		// First, mark all .tick files as skip-worktree so git ignores changes
+		// This must be done before deleting the files
+		cmd := exec.Command("git", "ls-files", ".tick")
+		cmd.Dir = wtPath
+		if output, err := cmd.Output(); err == nil && len(output) > 0 {
+			files := strings.Split(strings.TrimSpace(string(output)), "\n")
+			for _, file := range files {
+				if file != "" {
+					skipCmd := exec.Command("git", "update-index", "--skip-worktree", file)
+					skipCmd.Dir = wtPath
+					_ = skipCmd.Run()
+				}
+			}
+		}
+
+		// Remove the copied .tick directory
+		_ = os.RemoveAll(tickTarget)
+		// Create symlink to main repo's .tick
+		_ = os.Symlink(tickSource, tickTarget)
+	}
+
 	return &Worktree{
 		Path:    wtPath,
 		Branch:  branch,

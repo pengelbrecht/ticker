@@ -1650,6 +1650,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if idx == m.activeTab {
 				m.cost = tab.Cost
 				m.tokens = tab.Tokens
+				// Sync task outputs so viewing completed tasks works
+				m.taskOutputs = tab.TaskOutputs
 			}
 		}
 

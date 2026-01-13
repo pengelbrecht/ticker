@@ -83,6 +83,11 @@ type RunConfig struct {
 	// RepoRoot is the root of the git repository for worktree operations.
 	// Required when UseWorktree is true. If empty, current working directory is used.
 	RepoRoot string
+
+	// WorkDir overrides the working directory for the agent.
+	// If set, the agent runs in this directory instead of the current directory.
+	// Used by parallel runner to pass pre-created worktree paths.
+	WorkDir string
 }
 
 // Defaults for RunConfig.
@@ -251,6 +256,11 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 				_ = wtManager.Remove(config.EpicID)
 			}
 		}()
+	}
+
+	// Allow WorkDir override (used by parallel runner with pre-created worktrees)
+	if config.WorkDir != "" {
+		state.workDir = config.WorkDir
 	}
 
 	// Resume from checkpoint if specified
