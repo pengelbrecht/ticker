@@ -2,7 +2,7 @@
   "id": "52w",
   "title": "Add cross-epic shared budget tracking",
   "description": "Extend budget system to support shared tracking across multiple parallel epics.\n\n## Overview\n\nWhen running multiple epics in parallel, the budget should apply to the total cost across all epics, not per-epic. The budget needs to be thread-safe and provide per-epic breakdowns.\n\n## Files to Modify\n\n### internal/budget/budget.go\n\nAdd thread-safety and per-epic tracking:\n\n```go\ntype Budget struct {\n    mu          sync.RWMutex\n    // ... existing fields ...\n    \n    // Per-epic tracking\n    perEpic     map[string]*EpicUsage\n}\n\n// EpicUsage tracks usage for a single epic.\ntype EpicUsage struct {\n    EpicID     string\n    TokensIn   int\n    TokensOut  int\n    Cost       float64\n    Iterations int\n}\n\n// AddForEpic records usage attributed to a specific epic.\n// Thread-safe for concurrent calls from multiple engines.\nfunc (b *Budget) AddForEpic(epicID string, tokensIn, tokensOut int, cost float64)\n\n// UsageForEpic returns usage for a specific epic.\nfunc (b *Budget) UsageForEpic(epicID string) *EpicUsage\n\n// AllEpicUsage returns breakdown by epic.\nfunc (b *Budget) AllEpicUsage() map[string]*EpicUsage\n```\n\n## Thread Safety\n\nCurrent budget.Add() needs mutex protection:\n\n```go\nfunc (b *Budget) Add(tokensIn, tokensOut int, cost float64) {\n    b.mu.Lock()\n    defer b.mu.Unlock()\n    \n    b.usage.TokensIn += tokensIn\n    b.usage.TokensOut += tokensOut  \n    b.usage.Cost += cost\n    b.usage.Iterations++\n}\n\nfunc (b *Budget) ShouldStop() (bool, string) {\n    b.mu.RLock()\n    defer b.mu.RUnlock()\n    // ... check limits ...\n}\n```\n\n## Usage Display\n\nTUI should show:\n```\nTotal: .45 | 125k tokens | 15 iterations\n├─ epic1: .20 | 60k tokens | 8 iterations\n├─ epic2: /bin/zsh.85 | 45k tokens | 5 iterations  \n└─ epic3: /bin/zsh.40 | 20k tokens | 2 iterations\n```\n\n### internal/budget/budget_test.go\n- Test concurrent Add calls (race detector)\n- Test per-epic tracking\n- Test ShouldStop with concurrent access\n- Test total aggregation across epics",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -13,5 +13,7 @@
   "acceptance_criteria": "1. Budget is thread-safe for concurrent Add calls\n2. ShouldStop is thread-safe for concurrent reads\n3. AddForEpic tracks usage per epic\n4. UsageForEpic returns correct per-epic breakdown\n5. AllEpicUsage returns complete breakdown\n6. Total usage is sum of all epic usage\n7. Budget limits apply to total (not per-epic)\n8. Race detector passes on concurrent tests\n9. All tests pass",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-12T10:02:41.976538Z",
-  "updated_at": "2026-01-12T10:02:41.976538Z"
+  "updated_at": "2026-01-13T08:45:59.886814Z",
+  "closed_at": "2026-01-13T08:45:59.886814Z",
+  "closed_reason": "Added EpicUsage type for per-epic tracking. Added AddForEpic() method to record usage attributed to specific epics (also updates totals). Added UsageForEpic() and AllEpicUsage() methods to retrieve per-epic breakdowns. All methods are thread-safe. Added 10 new tests covering per-epic tracking, concurrent access, and copy semantics."
 }

@@ -329,3 +329,201 @@ func TestTracker_ConcurrentAccess(t *testing.T) {
 		t.Errorf("After concurrent access, Iterations = %d, want 1000", usage.Iterations)
 	}
 }
+
+func TestTracker_AddForEpic(t *testing.T) {
+	tracker := NewTracker(Limits{})
+
+	tracker.AddForEpic("epic1", 100, 50, 0.01)
+	tracker.AddForEpic("epic1", 200, 100, 0.02)
+	tracker.AddForEpic("epic2", 50, 25, 0.005)
+
+	// Check total usage
+	usage := tracker.Usage()
+	if usage.Iterations != 3 {
+		t.Errorf("Iterations = %d, want 3", usage.Iterations)
+	}
+	if usage.TokensIn != 350 {
+		t.Errorf("TokensIn = %d, want 350", usage.TokensIn)
+	}
+	if usage.TokensOut != 175 {
+		t.Errorf("TokensOut = %d, want 175", usage.TokensOut)
+	}
+	expectedCost := 0.035
+	if usage.Cost < expectedCost-0.0001 || usage.Cost > expectedCost+0.0001 {
+		t.Errorf("Cost = %f, want %f", usage.Cost, expectedCost)
+	}
+
+	// Check epic1 usage
+	epic1 := tracker.UsageForEpic("epic1")
+	if epic1 == nil {
+		t.Fatal("UsageForEpic(epic1) returned nil")
+	}
+	if epic1.EpicID != "epic1" {
+		t.Errorf("epic1.EpicID = %q, want %q", epic1.EpicID, "epic1")
+	}
+	if epic1.Iterations != 2 {
+		t.Errorf("epic1.Iterations = %d, want 2", epic1.Iterations)
+	}
+	if epic1.TokensIn != 300 {
+		t.Errorf("epic1.TokensIn = %d, want 300", epic1.TokensIn)
+	}
+	if epic1.TokensOut != 150 {
+		t.Errorf("epic1.TokensOut = %d, want 150", epic1.TokensOut)
+	}
+	if epic1.Cost != 0.03 {
+		t.Errorf("epic1.Cost = %f, want 0.03", epic1.Cost)
+	}
+
+	// Check epic2 usage
+	epic2 := tracker.UsageForEpic("epic2")
+	if epic2 == nil {
+		t.Fatal("UsageForEpic(epic2) returned nil")
+	}
+	if epic2.Iterations != 1 {
+		t.Errorf("epic2.Iterations = %d, want 1", epic2.Iterations)
+	}
+	if epic2.TokensIn != 50 {
+		t.Errorf("epic2.TokensIn = %d, want 50", epic2.TokensIn)
+	}
+}
+
+func TestTracker_UsageForEpic_Unknown(t *testing.T) {
+	tracker := NewTracker(Limits{})
+
+	epic := tracker.UsageForEpic("unknown")
+	if epic != nil {
+		t.Error("UsageForEpic(unknown) should return nil")
+	}
+}
+
+func TestTracker_UsageForEpic_ReturnsCopy(t *testing.T) {
+	tracker := NewTracker(Limits{})
+	tracker.AddForEpic("epic1", 100, 50, 0.01)
+
+	epic1 := tracker.UsageForEpic("epic1")
+	epic1.TokensIn = 9999
+
+	// Verify original is unchanged
+	epic1Again := tracker.UsageForEpic("epic1")
+	if epic1Again.TokensIn != 100 {
+		t.Error("UsageForEpic should return a copy, not the original")
+	}
+}
+
+func TestTracker_AllEpicUsage(t *testing.T) {
+	tracker := NewTracker(Limits{})
+
+	tracker.AddForEpic("epic1", 100, 50, 0.01)
+	tracker.AddForEpic("epic2", 200, 100, 0.02)
+	tracker.AddForEpic("epic3", 300, 150, 0.03)
+
+	all := tracker.AllEpicUsage()
+
+	if len(all) != 3 {
+		t.Errorf("AllEpicUsage returned %d epics, want 3", len(all))
+	}
+
+	for epicID, expected := range map[string]int{
+		"epic1": 100,
+		"epic2": 200,
+		"epic3": 300,
+	} {
+		epic, ok := all[epicID]
+		if !ok {
+			t.Errorf("AllEpicUsage missing %s", epicID)
+			continue
+		}
+		if epic.TokensIn != expected {
+			t.Errorf("%s.TokensIn = %d, want %d", epicID, epic.TokensIn, expected)
+		}
+	}
+}
+
+func TestTracker_AllEpicUsage_Empty(t *testing.T) {
+	tracker := NewTracker(Limits{})
+
+	all := tracker.AllEpicUsage()
+
+	if len(all) != 0 {
+		t.Errorf("AllEpicUsage returned %d epics, want 0", len(all))
+	}
+}
+
+func TestTracker_AllEpicUsage_ReturnsCopy(t *testing.T) {
+	tracker := NewTracker(Limits{})
+	tracker.AddForEpic("epic1", 100, 50, 0.01)
+
+	all := tracker.AllEpicUsage()
+	all["epic1"].TokensIn = 9999
+
+	// Verify original is unchanged
+	allAgain := tracker.AllEpicUsage()
+	if allAgain["epic1"].TokensIn != 100 {
+		t.Error("AllEpicUsage should return copies, not the originals")
+	}
+}
+
+func TestTracker_ConcurrentAddForEpic(t *testing.T) {
+	tracker := NewTracker(Limits{MaxIterations: 1000})
+
+	done := make(chan bool)
+	epics := []string{"epic1", "epic2", "epic3"}
+
+	// 10 goroutines, each adding 100 iterations across 3 epics
+	for i := 0; i < 10; i++ {
+		go func(worker int) {
+			for j := 0; j < 100; j++ {
+				epicID := epics[j%3]
+				tracker.AddForEpic(epicID, 1, 1, 0.001)
+				tracker.ShouldStop()
+				tracker.UsageForEpic(epicID)
+				tracker.AllEpicUsage()
+			}
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Verify total usage
+	usage := tracker.Usage()
+	if usage.Iterations != 1000 {
+		t.Errorf("After concurrent AddForEpic, Iterations = %d, want 1000", usage.Iterations)
+	}
+
+	// Verify per-epic usage sums to total
+	all := tracker.AllEpicUsage()
+	totalIterations := 0
+	for _, epic := range all {
+		totalIterations += epic.Iterations
+	}
+	if totalIterations != 1000 {
+		t.Errorf("Sum of per-epic iterations = %d, want 1000", totalIterations)
+	}
+}
+
+func TestTracker_ShouldStop_WithAddForEpic(t *testing.T) {
+	tracker := NewTracker(Limits{MaxIterations: 3})
+
+	// AddForEpic should count towards the limit
+	tracker.AddForEpic("epic1", 0, 0, 0)
+	tracker.AddForEpic("epic2", 0, 0, 0)
+
+	shouldStop, _ := tracker.ShouldStop()
+	if shouldStop {
+		t.Error("ShouldStop() = true at 2/3 iterations")
+	}
+
+	tracker.AddForEpic("epic1", 0, 0, 0)
+
+	shouldStop, reason := tracker.ShouldStop()
+	if !shouldStop {
+		t.Error("ShouldStop() = false at iteration limit")
+	}
+	if reason == "" {
+		t.Error("ShouldStop() returned empty reason at limit")
+	}
+}

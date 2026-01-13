@@ -30,6 +30,15 @@ type Usage struct {
 	StartTime  time.Time
 }
 
+// EpicUsage tracks usage for a single epic.
+type EpicUsage struct {
+	EpicID     string
+	TokensIn   int
+	TokensOut  int
+	Cost       float64
+	Iterations int
+}
+
 // TotalTokens returns the sum of input and output tokens.
 func (u *Usage) TotalTokens() int {
 	return u.TokensIn + u.TokensOut
@@ -51,9 +60,10 @@ type Remaining struct {
 // Tracker monitors resource usage and enforces budget limits.
 // It is safe for concurrent use.
 type Tracker struct {
-	limits Limits
-	usage  Usage
-	mu     sync.RWMutex
+	limits  Limits
+	usage   Usage
+	mu      sync.RWMutex
+	perEpic map[string]*EpicUsage
 }
 
 // NewTracker creates a new budget tracker with the given limits.
@@ -63,6 +73,7 @@ func NewTracker(limits Limits) *Tracker {
 		usage: Usage{
 			StartTime: time.Now(),
 		},
+		perEpic: make(map[string]*EpicUsage),
 	}
 }
 
@@ -83,6 +94,31 @@ func (t *Tracker) AddIteration() {
 	defer t.mu.Unlock()
 
 	t.usage.Iterations++
+}
+
+// AddForEpic records usage attributed to a specific epic.
+// Thread-safe for concurrent calls from multiple engines.
+// This also updates the total usage.
+func (t *Tracker) AddForEpic(epicID string, tokensIn, tokensOut int, cost float64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Update total usage
+	t.usage.Iterations++
+	t.usage.TokensIn += tokensIn
+	t.usage.TokensOut += tokensOut
+	t.usage.Cost += cost
+
+	// Update per-epic usage
+	epic, ok := t.perEpic[epicID]
+	if !ok {
+		epic = &EpicUsage{EpicID: epicID}
+		t.perEpic[epicID] = epic
+	}
+	epic.Iterations++
+	epic.TokensIn += tokensIn
+	epic.TokensOut += tokensOut
+	epic.Cost += cost
 }
 
 // ShouldStop checks if any budget limit has been exceeded.
@@ -172,4 +208,34 @@ func (t *Tracker) Limits() Limits {
 	defer t.mu.RUnlock()
 
 	return t.limits
+}
+
+// UsageForEpic returns usage for a specific epic.
+// Returns nil if no usage has been recorded for the epic.
+func (t *Tracker) UsageForEpic(epicID string) *EpicUsage {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	epic, ok := t.perEpic[epicID]
+	if !ok {
+		return nil
+	}
+
+	// Return a copy to avoid races
+	copy := *epic
+	return &copy
+}
+
+// AllEpicUsage returns breakdown by epic.
+// Returns a copy of the map to avoid races.
+func (t *Tracker) AllEpicUsage() map[string]*EpicUsage {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	result := make(map[string]*EpicUsage)
+	for k, v := range t.perEpic {
+		copy := *v
+		result[k] = &copy
+	}
+	return result
 }
