@@ -376,7 +376,25 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 	ticksClient := ticks.NewClient()
 	checkpointMgr := checkpoint.NewManager()
 
-	engineFactory := func() *engine.Engine {
+	// Helper to load tasks for an epic (defined before factory so it can be used in callbacks)
+	loadTasksForEpic := func(epicID string) {
+		tasks, err := ticksClient.ListTasks(epicID)
+		if err != nil {
+			return
+		}
+		taskInfos := make([]tui.TaskInfo, len(tasks))
+		for i, t := range tasks {
+			taskInfos[i] = tui.TaskInfo{
+				ID:        t.ID,
+				Title:     t.Title,
+				Status:    tui.TaskStatus(t.Status),
+				BlockedBy: t.BlockedBy,
+			}
+		}
+		p.Send(tui.EpicTasksUpdateMsg{EpicID: epicID, Tasks: taskInfos})
+	}
+
+	engineFactory := func(epicID string) *engine.Engine {
 		eng := engine.NewEngine(
 			agent.NewClaudeAgent(),
 			ticksClient,
@@ -387,6 +405,13 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 			if runner := createVerifyRunner(); runner != nil {
 				eng.SetVerifyRunner(runner)
 			}
+		}
+		// Wire up callbacks for task refresh (like single-epic mode)
+		eng.OnIterationEnd = func(result *engine.IterationResult) {
+			loadTasksForEpic(epicID)
+		}
+		eng.OnVerificationEnd = func(taskID string, results *verify.Results) {
+			loadTasksForEpic(epicID)
 		}
 		return eng
 	}
@@ -410,24 +435,6 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 
 	runner := parallel.NewRunner(runnerConfig)
 
-	// Helper to load tasks for an epic
-	loadTasksForEpic := func(epicID string) {
-		tasks, err := ticksClient.ListTasks(epicID)
-		if err != nil {
-			return
-		}
-		taskInfos := make([]tui.TaskInfo, len(tasks))
-		for i, t := range tasks {
-			taskInfos[i] = tui.TaskInfo{
-				ID:        t.ID,
-				Title:     t.Title,
-				Status:    tui.TaskStatus(t.Status),
-				BlockedBy: t.BlockedBy,
-			}
-		}
-		p.Send(tui.EpicTasksUpdateMsg{EpicID: epicID, Tasks: taskInfos})
-	}
-
 	// Set up callbacks to send messages to TUI
 	runner.SetCallbacks(parallel.RunnerCallbacks{
 		OnEpicStart: func(epicID string) {
@@ -448,6 +455,10 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 			// Refresh tasks when status changes (task completed, etc.)
 			loadTasksForEpic(epicID)
 		},
+		OnMessage: func(message string) {
+			// Display global status message in status bar
+			p.Send(tui.GlobalStatusMsg{Message: message})
+		},
 	})
 
 	// Run parallel runner in background
@@ -463,22 +474,6 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		for _, id := range epicIDs {
 			loadTasksForEpic(id)
 		}
-
-		// Start task refresh ticker (updates task status every 2 seconds while running)
-		refreshTicker := time.NewTicker(2 * time.Second)
-		defer refreshTicker.Stop()
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-refreshTicker.C:
-					for _, id := range epicIDs {
-						loadTasksForEpic(id)
-					}
-				}
-			}
-		}()
 
 		result, err := runner.Run(ctx)
 		if err != nil {
@@ -563,7 +558,7 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 	ticksClient := ticks.NewClient()
 	checkpointMgr := checkpoint.NewManager()
 
-	engineFactory := func() *engine.Engine {
+	engineFactory := func(epicID string) *engine.Engine {
 		eng := engine.NewEngine(
 			agent.NewClaudeAgent(),
 			ticksClient,

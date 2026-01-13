@@ -351,6 +351,12 @@ type AgentStatusMsg struct {
 	Error  string          // Error message if Status is "error"
 }
 
+// GlobalStatusMsg displays a global status message in the status bar.
+// Used for setup phases like worktree creation, merging, etc.
+type GlobalStatusMsg struct {
+	Message string // Status message to display (empty to clear)
+}
+
 // ToolActivityInfo represents a tool invocation for display in the TUI.
 // Tracks active and completed tools with timing information.
 type ToolActivityInfo struct {
@@ -553,16 +559,17 @@ var defaultKeyMap = keyMap{
 // Model is the main Bubble Tea model for the ticker TUI.
 type Model struct {
 	// Epic/Run state
-	epicID    string
-	epicTitle string
-	iteration int
-	taskID    string
-	taskTitle string
-	running   bool
-	paused    bool
-	quitting  bool
-	startTime time.Time
-	endTime   time.Time
+	epicID       string
+	epicTitle    string
+	globalStatus string // Global status message (e.g., "Creating worktrees...")
+	iteration    int
+	taskID       string
+	taskTitle    string
+	running      bool
+	paused       bool
+	quitting     bool
+	startTime    time.Time
+	endTime      time.Time
 
 	// Budget tracking
 	cost          float64
@@ -1315,6 +1322,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Status != agent.StatusToolUse {
 			m.liveActiveToolName = ""
 		}
+
+	case GlobalStatusMsg:
+		// Update global status message (displayed in status bar)
+		m.globalStatus = msg.Message
 
 	case VerifyStartMsg:
 		// Verification has started - update state and show in output
@@ -2353,7 +2364,7 @@ func (m Model) View() string {
 }
 
 // renderStatusBar renders the top status bar with header, progress, and optional progress bar.
-// Line 1: '⚡ ticker: [epic-id] Epic Title          ● STATUS'
+// Line 1: '⚡ ticker: [epic-id] Epic Title  [global status]  ● STATUS'
 // Line 2: 'Iter: 5 │ Tasks: 3/8 │ Time: 2:34 │ Cost: $1.23/$20.00 │ Tokens: 1.2k in │ 450 out │ 12k cache │ Model: opus'
 // Line 3 (optional): Progress bar
 func (m Model) renderStatusBar() string {
@@ -2369,6 +2380,12 @@ func (m Model) renderStatusBar() string {
 		leftContent += ": " + m.epicTitle
 	}
 
+	// Global status message (e.g., "Creating worktrees...")
+	var globalStatusText string
+	if m.globalStatus != "" {
+		globalStatusText = lipgloss.NewStyle().Foreground(colorBlue).Render("› " + m.globalStatus)
+	}
+
 	// Right side: status indicator with pulsing animation when running
 	var statusIndicator string
 	if m.running && !m.paused {
@@ -2382,15 +2399,25 @@ func (m Model) renderStatusBar() string {
 		statusIndicator = lipgloss.NewStyle().Foreground(colorGray).Render("■ STOPPED")
 	}
 
-	// Calculate padding for right-aligned status
+	// Calculate padding for right-aligned status (accounting for global status)
 	leftLen := lipgloss.Width(leftContent)
+	globalLen := lipgloss.Width(globalStatusText)
 	rightLen := lipgloss.Width(statusIndicator)
-	padding := m.width - leftLen - rightLen
-	if padding < 1 {
-		padding = 1
+	totalUsed := leftLen + globalLen + rightLen
+	padding := m.width - totalUsed
+	if padding < 2 {
+		padding = 2
 	}
 
-	headerLine := leftContent + strings.Repeat(" ", padding) + statusIndicator
+	// Build header line: left + padding/2 + global status + padding/2 + right
+	var headerLine string
+	if globalStatusText != "" {
+		leftPad := padding / 2
+		rightPad := padding - leftPad
+		headerLine = leftContent + strings.Repeat(" ", leftPad) + globalStatusText + strings.Repeat(" ", rightPad) + statusIndicator
+	} else {
+		headerLine = leftContent + strings.Repeat(" ", padding) + statusIndicator
+	}
 
 	// --- Line 2: Progress ---
 	var progressParts []string

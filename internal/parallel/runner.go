@@ -76,6 +76,7 @@ type RunnerCallbacks struct {
 	OnEpicFailed   func(epicID string, err error)
 	OnEpicConflict func(epicID string, conflict *ConflictState)
 	OnStatusChange func(epicID string, status string)
+	OnMessage      func(message string) // Global status messages (e.g., "Creating worktrees...")
 }
 
 // Runner orchestrates parallel epic execution.
@@ -173,17 +174,21 @@ func (r *Runner) runEpic(ctx context.Context, epicID string) {
 	var wt *worktree.Worktree
 	var err error
 	if r.config.WorktreeManager != nil {
+		r.sendMessage("Creating worktree for " + epicID + "...")
 		wt, err = r.config.WorktreeManager.Create(epicID)
 		if err != nil {
 			// If worktree exists, try to get it
 			if err == worktree.ErrWorktreeExists {
+				r.sendMessage("Using existing worktree for " + epicID)
 				wt, err = r.config.WorktreeManager.Get(epicID)
 			}
 			if err != nil {
+				r.sendMessage("") // Clear status
 				r.updateStatus(epicID, "failed", nil, err, nil)
 				return
 			}
 		}
+		r.sendMessage("") // Clear status after worktree ready
 
 		// Store worktree in status
 		r.mu.Lock()
@@ -222,7 +227,9 @@ func (r *Runner) runEpic(ctx context.Context, epicID string) {
 
 	// Try to merge if we have a worktree and merge manager
 	if wt != nil && r.config.MergeManager != nil {
+		r.sendMessage("Merging " + epicID + " to main...")
 		mergeResult, mergeErr := r.config.MergeManager.Merge(wt)
+		r.sendMessage("") // Clear status after merge attempt
 		if mergeErr != nil {
 			r.updateStatus(epicID, "failed", result, mergeErr, nil)
 			r.cleanupWorktree(epicID)
@@ -245,6 +252,13 @@ func (r *Runner) runEpic(ctx context.Context, epicID string) {
 	// Success - cleanup worktree
 	r.updateStatus(epicID, "completed", result, nil, nil)
 	r.cleanupWorktree(epicID)
+}
+
+// sendMessage sends a global status message via callback.
+func (r *Runner) sendMessage(message string) {
+	if r.callbacks.OnMessage != nil {
+		r.callbacks.OnMessage(message)
+	}
 }
 
 // cleanupWorktree removes the worktree for an epic if it exists.

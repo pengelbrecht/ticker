@@ -74,7 +74,7 @@ func TestRunner_SingleEpic(t *testing.T) {
 		config := RunnerConfig{
 			EpicIDs:     []string{"epic1"},
 			MaxParallel: 1,
-			EngineFactory: func() *engine.Engine {
+			EngineFactory: func(epicID string) *engine.Engine {
 				return nil // We won't actually run the engine
 			},
 		}
