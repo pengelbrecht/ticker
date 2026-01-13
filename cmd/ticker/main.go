@@ -434,8 +434,8 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 			checkpointMgr,
 		)
 		if !skipVerify {
-			if runner := createVerifyRunner(); runner != nil {
-				eng.SetVerifyRunner(runner)
+			if isVerificationEnabled() {
+				eng.EnableVerification()
 			}
 		}
 
@@ -656,8 +656,8 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 			checkpointMgr,
 		)
 		if !skipVerify {
-			if runner := createVerifyRunner(); runner != nil {
-				eng.SetVerifyRunner(runner)
+			if isVerificationEnabled() {
+				eng.EnableVerification()
 			}
 		}
 		return eng
@@ -865,8 +865,8 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 
 	// Set up verification runner (unless --skip-verify)
 	if !skipVerify {
-		if runner := createVerifyRunner(); runner != nil {
-			eng.SetVerifyRunner(runner)
+		if isVerificationEnabled() {
+			eng.EnableVerification()
 		}
 	}
 
@@ -1111,8 +1111,8 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 
 	// Set up verification runner (unless --skip-verify)
 	if !skipVerify {
-		if runner := createVerifyRunner(); runner != nil {
-			eng.SetVerifyRunner(runner)
+		if isVerificationEnabled() {
+			eng.EnableVerification()
 		}
 	}
 
@@ -1389,12 +1389,12 @@ func runPicker() *tui.EpicInfo {
 	return picker.Selected()
 }
 
-// createVerifyRunner creates a verification runner for the current directory.
-// Returns nil if verification is disabled via config or not in a git repo.
-func createVerifyRunner() *verify.Runner {
+// isVerificationEnabled checks if verification should be enabled.
+// Returns false if verification is disabled via config.
+func isVerificationEnabled() bool {
 	dir, err := os.Getwd()
 	if err != nil {
-		return nil
+		return false
 	}
 
 	// Check config
@@ -1402,19 +1402,9 @@ func createVerifyRunner() *verify.Runner {
 	if err != nil {
 		// Config error - log but continue without verification
 		fmt.Fprintf(os.Stderr, "Warning: error loading verification config: %v\n", err)
-		return nil
+		return false
 	}
-	if !config.IsEnabled() {
-		return nil
-	}
-
-	// Create GitVerifier (returns nil if not in git repo)
-	gitVerifier := verify.NewGitVerifier(dir)
-	if gitVerifier == nil {
-		return nil
-	}
-
-	return verify.NewRunner(dir, gitVerifier)
+	return config.IsEnabled()
 }
 
 // runVerifyOnly runs verification without the agent (--verify-only mode).

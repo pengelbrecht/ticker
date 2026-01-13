@@ -24,8 +24,8 @@ type Engine struct {
 	checkpoint *checkpoint.Manager
 	prompt     *PromptBuilder
 
-	// Verification runner (optional - created via SetVerifyRunner)
-	verifyRunner *verify.Runner
+	// Verification enabled flag (set via EnableVerification)
+	verifyEnabled bool
 
 	// Callbacks for TUI integration (optional)
 	OnIterationStart func(ctx IterationContext)
@@ -180,10 +180,10 @@ func NewEngine(a agent.Agent, t *ticks.Client, b *budget.Tracker, c *checkpoint.
 	}
 }
 
-// SetVerifyRunner sets the verification runner for the engine.
-// If set, verification runs after the agent closes a task.
-func (e *Engine) SetVerifyRunner(runner *verify.Runner) {
-	e.verifyRunner = runner
+// EnableVerification enables verification after task completion.
+// When enabled, GitVerifier runs in the appropriate working directory.
+func (e *Engine) EnableVerification() {
+	e.verifyEnabled = true
 }
 
 // Run executes the engine loop until completion, signal, or budget exceeded.
@@ -404,14 +404,14 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		}
 
 		// Check if task was closed by the agent - run verification if so
-		if !config.SkipVerify && e.verifyRunner != nil {
+		if !config.SkipVerify && e.verifyEnabled {
 			taskClosed, err := e.wasTaskClosed(task.ID)
 			if err != nil {
 				// Log but don't fail on status check error
 				_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not check task status: %v", err))
 			} else if taskClosed {
-				// Run verification
-				verifyResult := e.runVerification(ctx, task.ID, iterResult.Output, config.EpicID)
+				// Run verification in the correct working directory
+				verifyResult := e.runVerification(ctx, task.ID, iterResult.Output, config.EpicID, state.workDir)
 				if verifyResult != nil && !verifyResult.AllPassed {
 					// Verification failed - reopen task and add note
 					if err := e.ticks.ReopenTask(task.ID); err != nil {
@@ -684,10 +684,27 @@ func (e *Engine) wasTaskClosed(taskID string) (bool, error) {
 }
 
 // runVerification executes verification for a completed task.
-// Returns nil if no verification runner is configured.
-func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput string, epicID string) *verify.Results {
-	if e.verifyRunner == nil {
+// workDir specifies the directory to verify (worktree path or empty for cwd).
+// Returns nil if verification is not enabled.
+func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput string, epicID string, workDir string) *verify.Results {
+	if !e.verifyEnabled {
 		return nil
+	}
+
+	// Determine verification directory
+	dir := workDir
+	if dir == "" {
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return nil
+		}
+	}
+
+	// Create GitVerifier for the correct directory
+	gitVerifier := verify.NewGitVerifier(dir)
+	if gitVerifier == nil {
+		return nil // Not a git repo
 	}
 
 	// Call start callback
@@ -696,7 +713,8 @@ func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput
 	}
 
 	// Run verification
-	results := e.verifyRunner.Run(ctx, taskID, agentOutput)
+	runner := verify.NewRunner(dir, gitVerifier)
+	results := runner.Run(ctx, taskID, agentOutput)
 
 	// Call end callback
 	if e.OnVerificationEnd != nil {
