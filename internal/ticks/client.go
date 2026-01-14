@@ -401,6 +401,19 @@ func (c *Client) SetVerdict(taskID string, verdict string, feedback string) erro
 	return nil
 }
 
+// Approve sets verdict=approved on a task, triggering verdict processing.
+// This is a convenience method for human reviewers to approve awaiting tasks.
+func (c *Client) Approve(taskID string) error {
+	return c.SetVerdict(taskID, "approved", "")
+}
+
+// Reject sets verdict=rejected on a task with optional feedback.
+// The feedback is added as a note with --from human before setting the verdict.
+// This is a convenience method for human reviewers to reject awaiting tasks.
+func (c *Client) Reject(taskID string, feedback string) error {
+	return c.SetVerdict(taskID, "rejected", feedback)
+}
+
 // ProcessVerdict reads a task, processes its verdict, and saves the result.
 // This is used when ticker needs to process verdicts set by humans.
 // Returns the VerdictResult indicating what changes were made.
