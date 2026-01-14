@@ -30,6 +30,8 @@ type NextTaskOptions struct {
 	EpicID string
 	// StandaloneOnly when true, only returns tasks without a parent epic.
 	StandaloneOnly bool
+	// OrphanedOnly when true, only returns tasks whose parent epic is closed.
+	OrphanedOnly bool
 }
 
 // NextTaskOption is a functional option for configuring NextTask.
@@ -46,6 +48,13 @@ func WithEpic(epicID string) NextTaskOption {
 func StandaloneOnly() NextTaskOption {
 	return func(opts *NextTaskOptions) {
 		opts.StandaloneOnly = true
+	}
+}
+
+// OrphanedOnly filters to tasks whose parent epic is closed.
+func OrphanedOnly() NextTaskOption {
+	return func(opts *NextTaskOptions) {
+		opts.OrphanedOnly = true
 	}
 }
 
@@ -92,6 +101,7 @@ func (c *Client) NextTask(epicID string) (*Task, error) {
 // Uses functional options to configure behavior:
 //   - WithEpic(epicID): search within a specific epic (default behavior of NextTask)
 //   - StandaloneOnly(): only return tasks without a parent epic
+//   - OrphanedOnly(): only return tasks whose parent epic is closed
 //
 // If no options are provided, searches all tasks (any epic or standalone).
 // Returns nil if no tasks are available.
@@ -109,6 +119,11 @@ func (c *Client) NextTaskWithOptions(opts ...NextTaskOption) (*Task, error) {
 	// If standalone only, search for tasks without a parent
 	if options.StandaloneOnly {
 		return c.nextStandaloneTask()
+	}
+
+	// If orphaned only, search for tasks with a closed parent epic
+	if options.OrphanedOnly {
+		return c.nextOrphanedTask()
 	}
 
 	// Otherwise, search all tasks (any epic or standalone)
@@ -145,6 +160,45 @@ func (c *Client) nextStandaloneTask() (*Task, error) {
 	}
 
 	return c.findReadyTaskFromList(standaloneTasks)
+}
+
+// nextOrphanedTask finds the next ready task whose parent epic is closed.
+// Tasks are evaluated in priority order (lowest number = highest priority).
+// Returns nil if no orphaned tasks are available.
+func (c *Client) nextOrphanedTask() (*Task, error) {
+	tasks, err := c.ListAllTasks()
+	if err != nil {
+		return nil, err
+	}
+
+	// Build a cache of parent epic statuses to avoid repeated lookups
+	epicStatusCache := make(map[string]string)
+
+	// Filter to only orphaned tasks (parent exists but is closed)
+	var orphanedTasks []Task
+	for _, t := range tasks {
+		if t.Parent == "" {
+			continue // No parent = standalone, not orphaned
+		}
+
+		// Check if parent epic is closed (cache the result)
+		parentStatus, ok := epicStatusCache[t.Parent]
+		if !ok {
+			parent, err := c.GetEpic(t.Parent)
+			if err != nil {
+				// If we can't get the parent, skip this task
+				continue
+			}
+			parentStatus = parent.Status
+			epicStatusCache[t.Parent] = parentStatus
+		}
+
+		if parentStatus == "closed" {
+			orphanedTasks = append(orphanedTasks, t)
+		}
+	}
+
+	return c.findReadyTaskFromList(orphanedTasks)
 }
 
 // findReadyTaskFromList finds the first ready task from a list of tasks.
