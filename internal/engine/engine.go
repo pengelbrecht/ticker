@@ -925,7 +925,9 @@ func (e *Engine) getNextTaskWithDebounce(ctx context.Context, config RunConfig) 
 	return e.ticks.GetTask(task.ID)
 }
 
-// handleWatchIdle enters idle state and polls for new tasks.
+// handleWatchIdle enters idle state and watches for new tasks.
+// Uses fsnotify file watcher when available for faster response,
+// falling back to polling if fsnotify is unavailable.
 // Returns nil if tasks become available (continue processing).
 // Returns a RunResult if watch should end (timeout or cancellation).
 func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *runState, watchDeadline time.Time) *RunResult {
@@ -934,6 +936,13 @@ func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *r
 		e.OnIdle()
 	}
 
+	// Try to create a file watcher for the .tick/issues directory
+	// This provides faster response than polling when available
+	watcher := NewTicksWatcher(state.workDir)
+	defer watcher.Close()
+
+	fileChanges := watcher.Changes() // nil if fsnotify unavailable
+
 	// Poll for new tasks until available, timeout, or cancellation
 	for {
 		// Check watch timeout
@@ -941,39 +950,43 @@ func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *r
 			return state.toResult(ExitReasonWatchTimeout, e.budget.Usage())
 		}
 
-		// Wait for poll interval or cancellation
+		// Wait for file change, poll interval, or cancellation
+		// If file watcher is available, we still poll as a backup to catch changes
+		// that might not trigger fsnotify events (e.g., NFS, some edge cases)
 		select {
 		case <-ctx.Done():
 			e.writeInterruptionNotes(state, config.EpicID)
 			return state.toResult("context cancelled while idle", e.budget.Usage())
 
-		case <-time.After(config.WatchPollInterval):
-			// Check for new tasks
+		case <-fileChanges:
+			// File change detected - check for new tasks immediately
 			task, err := e.ticks.NextTask(config.EpicID)
 			if err != nil {
-				// Log but continue polling - transient errors shouldn't stop watch
+				// Transient error - continue watching
 				continue
 			}
-
 			if task != nil {
-				// Tasks available - return nil to continue processing
+				// Tasks available - continue processing
 				return nil
 			}
+			// Check if epic is now complete
+			result := e.checkForEpicCompletion(config, state)
+			if result != nil {
+				return result
+			}
+			// Still blocked/awaiting - continue watching
 
-			// Still no tasks - check if epic is now complete
-			hasOpen, err := e.ticks.HasOpenTasks(config.EpicID)
-			if err != nil {
-				continue
+		case <-time.After(config.WatchPollInterval):
+			// Periodic poll - check for new tasks
+			task, err := e.ticks.NextTask(config.EpicID)
+			if err == nil && task != nil {
+				return nil // Tasks available - continue processing
 			}
 
-			if !hasOpen {
-				// All tasks closed while idle - epic complete
-				state.signal = SignalComplete
-				reason := ExitReasonAllTasksCompleted
-				if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to close epic %s: %v\n", config.EpicID, err)
-				}
-				return state.toResult(reason, e.budget.Usage())
+			// Check if epic is now complete
+			result := e.checkForEpicCompletion(config, state)
+			if result != nil {
+				return result
 			}
 
 			// Still blocked/awaiting - re-trigger OnIdle callback
@@ -982,4 +995,25 @@ func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *r
 			}
 		}
 	}
+}
+
+// checkForEpicCompletion checks if all tasks are done and the epic should be closed.
+// Returns a RunResult if epic is complete, nil if still waiting for tasks.
+func (e *Engine) checkForEpicCompletion(config RunConfig, state *runState) *RunResult {
+	hasOpen, err := e.ticks.HasOpenTasks(config.EpicID)
+	if err != nil {
+		return nil // Transient error - continue watching
+	}
+
+	if !hasOpen {
+		// All tasks closed while idle - epic complete
+		state.signal = SignalComplete
+		reason := ExitReasonAllTasksCompleted
+		if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to close epic %s: %v\n", config.EpicID, err)
+		}
+		return state.toResult(reason, e.budget.Usage())
+	}
+
+	return nil // Still blocked/awaiting
 }
