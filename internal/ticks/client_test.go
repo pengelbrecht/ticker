@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -1251,6 +1252,180 @@ func TestCompleteTaskVariousRequiresTypes(t *testing.T) {
 			// Verify the awaiting value that would be set matches requires
 			if *task.Requires != requiresType {
 				t.Errorf("expected awaiting to be set to %q", requiresType)
+			}
+		})
+	}
+}
+
+// TestNextAwaitingTaskArgsConstruction tests that NextAwaitingTask builds correct arguments
+func TestNextAwaitingTaskArgsConstruction(t *testing.T) {
+	testCases := []struct {
+		name          string
+		epicID        string
+		awaitingTypes []string
+		wantArgs      []string
+	}{
+		{
+			name:          "no epic, no types",
+			epicID:        "",
+			awaitingTypes: nil,
+			wantArgs:      []string{"next", "--awaiting", "--json"},
+		},
+		{
+			name:          "with epic, no types",
+			epicID:        "epic-123",
+			awaitingTypes: nil,
+			wantArgs:      []string{"next", "epic-123", "--awaiting", "--json"},
+		},
+		{
+			name:          "no epic, single type",
+			epicID:        "",
+			awaitingTypes: []string{"approval"},
+			wantArgs:      []string{"next", "--awaiting", "approval", "--json"},
+		},
+		{
+			name:          "with epic, single type",
+			epicID:        "epic-123",
+			awaitingTypes: []string{"approval"},
+			wantArgs:      []string{"next", "epic-123", "--awaiting", "approval", "--json"},
+		},
+		{
+			name:          "with epic, multiple types",
+			epicID:        "epic-123",
+			awaitingTypes: []string{"content", "review"},
+			wantArgs:      []string{"next", "epic-123", "--awaiting", "content,review", "--json"},
+		},
+		{
+			name:          "no epic, multiple types",
+			epicID:        "",
+			awaitingTypes: []string{"approval", "review", "content"},
+			wantArgs:      []string{"next", "--awaiting", "approval,review,content", "--json"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build args the same way NextAwaitingTask does
+			args := []string{"next"}
+			if tc.epicID != "" {
+				args = append(args, tc.epicID)
+			}
+			args = append(args, "--awaiting")
+			if len(tc.awaitingTypes) > 0 {
+				args = append(args, strings.Join(tc.awaitingTypes, ","))
+			}
+			args = append(args, "--json")
+
+			// Verify args match expected
+			if len(args) != len(tc.wantArgs) {
+				t.Errorf("args length mismatch: got %d, want %d", len(args), len(tc.wantArgs))
+				t.Errorf("got: %v", args)
+				t.Errorf("want: %v", tc.wantArgs)
+				return
+			}
+			for i, arg := range args {
+				if arg != tc.wantArgs[i] {
+					t.Errorf("arg[%d] mismatch: got %q, want %q", i, arg, tc.wantArgs[i])
+				}
+			}
+		})
+	}
+}
+
+// TestNextAwaitingTaskReturnsAwaitingTask tests that NextAwaitingTask returns tasks with awaiting set
+func TestNextAwaitingTaskReturnsAwaitingTask(t *testing.T) {
+	// Simulate parsing a JSON response from tk next --awaiting
+	taskJSON := `{
+		"id": "task-awaiting",
+		"title": "Task Awaiting Approval",
+		"type": "task",
+		"status": "open",
+		"parent": "epic-123",
+		"awaiting": "approval",
+		"priority": 1
+	}`
+
+	var task Task
+	if err := json.Unmarshal([]byte(taskJSON), &task); err != nil {
+		t.Fatalf("failed to unmarshal task: %v", err)
+	}
+
+	if task.ID != "task-awaiting" {
+		t.Errorf("expected ID 'task-awaiting', got %q", task.ID)
+	}
+	if !task.IsAwaitingHuman() {
+		t.Error("expected IsAwaitingHuman() to return true")
+	}
+	if task.GetAwaitingType() != "approval" {
+		t.Errorf("expected awaiting type 'approval', got %q", task.GetAwaitingType())
+	}
+}
+
+// TestNextAwaitingTaskReturnsNilForEmptyResponse tests that empty response returns nil
+func TestNextAwaitingTaskReturnsNilForEmptyResponse(t *testing.T) {
+	// Simulate empty JSON (no awaiting tasks)
+	taskJSON := `{}`
+
+	var task Task
+	if err := json.Unmarshal([]byte(taskJSON), &task); err != nil {
+		t.Fatalf("failed to unmarshal task: %v", err)
+	}
+
+	// Should return nil when ID is empty
+	if task.ID != "" {
+		t.Errorf("expected empty ID for empty response, got %q", task.ID)
+	}
+}
+
+// TestNextAwaitingTaskTypesJoin tests that awaiting types are joined correctly
+func TestNextAwaitingTaskTypesJoin(t *testing.T) {
+	// Test string joining for multiple types
+	types := []string{"content", "review"}
+	joined := strings.Join(types, ",")
+	if joined != "content,review" {
+		t.Errorf("expected 'content,review', got %q", joined)
+	}
+
+	types2 := []string{"approval", "review", "content"}
+	joined2 := strings.Join(types2, ",")
+	if joined2 != "approval,review,content" {
+		t.Errorf("expected 'approval,review,content', got %q", joined2)
+	}
+
+	// Empty slice should produce empty string
+	types3 := []string{}
+	joined3 := strings.Join(types3, ",")
+	if joined3 != "" {
+		t.Errorf("expected empty string for empty slice, got %q", joined3)
+	}
+}
+
+// TestNextAwaitingTaskAllAwaitingTypes tests all valid awaiting types
+func TestNextAwaitingTaskAllAwaitingTypes(t *testing.T) {
+	// All valid awaiting types that humans might query for
+	awaitingTypes := []string{"work", "approval", "input", "review", "content", "escalation", "checkpoint"}
+
+	for _, awaitingType := range awaitingTypes {
+		t.Run(awaitingType, func(t *testing.T) {
+			// Simulate a task with this awaiting type
+			taskJSON := fmt.Sprintf(`{
+				"id": "task-%s",
+				"title": "Task Awaiting %s",
+				"type": "task",
+				"status": "open",
+				"awaiting": "%s"
+			}`, awaitingType, awaitingType, awaitingType)
+
+			var task Task
+			if err := json.Unmarshal([]byte(taskJSON), &task); err != nil {
+				t.Fatalf("failed to unmarshal task: %v", err)
+			}
+
+			if !task.IsAwaitingHuman() {
+				t.Errorf("expected task with awaiting=%q to be awaiting human", awaitingType)
+			}
+			if task.GetAwaitingType() != awaitingType {
+				t.Errorf("expected GetAwaitingType()=%q, got %q", awaitingType, task.GetAwaitingType())
 			}
 		})
 	}

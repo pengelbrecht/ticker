@@ -62,6 +62,48 @@ func (c *Client) NextTask(epicID string) (*Task, error) {
 	return c.findNextReadyTask(epicID)
 }
 
+// NextAwaitingTask returns the next task awaiting human attention.
+// If epicID is empty, searches across all epics.
+// If awaitingTypes are provided, filters to only those types (e.g., "approval", "review").
+// Returns nil if no tasks are awaiting human attention.
+func (c *Client) NextAwaitingTask(epicID string, awaitingTypes ...string) (*Task, error) {
+	args := []string{"next"}
+	if epicID != "" {
+		args = append(args, epicID)
+	}
+	args = append(args, "--awaiting")
+	if len(awaitingTypes) > 0 {
+		args = append(args, strings.Join(awaitingTypes, ","))
+	}
+	args = append(args, "--json")
+
+	out, err := c.run(args...)
+	if err != nil {
+		// Check if it's "no tasks" vs actual error
+		if strings.Contains(err.Error(), "no open") || strings.Contains(err.Error(), "No tasks") ||
+			strings.Contains(err.Error(), "no awaiting") || strings.Contains(err.Error(), "No awaiting") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("tk next --awaiting: %w", err)
+	}
+
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	var task Task
+	if err := json.Unmarshal(out, &task); err != nil {
+		return nil, fmt.Errorf("parse task JSON: %w", err)
+	}
+	// Guard against empty task (no awaiting tasks)
+	if task.ID == "" {
+		return nil, nil
+	}
+
+	return &task, nil
+}
+
 // findNextReadyTask finds the next task ready for agent work by filtering locally.
 // This handles the case where tk next returns a task that's awaiting human action.
 func (c *Client) findNextReadyTask(epicID string) (*Task, error) {
