@@ -732,6 +732,47 @@ func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput
 	return results
 }
 
+// signalToAwaiting maps signals to their corresponding awaiting states.
+// Signals not in this map don't trigger awaiting (e.g., SignalComplete, SignalNone).
+var signalToAwaiting = map[Signal]string{
+	SignalEject:           "work",
+	SignalBlocked:         "input", // Legacy - maps to InputNeeded for backwards compatibility
+	SignalApprovalNeeded:  "approval",
+	SignalInputNeeded:     "input",
+	SignalReviewRequested: "review",
+	SignalContentReview:   "content",
+	SignalEscalate:        "escalation",
+	SignalCheckpoint:      "checkpoint",
+}
+
+// handleSignal processes an agent signal and updates the task state accordingly.
+// For COMPLETE signals, it checks the task's requires field before closing.
+// For handoff signals (EJECT, BLOCKED, etc.), it sets the task to awaiting state.
+// Returns nil for unknown signals or SignalNone (no-op).
+func (e *Engine) handleSignal(task *ticks.Task, signal Signal, context string) error {
+	switch signal {
+	case SignalNone:
+		// No signal detected - nothing to do
+		return nil
+
+	case SignalComplete:
+		// Check for pre-declared approval gate
+		if task.Requires != nil && *task.Requires != "" {
+			note := "Work complete, requires " + *task.Requires
+			return e.ticks.SetAwaiting(task.ID, *task.Requires, note)
+		}
+		return e.ticks.CloseTask(task.ID, "Completed by agent")
+
+	default:
+		// Check if this signal maps to an awaiting state
+		if awaiting, ok := signalToAwaiting[signal]; ok {
+			return e.ticks.SetAwaiting(task.ID, awaiting, context)
+		}
+		// Unknown signal - gracefully ignore
+		return nil
+	}
+}
+
 // buildVerificationFailureNote creates a note about verification failure.
 // Includes iteration, task ID, and truncated verification output.
 func buildVerificationFailureNote(iteration int, taskID string, results *verify.Results) string {

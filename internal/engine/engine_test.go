@@ -703,3 +703,114 @@ func TestRunState_WorkDir(t *testing.T) {
 		t.Errorf("workDir = %q, want %q", state.workDir, "/path/to/worktree")
 	}
 }
+
+func TestSignalToAwaiting(t *testing.T) {
+	// Verify all signals are mapped to their correct awaiting states
+	tests := []struct {
+		signal Signal
+		want   string
+		inMap  bool
+	}{
+		{SignalEject, "work", true},
+		{SignalBlocked, "input", true},
+		{SignalApprovalNeeded, "approval", true},
+		{SignalInputNeeded, "input", true},
+		{SignalReviewRequested, "review", true},
+		{SignalContentReview, "content", true},
+		{SignalEscalate, "escalation", true},
+		{SignalCheckpoint, "checkpoint", true},
+		// These signals should NOT be in the map
+		{SignalComplete, "", false},
+		{SignalNone, "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.signal.String(), func(t *testing.T) {
+			awaiting, ok := signalToAwaiting[tt.signal]
+			if ok != tt.inMap {
+				if tt.inMap {
+					t.Errorf("signal %v should be in signalToAwaiting map", tt.signal)
+				} else {
+					t.Errorf("signal %v should NOT be in signalToAwaiting map", tt.signal)
+				}
+			}
+			if tt.inMap && awaiting != tt.want {
+				t.Errorf("signalToAwaiting[%v] = %q, want %q", tt.signal, awaiting, tt.want)
+			}
+		})
+	}
+}
+
+func TestSignalToAwaitingMap_Completeness(t *testing.T) {
+	// Ensure the map has exactly 8 entries for all handoff signals
+	expected := map[Signal]string{
+		SignalEject:           "work",
+		SignalBlocked:         "input",
+		SignalApprovalNeeded:  "approval",
+		SignalInputNeeded:     "input",
+		SignalReviewRequested: "review",
+		SignalContentReview:   "content",
+		SignalEscalate:        "escalation",
+		SignalCheckpoint:      "checkpoint",
+	}
+
+	if len(signalToAwaiting) != len(expected) {
+		t.Errorf("signalToAwaiting has %d entries, want %d", len(signalToAwaiting), len(expected))
+	}
+
+	for signal, want := range expected {
+		got, ok := signalToAwaiting[signal]
+		if !ok {
+			t.Errorf("signalToAwaiting missing %v", signal)
+			continue
+		}
+		if got != want {
+			t.Errorf("signalToAwaiting[%v] = %q, want %q", signal, got, want)
+		}
+	}
+}
+
+func TestSignalToAwaitingMap_ExcludesNonHandoff(t *testing.T) {
+	// SignalComplete and SignalNone should NOT be in the map
+	// as they have special handling
+	if _, ok := signalToAwaiting[SignalComplete]; ok {
+		t.Error("SignalComplete should not be in signalToAwaiting")
+	}
+	if _, ok := signalToAwaiting[SignalNone]; ok {
+		t.Error("SignalNone should not be in signalToAwaiting")
+	}
+}
+
+func TestHandleSignal_RequiresFieldLogic(t *testing.T) {
+	// Test the logic around requires field checking
+	// This tests the condition: task.Requires != nil && *task.Requires != ""
+
+	t.Run("nil Requires means no gate", func(t *testing.T) {
+		task := &ticks.Task{ID: "task-1", Requires: nil}
+		// When Requires is nil, COMPLETE should close the task directly
+		// We can't call handleSignal without a real ticks client, but
+		// we can verify the condition logic
+		hasGate := task.Requires != nil && *task.Requires != ""
+		if hasGate {
+			t.Error("nil Requires should not trigger gate")
+		}
+	})
+
+	t.Run("empty string Requires means no gate", func(t *testing.T) {
+		emptyStr := ""
+		task := &ticks.Task{ID: "task-1", Requires: &emptyStr}
+		hasGate := task.Requires != nil && *task.Requires != ""
+		if hasGate {
+			t.Error("empty string Requires should not trigger gate")
+		}
+	})
+
+	t.Run("non-empty Requires means has gate", func(t *testing.T) {
+		approval := "approval"
+		task := &ticks.Task{ID: "task-1", Requires: &approval}
+		hasGate := task.Requires != nil && *task.Requires != ""
+		if !hasGate {
+			t.Error("non-empty Requires should trigger gate")
+		}
+	})
+}

@@ -1,17 +1,97 @@
 {
-  "id": "tps",
-  "title": "Update ParseSignals to detect all handoff signals",
-  "description": "Update the signal parsing logic in internal/engine/signals.go:\n\n```go\n// signalPatterns maps signal strings to Signal constants\nvar signalPatterns = map[string]Signal{\n    \"COMPLETE\":         SignalComplete,\n    \"EJECT\":            SignalEject,\n    \"BLOCKED\":          SignalBlocked,\n    \"APPROVAL_NEEDED\":  SignalApprovalNeeded,\n    \"INPUT_NEEDED\":     SignalInputNeeded,\n    \"REVIEW_REQUESTED\": SignalReviewRequested,\n    \"CONTENT_REVIEW\":   SignalContentReview,\n    \"ESCALATE\":         SignalEscalate,\n    \"CHECKPOINT\":       SignalCheckpoint,\n}\n\n// ParseSignals extracts signal from agent output\n// Format: \u003cpromise\u003eSIGNAL_TYPE: context\u003c/promise\u003e\nfunc ParseSignals(output string) (Signal, string) {\n    re := regexp.MustCompile(`\u003cpromise\u003e(\\w+)(?::\\s*(.+?))?\u003c/promise\u003e`)\n    matches := re.FindStringSubmatch(output)\n    if matches == nil {\n        return SignalNone, \"\"\n    }\n    \n    signalStr := matches[1]\n    context := strings.TrimSpace(matches[2])\n    \n    if signal, ok := signalPatterns[signalStr]; ok {\n        return signal, context\n    }\n    return SignalNone, \"\"\n}\n```\n\nAcceptance criteria:\n- [ ] All 8 signal types detected correctly\n- [ ] Context/reason extracted after colon\n- [ ] Unknown signals return SignalNone\n- [ ] Regex handles signals with/without context",
-  "status": "open",
-  "priority": 0,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
-    "mpt",
     "ux4"
   ],
-  "parent": "eso",
-  "created_by": "peter@engelbrecht.dk",
+  "closed_at": "2026-01-14T17:33:49.416629Z",
+  "closed_reason": "Refactored ParseSignals to use unified pattern map with signalPatterns map and signalPriority slice. Single regex captures all signals with optional context. Added 20 new test cases for all 8 handoff signal types. Files modified: internal/engine/signals.go, signals_test.go.",
   "created_at": "2026-01-14T16:13:46.674435Z",
-  "updated_at": "2026-01-14T16:13:57.752821Z"
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Update the signal parsing logic in internal/engine/signals.go:\n\n```go\n// signalPatterns maps signal strings to Signal constants\nvar signalPatterns = map[string]Signal{\n    \"COMPLETE\":         SignalComplete,\n    \"EJECT\":            SignalEject,\n    \"BLOCKED\":          SignalBlocked,\n    \"APPROVAL_NEEDED\":  SignalApprovalNeeded,\n    \"INPUT_NEEDED\":     SignalInputNeeded,\n    \"REVIEW_REQUESTED\": SignalReviewRequested,\n    \"CONTENT_REVIEW\":   SignalContentReview,\n    \"ESCALATE\":         SignalEscalate,\n    \"CHECKPOINT\":       SignalCheckpoint,\n}\n\n// ParseSignals extracts signal from agent output\n// Format: \u003cpromise\u003eSIGNAL_TYPE: context\u003c/promise\u003e\nfunc ParseSignals(output string) (Signal, string) {\n    re := regexp.MustCompile(`\u003cpromise\u003e(\\w+)(?::\\s*(.+?))?\u003c/promise\u003e`)\n    matches := re.FindStringSubmatch(output)\n    if matches == nil {\n        return SignalNone, \"\"\n    }\n    \n    signalStr := matches[1]\n    context := strings.TrimSpace(matches[2])\n    \n    if signal, ok := signalPatterns[signalStr]; ok {\n        return signal, context\n    }\n    return SignalNone, \"\"\n}\n```\n\nAcceptance criteria:\n- [ ] All 8 signal types detected correctly\n- [ ] Context/reason extracted after colon\n- [ ] Unknown signals return SignalNone\n- [ ] Regex handles signals with/without context",
+  "id": "tps",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "eso",
+  "priority": 0,
+  "run": {
+    "session_id": "c8b2a7f3-aac1-4aaf-8ea2-a75172131875",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T18:32:23.186275+01:00",
+    "ended_at": "2026-01-14T18:34:15.020812+01:00",
+    "output": "I'll start by reviewing the current state of the signals.go file to understand what needs to be updated.\n\nNow let me check if there are existing tests for the ParseSignals function.\n\nNow I understand the current implementation. It uses individual regex patterns for each signal type, but the task requires updating it to use a unified pattern approach that detects all 8 handoff signal types. Let me update the `ParseSignals` function as specified.\n\nNow let me update the tests to add test cases for all the new handoff signal types.\n\nNow let me run the tests to verify everything works correctly.\n\nAll tests pass. Let me also run all tests to make sure nothing is broken.\n\nAll tests pass. Now let me close the task and commit the changes.\n\nTask completed. Here's a summary of what was done:\n\n**Task [tps] - Update ParseSignals to detect all handoff signals**\n\n**Changes made:**\n\n1. **internal/engine/signals.go** - Refactored `ParseSignals` function:\n   - Added `signalPatterns` map mapping signal strings to Signal constants for all 8 signal types\n   - Added `signalPriority` slice defining precedence order (COMPLETE \u003e EJECT \u003e BLOCKED \u003e APPROVAL_NEEDED \u003e INPUT_NEEDED \u003e REVIEW_REQUESTED \u003e CONTENT_REVIEW \u003e ESCALATE \u003e CHECKPOINT)\n   - Replaced individual regex patterns with single unified regex: `\u003cpromise\u003e(\\w+)(?::\\s*(.+?))?\u003c/promise\u003e`\n   - Handles signals with or without context after the colon\n   - Unknown signals return SignalNone\n\n2. **internal/engine/signals_test.go** - Added 20 new test cases:\n   - Tests for each new signal type with and without context\n   - Priority tests between new signals\n   - Unknown signal handling test\n   - Context with special characters (colons) test\n\n**Acceptance criteria met:**\n- ✅ All 8 signal types detected correctly\n- ✅ Context/reason extracted after colon  \n- ✅ Unknown signals return SignalNone\n- ✅ Regex handles signals with/without context",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 653
+      },
+      {
+        "name": "Read",
+        "duration_ms": 384
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2728
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 942
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 11029
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1331
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 13005
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1317
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 853
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 566
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1316
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2200
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3538
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2622
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1301
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5188,
+      "cache_read_tokens": 789357,
+      "cache_creation_tokens": 20588,
+      "cost_usd": 0.6670414999999998,
+      "duration_ms": 111298
+    },
+    "success": true,
+    "num_turns": 16
+  },
+  "status": "closed",
+  "title": "Update ParseSignals to detect all handoff signals",
+  "type": "task",
+  "updated_at": "2026-01-14T17:33:49.416629Z"
 }
