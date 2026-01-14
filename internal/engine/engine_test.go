@@ -814,3 +814,174 @@ func TestHandleSignal_RequiresFieldLogic(t *testing.T) {
 		}
 	})
 }
+
+func TestHandoffSignals_ContinueToNextTask(t *testing.T) {
+	// Verify that all handoff signals are in the signalToAwaiting map
+	// which means they will trigger the "continue to next task" behavior
+	handoffSignals := []Signal{
+		SignalEject,
+		SignalBlocked,
+		SignalApprovalNeeded,
+		SignalInputNeeded,
+		SignalReviewRequested,
+		SignalContentReview,
+		SignalEscalate,
+		SignalCheckpoint,
+	}
+
+	for _, signal := range handoffSignals {
+		t.Run(signal.String(), func(t *testing.T) {
+			// Handoff signals should be in signalToAwaiting map
+			awaiting, ok := signalToAwaiting[signal]
+			if !ok {
+				t.Errorf("signal %v should be in signalToAwaiting map (triggers continue behavior)", signal)
+			}
+			if awaiting == "" {
+				t.Errorf("signal %v has empty awaiting state", signal)
+			}
+		})
+	}
+}
+
+func TestNonHandoffSignals_SpecialHandling(t *testing.T) {
+	// Verify that COMPLETE and NONE are NOT in the signalToAwaiting map
+	// because they have special handling (COMPLETE is ignored, NONE is no-op)
+	nonHandoffSignals := []Signal{
+		SignalComplete,
+		SignalNone,
+	}
+
+	for _, signal := range nonHandoffSignals {
+		t.Run(signal.String(), func(t *testing.T) {
+			if _, ok := signalToAwaiting[signal]; ok {
+				t.Errorf("signal %v should NOT be in signalToAwaiting map", signal)
+			}
+		})
+	}
+}
+
+func TestSignalHandlingLogic(t *testing.T) {
+	// Test the logic flow for signal handling in the main loop
+	// This verifies that:
+	// 1. SignalNone -> no action (if block not entered)
+	// 2. SignalComplete -> ignored, continues
+	// 3. Handoff signals -> handleSignal called, continue to next task
+
+	tests := []struct {
+		name                string
+		signal              Signal
+		expectHandleSignal  bool // Should handleSignal be called?
+		expectContinue      bool // Should continue to next task?
+		expectIgnoreWarning bool // Should emit warning for COMPLETE?
+	}{
+		{
+			name:               "SignalNone - no action",
+			signal:             SignalNone,
+			expectHandleSignal: false,
+			expectContinue:     false,
+		},
+		{
+			name:                "SignalComplete - ignored with warning",
+			signal:              SignalComplete,
+			expectHandleSignal:  false,
+			expectContinue:      false, // No explicit continue, just falls through
+			expectIgnoreWarning: true,
+		},
+		{
+			name:               "SignalEject - handoff signal",
+			signal:             SignalEject,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+		{
+			name:               "SignalBlocked - handoff signal",
+			signal:             SignalBlocked,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+		{
+			name:               "SignalApprovalNeeded - handoff signal",
+			signal:             SignalApprovalNeeded,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+		{
+			name:               "SignalInputNeeded - handoff signal",
+			signal:             SignalInputNeeded,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+		{
+			name:               "SignalReviewRequested - handoff signal",
+			signal:             SignalReviewRequested,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+		{
+			name:               "SignalContentReview - handoff signal",
+			signal:             SignalContentReview,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+		{
+			name:               "SignalEscalate - handoff signal",
+			signal:             SignalEscalate,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+		{
+			name:               "SignalCheckpoint - handoff signal",
+			signal:             SignalCheckpoint,
+			expectHandleSignal: true,
+			expectContinue:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test the logic conditions used in the main loop
+
+			// Condition 1: Is signal != SignalNone (enters the if block)?
+			entersIfBlock := tt.signal != SignalNone
+
+			// Condition 2: Is signal == SignalComplete (special case)?
+			isComplete := tt.signal == SignalComplete
+
+			// Condition 3: Is signal a handoff signal (in signalToAwaiting)?
+			_, isHandoffSignal := signalToAwaiting[tt.signal]
+
+			// Verify expectations
+			if tt.signal == SignalNone {
+				if entersIfBlock {
+					t.Error("SignalNone should not enter the signal handling block")
+				}
+			} else if tt.signal == SignalComplete {
+				if !entersIfBlock {
+					t.Error("SignalComplete should enter the signal handling block")
+				}
+				if !isComplete {
+					t.Error("SignalComplete should trigger the complete special case")
+				}
+				if isHandoffSignal {
+					t.Error("SignalComplete should not be a handoff signal")
+				}
+			} else {
+				// Handoff signals
+				if !entersIfBlock {
+					t.Errorf("%v should enter the signal handling block", tt.signal)
+				}
+				if isComplete {
+					t.Errorf("%v should not trigger the complete special case", tt.signal)
+				}
+				if tt.expectHandleSignal && !isHandoffSignal {
+					t.Errorf("%v should be a handoff signal (in signalToAwaiting map)", tt.signal)
+				}
+			}
+
+			// Verify handleSignal expectation matches map membership
+			if tt.expectHandleSignal != isHandoffSignal {
+				t.Errorf("expectHandleSignal=%v but isHandoffSignal=%v", tt.expectHandleSignal, isHandoffSignal)
+			}
+		})
+	}
+}

@@ -345,8 +345,8 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			}
 
 			if hasOpen {
-				// There are tasks but they're all blocked - don't close epic
-				return state.toResult("no ready tasks (remaining tasks are blocked)", e.budget.Usage()), nil
+				// There are tasks but they're all blocked or awaiting human - don't close epic
+				return state.toResult("no ready tasks (remaining tasks are blocked or awaiting human)", e.budget.Usage()), nil
 			}
 
 			// All tasks are closed - epic complete
@@ -428,7 +428,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			}
 		}
 
-		// Handle signals
+		// Handle signals - process with handleSignal and continue to next task
 		if iterResult.Signal != SignalNone {
 			state.signal = iterResult.Signal
 			state.signalReason = iterResult.SignalReason
@@ -437,19 +437,22 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 				e.OnSignal(iterResult.Signal, iterResult.SignalReason)
 			}
 
-			switch iterResult.Signal {
-			case SignalComplete:
-				// Agent emitted COMPLETE - ignore it and continue loop
-				// Ticker detects completion naturally via tk next returning nil
-				// Log this as a warning since agent shouldn't emit COMPLETE
+			// Special case: COMPLETE signal is ignored (ticker handles completion via tk next)
+			if iterResult.Signal == SignalComplete {
 				if e.OnOutput != nil {
 					e.OnOutput("\n[Warning: Agent emitted COMPLETE signal - ignoring. Ticker handles completion automatically.]\n")
 				}
 				// Continue to next iteration - don't close epic
-			case SignalEject:
-				return state.toResult(fmt.Sprintf("agent ejected: %s", iterResult.SignalReason), e.budget.Usage()), nil
-			case SignalBlocked:
-				return state.toResult(fmt.Sprintf("agent blocked: %s", iterResult.SignalReason), e.budget.Usage()), nil
+			} else {
+				// All other signals (handoff signals) set the task to awaiting state
+				// and continue to the next available task
+				if err := e.handleSignal(task, iterResult.Signal, iterResult.SignalReason); err != nil {
+					// Log error but don't fail - task state update is not critical
+					_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not update task %s awaiting state: %v", task.ID, err))
+				}
+				// Continue to next task - never block waiting for human response
+				// The task is now awaiting human, so tk next won't return it
+				continue
 			}
 		}
 
