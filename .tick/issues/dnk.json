@@ -1,18 +1,233 @@
 {
-  "id": "dnk",
-  "title": "Implement watch mode for ticker engine",
-  "description": "Add --watch flag to ticker that idles when no tasks available instead of exiting:\n\n```bash\nticker run --auto --watch              # Watch indefinitely\nticker run --auto --watch --timeout 1h # Watch with timeout\nticker run --auto --watch --poll 5s    # Custom poll interval\n```\n\nImplementation:\n```go\nfunc (e *Engine) RunWatch(epicID string, timeout, pollInterval time.Duration) error {\n    deadline := time.Now().Add(timeout)\n    \n    for {\n        // Check timeout\n        if timeout \u003e 0 \u0026\u0026 time.Now().After(deadline) {\n            return nil\n        }\n        \n        // Try to get next task\n        task, err := e.ticks.NextTask(epicID)\n        if err != nil {\n            return err\n        }\n        \n        if task != nil {\n            // Process task\n            if err := e.processTask(task); err != nil {\n                return err\n            }\n            continue\n        }\n        \n        // No tasks - enter idle state\n        e.callbacks.OnIdle()\n        \n        // Poll for changes\n        select {\n        case \u003c-time.After(pollInterval):\n            continue\n        case \u003c-e.quit:\n            return nil\n        }\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] --watch flag enables watch mode\n- [ ] Engine idles when no tasks available\n- [ ] Polls at configurable interval (default 10s)\n- [ ] Resumes when tasks become available\n- [ ] --timeout limits watch duration\n- [ ] Graceful shutdown on quit signal",
-  "status": "closed",
-  "priority": 2,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
     "dqq"
   ],
-  "parent": "8x8",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-14T16:16:35.326012Z",
-  "updated_at": "2026-01-14T20:45:52.904116Z",
   "closed_at": "2026-01-14T20:45:52.904116Z",
-  "closed_reason": "Implemented watch mode: added --watch, --timeout, --poll CLI flags; added Watch, WatchTimeout, WatchPollInterval to RunConfig; implemented handleWatchIdle() that polls for new tasks and respects timeout/context cancellation; added OnIdle callback for TUI/headless output; added ExitReasonWatchTimeout constant and comprehensive tests"
+  "closed_reason": "Implemented watch mode: added --watch, --timeout, --poll CLI flags; added Watch, WatchTimeout, WatchPollInterval to RunConfig; implemented handleWatchIdle() that polls for new tasks and respects timeout/context cancellation; added OnIdle callback for TUI/headless output; added ExitReasonWatchTimeout constant and comprehensive tests",
+  "created_at": "2026-01-14T16:16:35.326012Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Add --watch flag to ticker that idles when no tasks available instead of exiting:\n\n```bash\nticker run --auto --watch              # Watch indefinitely\nticker run --auto --watch --timeout 1h # Watch with timeout\nticker run --auto --watch --poll 5s    # Custom poll interval\n```\n\nImplementation:\n```go\nfunc (e *Engine) RunWatch(epicID string, timeout, pollInterval time.Duration) error {\n    deadline := time.Now().Add(timeout)\n    \n    for {\n        // Check timeout\n        if timeout \u003e 0 \u0026\u0026 time.Now().After(deadline) {\n            return nil\n        }\n        \n        // Try to get next task\n        task, err := e.ticks.NextTask(epicID)\n        if err != nil {\n            return err\n        }\n        \n        if task != nil {\n            // Process task\n            if err := e.processTask(task); err != nil {\n                return err\n            }\n            continue\n        }\n        \n        // No tasks - enter idle state\n        e.callbacks.OnIdle()\n        \n        // Poll for changes\n        select {\n        case \u003c-time.After(pollInterval):\n            continue\n        case \u003c-e.quit:\n            return nil\n        }\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] --watch flag enables watch mode\n- [ ] Engine idles when no tasks available\n- [ ] Polls at configurable interval (default 10s)\n- [ ] Resumes when tasks become available\n- [ ] --timeout limits watch duration\n- [ ] Graceful shutdown on quit signal",
+  "id": "dnk",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "8x8",
+  "priority": 2,
+  "run": {
+    "session_id": "49edc29f-e997-419d-9614-422e7f5fb563",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T21:40:37.442967+01:00",
+    "ended_at": "2026-01-14T21:46:28.149463+01:00",
+    "output": "I'll implement watch mode for the ticker engine. Let me start by exploring the current codebase structure to understand how the engine and CLI are organized.\n\nNow I understand the structure. The engine has a `Run` method that loops through tasks, and the CLI has the `runRun` function that handles flags. I need to:\n\n1. Add watch-related configuration to `RunConfig`\n2. Implement `RunWatch` method or extend `Run` to support watch mode\n3. Add `OnIdle` callback\n4. Add CLI flags `--watch`, `--timeout`, `--poll`\n\nLet me first add the watch mode configuration and OnIdle callback to the engine.\n\nNow let me add the watch mode configuration to RunConfig:\n\nNow let me add the default poll interval constant:\n\nNow I need to modify the `Run` method to support watch mode. The key changes are:\n1. Apply default poll interval\n2. Calculate deadline for watch timeout\n3. Modify the \"no ready tasks\" handling to enter idle state and poll instead of exiting\n\nLet me update the Run method. First, let me add the watch mode defaults in the defaults section:\n\nNow I need to modify the \"no ready tasks\" handling. Currently, when `task == nil`, the code either returns with \"all tasks completed\" or \"no ready tasks\". For watch mode, we need to idle and poll instead. Let me find and update that section:\n\nNow I need to update the \"no ready tasks\" section to support watch mode. Let me replace it:\n\nNow I need to add the `handleWatchIdle` method and an exit reason constant for watch timeout. Let me also add the exit reason:\n\nNow let me add the `handleWatchIdle` method at the end of the file. Let me find a good spot after the buildVerificationFailureNote function:\n\nNow let me add the `handleWatchIdle` method at the end of the file:\n\nNow let me add the CLI flags for watch mode. I need to modify the `main.go` file to add --watch, --timeout, and --poll flags:\n\nNow I need to update the `runRun` function to read these flags and pass them through. First, let me read the flags:\n\nNow I need to add validation for watch mode flags and update the function signatures to pass watch settings. Let me add validation after the existing checks:\n\nNow I need to update the functions that run the engine to accept watch settings. First let me find the runWithTUI and runHeadless function signatures:\n\nNow I need to update these function signatures to include watch mode parameters, and update the calls to them. Let me first look at where runWithTUI and runHeadless are called:\n\nLet me update the calls first:\n\nNow let me update the runWithTUI function signature and add watch mode support:\n\nNow let me find the engine.RunConfig construction in runWithTUI and add watch settings:\n\nNow let me update the runHeadless function signature:\n\nNow let me find and update the engine.RunConfig in runHeadless:\n\nNow I need to add the `IdleMsg` type to the TUI package. Let me check for existing message types:\n\nLet me add the IdleMsg after VerifyResultMsg:\n\nNow I need to handle the IdleMsg in the TUI's Update function. Let me find it:\n\nLet me continue reading to find a good place to add the IdleMsg handler:\n\nLet me add the IdleMsg handler after RunCompleteMsg:\n\nNow let me write tests for watch mode. First, let me look at existing engine tests:\n\nThe existing test file has comprehensive test patterns. Now let me add tests for watch mode. I'll add tests for:\n\n1. `DefaultWatchPollInterval` constant\n2. `ExitReasonWatchTimeout` constant\n3. `handleWatchIdle` function\n4. `RunConfig` watch fields\n5. `OnIdle` callback\n\nNow let me run the tests to verify everything works:\n\nAll watch mode tests pass. Now let me run all engine tests:\n\nNow let me run the full test suite to make sure nothing else broke:\n\nAll tests pass. Now let me also verify the build works:\n\nAll tests pass and the build compiles. Let me now close the task and commit the changes.\n\nNow let me add an epic note for the next iteration:\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e\n\n## Summary\n\nI implemented watch mode for the ticker engine with the following changes:\n\n### CLI Flags\n- `--watch` - Enables watch mode (idles when no tasks instead of exiting)\n- `--timeout \u003cduration\u003e` - Optional watch timeout (default: unlimited)\n- `--poll \u003cduration\u003e` - Poll interval for checking new tasks (default: 10s)\n\n### Engine Changes (`internal/engine/engine.go`)\n- Added `Watch`, `WatchTimeout`, `WatchPollInterval` fields to `RunConfig`\n- Added `DefaultWatchPollInterval` constant (10 seconds)\n- Added `ExitReasonWatchTimeout` constant\n- Added `OnIdle` callback to `Callbacks` struct\n- Implemented `handleWatchIdle()` method that:\n  - Calls `OnIdle` callback when entering idle state\n  - Polls for new tasks at configured interval\n  - Returns nil when tasks become available (continue processing)\n  - Returns result with timeout exit reason when deadline exceeded\n  - Returns result on context cancellation\n  - Detects epic completion during idle and returns complete signal\n\n### TUI Changes (`internal/tui/model.go`)\n- Added `IdleMsg` type for watch mode idle state notifications\n- Handler in `Update()` updates `liveStatus` to \"idle\" and appends `[IDLE]` message\n\n### CLI Integration (`cmd/ticker/main.go`)\n- Updated `runWithTUI()` and `runHeadless()` to accept watch parameters\n- Set up `OnIdle` callbacks for both TUI and headless output\n- Headless mode outputs `[IDLE] No tasks available, waiting...` (or JSON for `--jsonl`)\n\n### Tests (`internal/engine/engine_test.go`)\n- Added tests for all new constants and config fields\n- Added tests for `handleWatchIdle()` covering:\n  - OnIdle callback invocation\n  - Watch timeout expiration\n  - Context cancellation\n  - Epic completion during idle",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3182
+      },
+      {
+        "name": "Read",
+        "duration_ms": 525
+      },
+      {
+        "name": "Read",
+        "duration_ms": 671
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4001
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3368
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6441
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2869
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4394
+      },
+      {
+        "name": "Read",
+        "duration_ms": 589
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7033
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4752
+      },
+      {
+        "name": "Read",
+        "duration_ms": 614
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7939
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3657
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3469
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4721
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2792
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 890
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1712
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1103
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2719
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 1629
+      },
+      {
+        "name": "Read",
+        "duration_ms": 696
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2758
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 1432
+      },
+      {
+        "name": "Read",
+        "duration_ms": 678
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4646
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 992
+      },
+      {
+        "name": "Read",
+        "duration_ms": 728
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2330
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1004
+      },
+      {
+        "name": "Read",
+        "duration_ms": 591
+      },
+      {
+        "name": "Read",
+        "duration_ms": 119
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6416
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3600
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 595
+      },
+      {
+        "name": "Read",
+        "duration_ms": 521
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 41381
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3229
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1468
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 467
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 787
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1045
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1828
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2866
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 588
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 564
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3921
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2610
+      }
+    ],
+    "metrics": {
+      "input_tokens": 13,
+      "output_tokens": 17730,
+      "cache_read_tokens": 4374114,
+      "cache_creation_tokens": 190123,
+      "cost_usd": 3.83878275,
+      "duration_ms": 350208
+    },
+    "success": true,
+    "num_turns": 50
+  },
+  "status": "closed",
+  "title": "Implement watch mode for ticker engine",
+  "type": "task",
+  "updated_at": "2026-01-14T20:45:52.904116Z"
 }

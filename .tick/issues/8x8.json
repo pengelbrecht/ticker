@@ -2,6 +2,7 @@
   "id": "8x8",
   "title": "Watch Mode \u0026 Advanced Features",
   "description": "Implement watch mode for ticker to idle when no tasks available. Add orphaned/standalone task support. Handle race conditions with debounce.",
+  "notes": "2026-01-14 21:46 - Watch mode implemented [dnk]: Added --watch, --timeout, --poll flags. Engine now idles when no tasks available and polls at configurable interval (default 10s). OnIdle callback triggers [IDLE] output in headless mode and IdleMsg in TUI. Watch timeout returns ExitReasonWatchTimeout which preserves worktree for resume. All tests pass.\n2026-01-14 21:51 - Debounce implemented [32y]: Added --debounce flag for optional wait before task pickup. Waits configurable interval then re-fetches task via GetTask to capture human edits. Default 0 (disabled) for backwards compat. Works with context cancellation. Tests cover no-debounce, with-debounce, no-task, context-cancelled, and negative-interval cases.\n2026-01-14 21:55 - Standalone task support implemented [h5t]: Added NextTaskWithOptions() with functional options (WithEpic, StandaloneOnly). ListAllTasks() gets all open tasks, findReadyTaskFromList() handles priority sorting and filters awaiting/blocked/manual. Engine integration not changed - engine still uses NextTask(epicID). Future work could update engine to use NextTaskWithOptions when running without epic.",
   "status": "open",
   "priority": 2,
   "type": "epic",
@@ -9,5 +10,5 @@
   "parent": "zt5",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:11:04.892033Z",
-  "updated_at": "2026-01-14T16:11:04.892033Z"
+  "updated_at": "2026-01-14T20:55:10.560132Z"
 }
