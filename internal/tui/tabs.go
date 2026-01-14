@@ -18,11 +18,11 @@ const tabHeaderHeight = 1
 // renderTabBar renders the tab bar for multi-epic mode.
 // Format: ─[1:epic1]─[2:epic2]─[3:epic3]─────────────────────────
 // Active tab is highlighted with different background.
-// Tab status indicators:
-//   - Running: blue indicator (●)
-//   - Completed: green checkmark (✓)
-//   - Failed: red X (✗)
-//   - Conflict: yellow warning (⚠)
+// Tab status indicators (emoji style matching task icons):
+//   - Running: 🔵 (blue)
+//   - Completed: ✅ (green)
+//   - Failed: 🔴 (red)
+//   - Conflict: ⚠ (yellow/peach)
 func (m Model) renderTabBar() string {
 	if !m.multiEpic || len(m.epicTabs) == 0 {
 		return ""
@@ -90,19 +90,21 @@ func (m Model) renderSingleTab(index int, tab EpicTab, isActive bool) string {
 }
 
 // getTabStatusIcon returns the status icon for a tab based on its status.
+// Uses emoji style matching task StatusIcon() for visual consistency:
+//   - Running: 🔵 (blue)
+//   - Complete: ✅ (green)
+//   - Failed: 🔴 (red)
+//   - Conflict: ⚠ (yellow/peach) - kept distinct as it has different meaning
 func (m Model) getTabStatusIcon(status EpicTabStatus) string {
 	switch status {
 	case EpicTabStatusRunning:
-		// Blue pulsing indicator when running
-		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("●")
+		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("🔵")
 	case EpicTabStatusComplete:
-		// Green checkmark for complete
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("✓")
+		return lipgloss.NewStyle().Foreground(colorGreen).Render("✅")
 	case EpicTabStatusFailed:
-		// Red X for failed
-		return lipgloss.NewStyle().Foreground(colorRed).Render("✗")
+		return lipgloss.NewStyle().Foreground(colorRed).Render("🔴")
 	case EpicTabStatusConflict:
-		// Yellow warning for conflict
+		// Warning symbol kept as-is - distinct from task "blocked" status
 		return lipgloss.NewStyle().Foreground(colorPeach).Render("⚠")
 	default:
 		return ""
