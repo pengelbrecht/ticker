@@ -23,9 +23,10 @@ func NewClient() *Client {
 	return &Client{Command: "tk"}
 }
 
-// NextTask returns the next open, unblocked task for the given epic.
+// NextTask returns the next open, unblocked task for the given epic that is ready for agent work.
 // Returns nil if no tasks are available.
 // Uses --all to see tasks from all owners (important for blockers check).
+// Excludes tasks where awaiting is set or manual=true (backwards compat).
 func (c *Client) NextTask(epicID string) (*Task, error) {
 	out, err := c.run("next", epicID, "--all", "--json")
 	if err != nil {
@@ -49,7 +50,60 @@ func (c *Client) NextTask(epicID string) (*Task, error) {
 	if task.ID == "" {
 		return nil, nil
 	}
-	return &task, nil
+
+	// If the task is not awaiting human action, return it directly
+	if !task.IsAwaitingHuman() {
+		return &task, nil
+	}
+
+	// The tk CLI returned a task that's awaiting human action.
+	// We need to find the next task that's ready for agent work.
+	// Get all tasks and filter locally.
+	return c.findNextReadyTask(epicID)
+}
+
+// findNextReadyTask finds the next task ready for agent work by filtering locally.
+// This handles the case where tk next returns a task that's awaiting human action.
+func (c *Client) findNextReadyTask(epicID string) (*Task, error) {
+	tasks, err := c.ListTasks(epicID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build a set of blocked task IDs for efficient lookup
+	blockedIDs := make(map[string]bool)
+	for _, t := range tasks {
+		for _, blockerID := range t.BlockedBy {
+			// A task is blocked if any of its blockers are not closed
+			for _, blocker := range tasks {
+				if blocker.ID == blockerID && blocker.Status != "closed" {
+					blockedIDs[t.ID] = true
+					break
+				}
+			}
+		}
+	}
+
+	// Find the first task that is:
+	// 1. Open (not closed)
+	// 2. Not blocked
+	// 3. Not awaiting human action (awaiting=nil AND manual=false)
+	for _, t := range tasks {
+		if t.Status != "open" {
+			continue
+		}
+		if blockedIDs[t.ID] {
+			continue
+		}
+		if t.IsAwaitingHuman() {
+			continue
+		}
+		// Found a ready task
+		taskCopy := t
+		return &taskCopy, nil
+	}
+
+	return nil, nil
 }
 
 // GetTask returns details for a specific task.

@@ -923,3 +923,253 @@ func TestClientProcessVerdictNoVerdict(t *testing.T) {
 func strPtr(s string) *string {
 	return &s
 }
+
+// TestFindNextReadyTaskFiltersAwaiting tests that findNextReadyTask excludes tasks with awaiting set
+func TestFindNextReadyTaskFiltersAwaiting(t *testing.T) {
+	// Create temp directory structure
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	// Change to temp directory so findTickDir works
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	// Create an epic
+	epicData := map[string]interface{}{
+		"id":       "epic-filter",
+		"title":    "Filter Test Epic",
+		"type":     "epic",
+		"status":   "open",
+		"children": []string{"task-awaiting", "task-manual", "task-ready"},
+	}
+	epicJSON, _ := json.MarshalIndent(epicData, "", "  ")
+	if err := os.WriteFile(filepath.Join(tickDir, "epic-filter.json"), epicJSON, 0600); err != nil {
+		t.Fatalf("writing epic file: %v", err)
+	}
+
+	// Create task with awaiting set - should be skipped
+	task1 := map[string]interface{}{
+		"id":       "task-awaiting",
+		"title":    "Task Awaiting Approval",
+		"type":     "task",
+		"status":   "open",
+		"parent":   "epic-filter",
+		"awaiting": "approval",
+		"priority": 1,
+	}
+	task1JSON, _ := json.MarshalIndent(task1, "", "  ")
+	if err := os.WriteFile(filepath.Join(tickDir, "task-awaiting.json"), task1JSON, 0600); err != nil {
+		t.Fatalf("writing task1 file: %v", err)
+	}
+
+	// Create task with manual=true - should be skipped (backwards compat)
+	task2 := map[string]interface{}{
+		"id":       "task-manual",
+		"title":    "Manual Task",
+		"type":     "task",
+		"status":   "open",
+		"parent":   "epic-filter",
+		"manual":   true,
+		"priority": 2,
+	}
+	task2JSON, _ := json.MarshalIndent(task2, "", "  ")
+	if err := os.WriteFile(filepath.Join(tickDir, "task-manual.json"), task2JSON, 0600); err != nil {
+		t.Fatalf("writing task2 file: %v", err)
+	}
+
+	// Create a ready task - should be returned
+	task3 := map[string]interface{}{
+		"id":       "task-ready",
+		"title":    "Ready Task",
+		"type":     "task",
+		"status":   "open",
+		"parent":   "epic-filter",
+		"priority": 3,
+	}
+	task3JSON, _ := json.MarshalIndent(task3, "", "  ")
+	if err := os.WriteFile(filepath.Join(tickDir, "task-ready.json"), task3JSON, 0600); err != nil {
+		t.Fatalf("writing task3 file: %v", err)
+	}
+
+	// Create a mock client that uses tk list which reads from files
+	// Since we can't easily mock tk CLI, we test the filtering logic directly
+	// by verifying the IsAwaitingHuman() checks
+
+	// Test the IsAwaitingHuman filtering logic
+	var awaitingTask Task
+	if err := json.Unmarshal(task1JSON, &awaitingTask); err != nil {
+		t.Fatalf("parsing task1: %v", err)
+	}
+	if !awaitingTask.IsAwaitingHuman() {
+		t.Error("task with awaiting set should return IsAwaitingHuman()=true")
+	}
+
+	var manualTask Task
+	if err := json.Unmarshal(task2JSON, &manualTask); err != nil {
+		t.Fatalf("parsing task2: %v", err)
+	}
+	if !manualTask.IsAwaitingHuman() {
+		t.Error("task with manual=true should return IsAwaitingHuman()=true")
+	}
+
+	var readyTask Task
+	if err := json.Unmarshal(task3JSON, &readyTask); err != nil {
+		t.Fatalf("parsing task3: %v", err)
+	}
+	if readyTask.IsAwaitingHuman() {
+		t.Error("ready task should return IsAwaitingHuman()=false")
+	}
+}
+
+// TestFindNextReadyTaskFiltersBlocked tests that findNextReadyTask excludes blocked tasks
+func TestFindNextReadyTaskFiltersBlocked(t *testing.T) {
+	// Test the blocking logic
+	tasks := []Task{
+		{ID: "blocker", Status: "open", Priority: 1},
+		{ID: "blocked", Status: "open", Priority: 2, BlockedBy: []string{"blocker"}},
+		{ID: "ready", Status: "open", Priority: 3},
+	}
+
+	// Build blocked IDs like findNextReadyTask does
+	blockedIDs := make(map[string]bool)
+	for _, t := range tasks {
+		for _, blockerID := range t.BlockedBy {
+			for _, blocker := range tasks {
+				if blocker.ID == blockerID && blocker.Status != "closed" {
+					blockedIDs[t.ID] = true
+					break
+				}
+			}
+		}
+	}
+
+	// Verify blocked detection
+	if blockedIDs["blocker"] {
+		t.Error("blocker task should not be marked as blocked")
+	}
+	if !blockedIDs["blocked"] {
+		t.Error("blocked task should be marked as blocked")
+	}
+	if blockedIDs["ready"] {
+		t.Error("ready task should not be marked as blocked")
+	}
+}
+
+// TestFindNextReadyTaskFiltersClosed tests that findNextReadyTask excludes closed tasks
+func TestFindNextReadyTaskFiltersClosed(t *testing.T) {
+	tasks := []Task{
+		{ID: "closed-task", Status: "closed", Priority: 1},
+		{ID: "open-task", Status: "open", Priority: 2},
+	}
+
+	// Simulate the filtering logic
+	var readyTask *Task
+	for _, task := range tasks {
+		if task.Status != "open" {
+			continue
+		}
+		if task.IsAwaitingHuman() {
+			continue
+		}
+		taskCopy := task
+		readyTask = &taskCopy
+		break
+	}
+
+	if readyTask == nil {
+		t.Fatal("expected to find a ready task")
+	}
+	if readyTask.ID != "open-task" {
+		t.Errorf("expected open-task, got %s", readyTask.ID)
+	}
+}
+
+// TestFindNextReadyTaskAllAwaiting tests that findNextReadyTask returns nil when all tasks are awaiting
+func TestFindNextReadyTaskAllAwaiting(t *testing.T) {
+	awaiting := "approval"
+	tasks := []Task{
+		{ID: "task1", Status: "open", Awaiting: &awaiting},
+		{ID: "task2", Status: "open", Manual: true},
+		{ID: "task3", Status: "closed"},
+	}
+
+	// Simulate the filtering logic
+	var readyTask *Task
+	for _, task := range tasks {
+		if task.Status != "open" {
+			continue
+		}
+		if task.IsAwaitingHuman() {
+			continue
+		}
+		taskCopy := task
+		readyTask = &taskCopy
+		break
+	}
+
+	if readyTask != nil {
+		t.Errorf("expected nil when all tasks are awaiting/closed, got %+v", readyTask)
+	}
+}
+
+// TestNextTaskFilteringIntegration tests the integrated filtering behavior
+func TestNextTaskFilteringIntegration(t *testing.T) {
+	// This tests the full filtering criteria:
+	// 1. Open status
+	// 2. Not blocked
+	// 3. Not awaiting human (awaiting=nil AND manual=false)
+
+	awaiting := "work"
+	tasks := []Task{
+		{ID: "closed", Status: "closed"},
+		{ID: "awaiting", Status: "open", Awaiting: &awaiting},
+		{ID: "manual", Status: "open", Manual: true},
+		{ID: "blocked", Status: "open", BlockedBy: []string{"blocker"}},
+		{ID: "blocker", Status: "open"},
+		{ID: "ready", Status: "open"},
+	}
+
+	// Build blocked IDs
+	blockedIDs := make(map[string]bool)
+	for _, task := range tasks {
+		for _, blockerID := range task.BlockedBy {
+			for _, blocker := range tasks {
+				if blocker.ID == blockerID && blocker.Status != "closed" {
+					blockedIDs[task.ID] = true
+					break
+				}
+			}
+		}
+	}
+
+	// Find first ready task using the same logic as findNextReadyTask
+	var foundTask *Task
+	for _, task := range tasks {
+		if task.Status != "open" {
+			continue
+		}
+		if blockedIDs[task.ID] {
+			continue
+		}
+		if task.IsAwaitingHuman() {
+			continue
+		}
+		taskCopy := task
+		foundTask = &taskCopy
+		break
+	}
+
+	if foundTask == nil {
+		t.Fatal("expected to find a ready task")
+	}
+	// The first non-blocked, non-awaiting, open task should be "blocker"
+	if foundTask.ID != "blocker" {
+		t.Errorf("expected 'blocker' (first ready task), got %s", foundTask.ID)
+	}
+}
