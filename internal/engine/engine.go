@@ -120,6 +120,11 @@ type RunConfig struct {
 	// WatchPollInterval is how often to poll for new tasks when idle (0 = 10s default).
 	// Only used when Watch is true.
 	WatchPollInterval time.Duration
+
+	// DebounceInterval is how long to wait after a task becomes available before picking it up.
+	// This prevents race conditions when a human is still editing (e.g., adding notes after reject).
+	// 0 means no debounce (default, backwards compatible).
+	DebounceInterval time.Duration
 }
 
 // Defaults for RunConfig.
@@ -408,8 +413,8 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			}
 		}
 
-		// Get next task
-		task, err := e.ticks.NextTask(config.EpicID)
+		// Get next task with optional debounce
+		task, err := e.getNextTaskWithDebounce(ctx, config)
 		if err != nil {
 			return nil, fmt.Errorf("getting next task: %w", err)
 		}
@@ -890,6 +895,34 @@ func buildVerificationFailureNote(iteration int, taskID string, results *verify.
 
 	sb.WriteString(" Please fix and close the task again.")
 	return sb.String()
+}
+
+// getNextTaskWithDebounce gets the next available task with optional debounce.
+// If DebounceInterval is set, it waits after a task becomes available to allow
+// humans to finish editing (e.g., adding notes after reject).
+// After the debounce wait, it re-fetches the task to get any updates.
+func (e *Engine) getNextTaskWithDebounce(ctx context.Context, config RunConfig) (*ticks.Task, error) {
+	task, err := e.ticks.NextTask(config.EpicID)
+	if err != nil || task == nil {
+		return task, err
+	}
+
+	// No debounce configured - return immediately
+	if config.DebounceInterval <= 0 {
+		return task, nil
+	}
+
+	// Task just became available - wait for potential follow-up edits
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(config.DebounceInterval):
+		// Continue after debounce
+	}
+
+	// Re-fetch the task to get any updates made during debounce period
+	// (e.g., human might have added notes, changed description, etc.)
+	return e.ticks.GetTask(task.ID)
 }
 
 // handleWatchIdle enters idle state and polls for new tasks.

@@ -2164,3 +2164,290 @@ func TestHandleWatchIdle_EpicCompletes(t *testing.T) {
 		t.Errorf("Signal = %v, want %v", result.Signal, SignalComplete)
 	}
 }
+
+// =============================================================================
+// Debounce Tests
+// =============================================================================
+
+func TestRunConfig_DebounceInterval(t *testing.T) {
+	// Test that DebounceInterval field exists and defaults to zero
+	config := RunConfig{
+		EpicID: "test-epic",
+	}
+
+	if config.DebounceInterval != 0 {
+		t.Errorf("DebounceInterval should default to 0, got %v", config.DebounceInterval)
+	}
+
+	// Test that it can be set
+	config.DebounceInterval = 2 * time.Second
+	if config.DebounceInterval != 2*time.Second {
+		t.Errorf("DebounceInterval = %v, want 2s", config.DebounceInterval)
+	}
+}
+
+// mockTicksClientForDebounce tracks GetTask calls for debounce testing.
+type mockTicksClientForDebounce struct {
+	*mockTicksClient
+	getTaskCalls []string // track taskIDs passed to GetTask
+	taskUpdates  map[string]*ticks.Task // taskID -> updated task (simulates edits during debounce)
+}
+
+func newMockTicksClientForDebounce() *mockTicksClientForDebounce {
+	return &mockTicksClientForDebounce{
+		mockTicksClient: newMockTicksClient(),
+		getTaskCalls:    []string{},
+		taskUpdates:     make(map[string]*ticks.Task),
+	}
+}
+
+func (m *mockTicksClientForDebounce) GetTask(taskID string) (*ticks.Task, error) {
+	m.getTaskCalls = append(m.getTaskCalls, taskID)
+
+	// If there's an updated version of this task, return it
+	if updated, ok := m.taskUpdates[taskID]; ok {
+		return updated, nil
+	}
+
+	// Fall back to base implementation
+	return m.mockTicksClient.GetTask(taskID)
+}
+
+func TestGetNextTaskWithDebounce_NoDebounce(t *testing.T) {
+	// When DebounceInterval is 0, should return task immediately without re-fetch
+	mock := newMockTicksClientForDebounce()
+	mock.tasks = []*ticks.Task{
+		{ID: "task-1", Title: "Test Task"},
+	}
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+	}
+
+	config := RunConfig{
+		EpicID:           "test-epic",
+		DebounceInterval: 0, // No debounce
+	}
+
+	ctx := context.Background()
+	task, err := engine.getNextTaskWithDebounce(ctx, config)
+
+	if err != nil {
+		t.Fatalf("getNextTaskWithDebounce returned error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected task, got nil")
+	}
+	if task.ID != "task-1" {
+		t.Errorf("task.ID = %q, want %q", task.ID, "task-1")
+	}
+
+	// Should NOT have called GetTask (no re-fetch without debounce)
+	if len(mock.getTaskCalls) != 0 {
+		t.Errorf("GetTask called %d times, want 0 (no debounce)", len(mock.getTaskCalls))
+	}
+}
+
+func TestGetNextTaskWithDebounce_WithDebounce(t *testing.T) {
+	// When DebounceInterval is set, should wait and then re-fetch task
+	mock := newMockTicksClientForDebounce()
+	mock.tasks = []*ticks.Task{
+		{ID: "task-1", Title: "Original Title"},
+	}
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+
+	// Simulate human updating the task during debounce
+	mock.taskUpdates["task-1"] = &ticks.Task{
+		ID:    "task-1",
+		Title: "Updated Title After Debounce",
+	}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+	}
+
+	config := RunConfig{
+		EpicID:           "test-epic",
+		DebounceInterval: 10 * time.Millisecond, // Short for testing
+	}
+
+	ctx := context.Background()
+	start := time.Now()
+	task, err := engine.getNextTaskWithDebounce(ctx, config)
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("getNextTaskWithDebounce returned error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected task, got nil")
+	}
+
+	// Should have waited approximately the debounce interval
+	if elapsed < config.DebounceInterval {
+		t.Errorf("elapsed time %v < debounce interval %v", elapsed, config.DebounceInterval)
+	}
+
+	// Should have called GetTask to re-fetch the task
+	if len(mock.getTaskCalls) != 1 {
+		t.Errorf("GetTask called %d times, want 1", len(mock.getTaskCalls))
+	}
+	if mock.getTaskCalls[0] != "task-1" {
+		t.Errorf("GetTask called with %q, want %q", mock.getTaskCalls[0], "task-1")
+	}
+
+	// Should have the updated task data
+	if task.Title != "Updated Title After Debounce" {
+		t.Errorf("task.Title = %q, want %q (updated version)", task.Title, "Updated Title After Debounce")
+	}
+}
+
+func TestGetNextTaskWithDebounce_NoTask(t *testing.T) {
+	// When NextTask returns nil, should return nil immediately (no debounce)
+	mock := newMockTicksClientForDebounce()
+	mock.tasks = []*ticks.Task{} // No tasks
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+	}
+
+	config := RunConfig{
+		EpicID:           "test-epic",
+		DebounceInterval: time.Second, // Would be long if debounce happened
+	}
+
+	ctx := context.Background()
+	start := time.Now()
+	task, err := engine.getNextTaskWithDebounce(ctx, config)
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("getNextTaskWithDebounce returned error: %v", err)
+	}
+	if task != nil {
+		t.Errorf("expected nil task, got %+v", task)
+	}
+
+	// Should return immediately, not wait for debounce
+	if elapsed >= config.DebounceInterval {
+		t.Errorf("elapsed time %v >= debounce interval (should be immediate for nil task)", elapsed)
+	}
+
+	// Should NOT have called GetTask
+	if len(mock.getTaskCalls) != 0 {
+		t.Errorf("GetTask called %d times, want 0", len(mock.getTaskCalls))
+	}
+}
+
+func TestGetNextTaskWithDebounce_ContextCancelled(t *testing.T) {
+	// When context is cancelled during debounce wait, should return error
+	mock := newMockTicksClientForDebounce()
+	mock.tasks = []*ticks.Task{
+		{ID: "task-1", Title: "Test Task"},
+	}
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+	}
+
+	config := RunConfig{
+		EpicID:           "test-epic",
+		DebounceInterval: time.Second, // Long debounce
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel context after a short delay
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	task, err := engine.getNextTaskWithDebounce(ctx, config)
+
+	if err == nil {
+		t.Error("expected error when context cancelled")
+	}
+	if task != nil {
+		t.Errorf("expected nil task on cancellation, got %+v", task)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+
+	// Should NOT have called GetTask (cancelled before debounce completed)
+	if len(mock.getTaskCalls) != 0 {
+		t.Errorf("GetTask called %d times, want 0 (cancelled before re-fetch)", len(mock.getTaskCalls))
+	}
+}
+
+func TestGetNextTaskWithDebounce_NegativeDebounce(t *testing.T) {
+	// Negative DebounceInterval should be treated as no debounce
+	mock := newMockTicksClientForDebounce()
+	mock.tasks = []*ticks.Task{
+		{ID: "task-1", Title: "Test Task"},
+	}
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+	}
+
+	config := RunConfig{
+		EpicID:           "test-epic",
+		DebounceInterval: -1 * time.Second, // Negative
+	}
+
+	ctx := context.Background()
+	task, err := engine.getNextTaskWithDebounce(ctx, config)
+
+	if err != nil {
+		t.Fatalf("getNextTaskWithDebounce returned error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected task, got nil")
+	}
+
+	// Should NOT have called GetTask (negative treated as no debounce)
+	if len(mock.getTaskCalls) != 0 {
+		t.Errorf("GetTask called %d times, want 0 (negative debounce = no debounce)", len(mock.getTaskCalls))
+	}
+}

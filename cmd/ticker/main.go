@@ -201,6 +201,7 @@ func init() {
 	runCmd.Flags().Bool("watch", false, "Watch mode: idle when no tasks available instead of exiting")
 	runCmd.Flags().Duration("timeout", 0, "Watch timeout: stop watching after this duration (default: unlimited)")
 	runCmd.Flags().Duration("poll", 10*time.Second, "Poll interval for watch mode (default: 10s)")
+	runCmd.Flags().Duration("debounce", 0, "Wait before picking up newly available tasks (prevents race with human edits)")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
@@ -231,6 +232,7 @@ func runRun(cmd *cobra.Command, args []string) {
 	watch, _ := cmd.Flags().GetBool("watch")
 	watchTimeout, _ := cmd.Flags().GetDuration("timeout")
 	watchPollInterval, _ := cmd.Flags().GetDuration("poll")
+	debounceInterval, _ := cmd.Flags().GetDuration("debounce")
 
 	// Check mutual exclusivity
 	if skipVerify && verifyOnly {
@@ -355,12 +357,12 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	// TUI mode (default)
 	if !headless {
-		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, watch, watchTimeout, watchPollInterval)
+		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, watch, watchTimeout, watchPollInterval, debounceInterval)
 		return
 	}
 
 	// Headless mode
-	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, jsonl, watch, watchTimeout, watchPollInterval)
+	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, jsonl, watch, watchTimeout, watchPollInterval, debounceInterval)
 }
 
 // validateEpicIDs checks that all epic IDs exist, are open, and are unique.
@@ -962,7 +964,7 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 	os.Exit(ExitError)
 }
 
-func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, watch bool, watchTimeout, watchPollInterval time.Duration) {
+func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, watch bool, watchTimeout, watchPollInterval, debounceInterval time.Duration) {
 	// Create pause channel for TUI <-> engine communication
 	pauseChan := make(chan bool, 1)
 
@@ -1187,6 +1189,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 			Watch:             watch,
 			WatchTimeout:      watchTimeout,
 			WatchPollInterval: watchPollInterval,
+			DebounceInterval:  debounceInterval,
 		}
 
 		result, err := eng.Run(ctx, config)
@@ -1213,7 +1216,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	cancel()
 }
 
-func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, jsonl, watch bool, watchTimeout, watchPollInterval time.Duration) {
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, jsonl, watch bool, watchTimeout, watchPollInterval, debounceInterval time.Duration) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1328,6 +1331,7 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		Watch:             watch,
 		WatchTimeout:      watchTimeout,
 		WatchPollInterval: watchPollInterval,
+		DebounceInterval:  debounceInterval,
 	}
 
 	result, err := eng.Run(ctx, config)
