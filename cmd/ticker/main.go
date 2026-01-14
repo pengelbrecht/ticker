@@ -202,6 +202,9 @@ func init() {
 	runCmd.Flags().Duration("timeout", 0, "Watch timeout: stop watching after this duration (default: unlimited)")
 	runCmd.Flags().Duration("poll", 10*time.Second, "Poll interval for watch mode (default: 10s)")
 	runCmd.Flags().Duration("debounce", 0, "Wait before picking up newly available tasks (prevents race with human edits)")
+	runCmd.Flags().Bool("include-standalone", false, "Include standalone tasks (no parent epic) in auto mode")
+	runCmd.Flags().Bool("include-orphans", false, "Include orphaned tasks (parent epic closed) in auto mode")
+	runCmd.Flags().Bool("all", false, "Include all task types (standalone + orphans) in auto mode")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
@@ -233,6 +236,15 @@ func runRun(cmd *cobra.Command, args []string) {
 	watchTimeout, _ := cmd.Flags().GetDuration("timeout")
 	watchPollInterval, _ := cmd.Flags().GetDuration("poll")
 	debounceInterval, _ := cmd.Flags().GetDuration("debounce")
+	includeStandalone, _ := cmd.Flags().GetBool("include-standalone")
+	includeOrphans, _ := cmd.Flags().GetBool("include-orphans")
+	includeAll, _ := cmd.Flags().GetBool("all")
+
+	// --all is shorthand for standalone + orphans
+	if includeAll {
+		includeStandalone = true
+		includeOrphans = true
+	}
 
 	// Check mutual exclusivity
 	if skipVerify && verifyOnly {
@@ -268,10 +280,14 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	var epicIDs []string
 	var epicTitles []string
+	// standaloneTask is set when running in standalone/orphan task mode (no epic)
+	var standaloneTask *ticks.Task
 
 	if len(args) > 0 {
 		epicIDs = args
 	} else if auto {
+		ticksClient := ticks.NewClient()
+
 		// Auto-select: use tk to find ready epics
 		// If --parallel is specified, select up to that many epics
 		selectCount := 1
@@ -283,15 +299,52 @@ func runRun(cmd *cobra.Command, args []string) {
 			fmt.Fprintf(os.Stderr, "Error auto-selecting epics: %v\n", err)
 			os.Exit(ExitError)
 		}
-		if len(selected) == 0 {
-			fmt.Fprintln(os.Stderr, "No ready epics found")
-			os.Exit(ExitError)
-		}
-		epicIDs = selected
-		if len(epicIDs) == 1 {
-			fmt.Printf("Auto-selected epic: %s\n", epicIDs[0])
+
+		// If we found epics, use them
+		if len(selected) > 0 {
+			epicIDs = selected
+			if len(epicIDs) == 1 {
+				fmt.Printf("Auto-selected epic: %s\n", epicIDs[0])
+			} else {
+				fmt.Printf("Auto-selected %d epics: %v\n", len(epicIDs), epicIDs)
+			}
 		} else {
-			fmt.Printf("Auto-selected %d epics: %v\n", len(epicIDs), epicIDs)
+			// No ready epics - try standalone/orphan tasks if enabled
+			// Priority: standalone tasks (housekeeping) > orphaned tasks (cleanup)
+			if includeStandalone {
+				task, err := ticksClient.NextTaskWithOptions(ticks.StandaloneOnly())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error finding standalone tasks: %v\n", err)
+					os.Exit(ExitError)
+				}
+				if task != nil {
+					standaloneTask = task
+					fmt.Printf("Auto-selected standalone task: [%s] %s\n", task.ID, task.Title)
+				}
+			}
+
+			if standaloneTask == nil && includeOrphans {
+				task, err := ticksClient.NextTaskWithOptions(ticks.OrphanedOnly())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error finding orphaned tasks: %v\n", err)
+					os.Exit(ExitError)
+				}
+				if task != nil {
+					standaloneTask = task
+					fmt.Printf("Auto-selected orphaned task: [%s] %s (parent: %s)\n", task.ID, task.Title, task.Parent)
+				}
+			}
+
+			// If still nothing found
+			if standaloneTask == nil {
+				if includeStandalone || includeOrphans {
+					fmt.Fprintln(os.Stderr, "No ready epics, standalone tasks, or orphaned tasks found")
+				} else {
+					fmt.Fprintln(os.Stderr, "No ready epics found")
+					fmt.Fprintln(os.Stderr, "Tip: Use --include-standalone or --include-orphans to also process tasks without active epics")
+				}
+				os.Exit(ExitError)
+			}
 		}
 	} else if !headless {
 		// Interactive mode: show epic picker
@@ -304,6 +357,16 @@ func runRun(cmd *cobra.Command, args []string) {
 	} else {
 		fmt.Fprintln(os.Stderr, "Error: either provide an epic-id or use --auto")
 		os.Exit(ExitError)
+	}
+
+	// Handle standalone/orphan task mode (no epic)
+	if standaloneTask != nil {
+		if !headless {
+			fmt.Fprintln(os.Stderr, "Note: TUI mode not supported for standalone tasks. Use --headless.")
+			headless = true
+		}
+		runStandaloneTask(standaloneTask, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, jsonl, includeStandalone, includeOrphans)
+		return
 	}
 
 	// Validate epic IDs: exist, open, unique
@@ -1747,6 +1810,243 @@ func runMerge(cmd *cobra.Command, args []string) {
 	}
 
 	os.Exit(ExitSuccess)
+}
+
+// runStandaloneTask runs a single standalone or orphan task (task without active parent epic).
+// Unlike epic-based runs, this directly processes one task at a time and then looks for the next.
+// includeStandalone and includeOrphans control which task types to continue picking up after each completion.
+func runStandaloneTask(initialTask *ticks.Task, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, jsonl, includeStandalone, includeOrphans bool) {
+	// Create context with signal handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create headless output formatter
+	out := engine.NewHeadlessOutput(jsonl, "")
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		out.Interrupted()
+		cancel()
+	}()
+
+	// Initialize components
+	claudeAgent := agent.NewClaudeAgent()
+	if !claudeAgent.Available() {
+		out.Error(fmt.Errorf("claude CLI not found - please install Claude Code"))
+		os.Exit(ExitError)
+	}
+
+	ticksClient := ticks.NewClient()
+	budgetTracker := budget.NewTracker(budget.Limits{
+		MaxIterations: maxIterations,
+		MaxCost:       maxCost,
+	})
+	checkpointMgr := checkpoint.NewManager()
+
+	// Create engine for running iterations
+	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
+
+	// Set up verification runner (unless --skip-verify)
+	if !skipVerify {
+		if isVerificationEnabled() {
+			eng.EnableVerification()
+		}
+	}
+
+	// Track verification pass status for task_complete output
+	var verifyPassed bool = true
+
+	// Set up output callbacks
+	eng.OnOutput = func(chunk string) {
+		out.Output(chunk)
+	}
+
+	eng.OnSignal = func(sig engine.Signal, reason string) {
+		out.Signal(sig, reason)
+	}
+
+	// Output start message
+	if jsonl {
+		fmt.Printf(`{"type":"standalone_start","task_id":"%s","title":"%s","max_iterations":%d,"max_cost":%.2f}`+"\n",
+			initialTask.ID, initialTask.Title, maxIterations, maxCost)
+	} else {
+		fmt.Printf("[START] Standalone task mode\n")
+		fmt.Printf("[START] Budget: max %d iterations, $%.2f\n", maxIterations, maxCost)
+	}
+
+	// Run tasks in a loop
+	currentTask := initialTask
+	iteration := 0
+	totalCost := 0.0
+	totalTokens := 0
+
+	for currentTask != nil {
+		// Check context cancellation
+		if ctx.Err() != nil {
+			break
+		}
+
+		// Check budget limits
+		if shouldStop, _ := budgetTracker.ShouldStop(); shouldStop {
+			break
+		}
+
+		iteration++
+
+		// Output task start
+		if jsonl {
+			fmt.Printf(`{"type":"task","task_id":"%s","title":"%s","iteration":%d}`+"\n",
+				currentTask.ID, currentTask.Title, iteration)
+		} else {
+			fmt.Printf("[TASK] %s - %s (iteration %d)\n", currentTask.ID, currentTask.Title, iteration)
+		}
+
+		// Build prompt using the prompt builder
+		promptBuilder := engine.NewPromptBuilder()
+
+		// Get task notes for human feedback context
+		humanNotes, _ := ticksClient.GetHumanNotes(currentTask.ID)
+
+		// Try to get parent epic info for context (even if closed/orphaned)
+		var parentEpic *ticks.Epic
+		var epicNotes []string
+		if currentTask.Parent != "" {
+			if epic, err := ticksClient.GetEpic(currentTask.Parent); err == nil {
+				parentEpic = epic
+				epicNotes, _ = ticksClient.GetNotes(currentTask.Parent)
+			}
+		}
+
+		iterCtx := engine.IterationContext{
+			Iteration:     iteration,
+			Epic:          parentEpic,
+			Task:          currentTask,
+			EpicNotes:     epicNotes,
+			HumanFeedback: humanNotes,
+		}
+
+		prompt := promptBuilder.Build(iterCtx)
+
+		// Run the agent
+		agentResult, err := claudeAgent.Run(ctx, prompt, agent.RunOpts{
+			Timeout: 30 * time.Minute,
+			Stream:  nil, // Use callback instead
+		})
+
+		if err != nil {
+			if jsonl {
+				fmt.Printf(`{"type":"error","error":"%s"}`+"\n", err.Error())
+			} else {
+				fmt.Printf("[ERROR] %s\n", err.Error())
+			}
+			break
+		}
+
+		// Stream output
+		out.Output(agentResult.Output)
+
+		// Update budget tracking
+		budgetTracker.Add(agentResult.TokensIn, agentResult.TokensOut, agentResult.Cost)
+		totalCost += agentResult.Cost
+		totalTokens += agentResult.TokensIn + agentResult.TokensOut
+
+		// Parse signals from output
+		signal, signalReason := engine.ParseSignals(agentResult.Output)
+
+		if signal != engine.SignalNone {
+			out.Signal(signal, signalReason)
+
+			// Handle handoff signals by setting awaiting state
+			if signal != engine.SignalComplete {
+				handleStandaloneSignal(ticksClient, currentTask, signal, signalReason)
+			}
+		}
+
+		// Check if task was closed
+		updatedTask, err := ticksClient.GetTask(currentTask.ID)
+		if err == nil && updatedTask.Status == "closed" {
+			// Run verification if enabled
+			if !skipVerify && isVerificationEnabled() {
+				verifyPassed = runStandaloneVerification(ctx, currentTask.ID, agentResult.Output)
+				if !verifyPassed {
+					// Reopen the task if verification failed
+					_ = ticksClient.ReopenTask(currentTask.ID)
+					if jsonl {
+						fmt.Printf(`{"type":"verify_failed","task_id":"%s"}`+"\n", currentTask.ID)
+					} else {
+						fmt.Printf("[VERIFY] %s - failed, task reopened\n", currentTask.ID)
+					}
+					// Continue with same task
+					continue
+				}
+			}
+
+			out.TaskComplete(currentTask.ID, verifyPassed)
+		}
+
+		// Get next task based on priority:
+		// 1. Standalone tasks (if enabled)
+		// 2. Orphaned tasks (if enabled)
+		var nextTask *ticks.Task
+		if includeStandalone {
+			nextTask, _ = ticksClient.NextTaskWithOptions(ticks.StandaloneOnly())
+		}
+		if nextTask == nil && includeOrphans {
+			nextTask, _ = ticksClient.NextTaskWithOptions(ticks.OrphanedOnly())
+		}
+
+		currentTask = nextTask
+	}
+
+	// Output completion summary
+	if jsonl {
+		fmt.Printf(`{"type":"standalone_complete","iterations":%d,"total_cost":%.4f,"total_tokens":%d}`+"\n",
+			iteration, totalCost, totalTokens)
+	} else {
+		fmt.Printf("\n[COMPLETE] Standalone task run finished\n")
+		fmt.Printf("[COMPLETE] %d iterations, $%.4f, %d tokens\n", iteration, totalCost, totalTokens)
+	}
+
+	os.Exit(ExitSuccess)
+}
+
+// handleStandaloneSignal processes a handoff signal for a standalone task.
+func handleStandaloneSignal(client *ticks.Client, task *ticks.Task, sig engine.Signal, context string) {
+	// Map signals to awaiting states
+	awaitingMap := map[engine.Signal]string{
+		engine.SignalEject:           "work",
+		engine.SignalBlocked:         "input",
+		engine.SignalApprovalNeeded:  "approval",
+		engine.SignalInputNeeded:     "input",
+		engine.SignalReviewRequested: "review",
+		engine.SignalContentReview:   "content",
+		engine.SignalEscalate:        "escalation",
+		engine.SignalCheckpoint:      "checkpoint",
+	}
+
+	if awaiting, ok := awaitingMap[sig]; ok {
+		_ = client.SetAwaiting(task.ID, awaiting, context)
+	}
+}
+
+// runStandaloneVerification runs verification for a standalone task.
+func runStandaloneVerification(ctx context.Context, taskID string, agentOutput string) bool {
+	dir, err := os.Getwd()
+	if err != nil {
+		return true // Skip verification on error
+	}
+
+	gitVerifier := verify.NewGitVerifier(dir)
+	if gitVerifier == nil {
+		return true // Not a git repo, skip verification
+	}
+
+	runner := verify.NewRunner(dir, gitVerifier)
+	results := runner.Run(ctx, taskID, agentOutput)
+
+	return results == nil || results.AllPassed
 }
 
 // isBranchMerged checks if a branch has been merged into main.
