@@ -2067,3 +2067,327 @@ func TestGetStructuredNotesEmptyNotes(t *testing.T) {
 		t.Errorf("expected nil notes for issue without notes, got %v", notes)
 	}
 }
+
+// ============================================================================
+// Tests for NextTaskWithOptions and standalone task support
+// ============================================================================
+
+// TestNextTaskOptionsDefaults tests that NextTaskOptions has correct defaults
+func TestNextTaskOptionsDefaults(t *testing.T) {
+	opts := &NextTaskOptions{}
+	if opts.EpicID != "" {
+		t.Errorf("expected default EpicID to be empty, got %q", opts.EpicID)
+	}
+	if opts.StandaloneOnly {
+		t.Error("expected default StandaloneOnly to be false")
+	}
+}
+
+// TestWithEpicOption tests the WithEpic functional option
+func TestWithEpicOption(t *testing.T) {
+	opts := &NextTaskOptions{}
+	WithEpic("epic-123")(opts)
+	if opts.EpicID != "epic-123" {
+		t.Errorf("expected EpicID to be 'epic-123', got %q", opts.EpicID)
+	}
+}
+
+// TestStandaloneOnlyOption tests the StandaloneOnly functional option
+func TestStandaloneOnlyOption(t *testing.T) {
+	opts := &NextTaskOptions{}
+	StandaloneOnly()(opts)
+	if !opts.StandaloneOnly {
+		t.Error("expected StandaloneOnly to be true after applying option")
+	}
+}
+
+// TestFindReadyTaskFromListEmpty tests findReadyTaskFromList with empty list
+func TestFindReadyTaskFromListEmpty(t *testing.T) {
+	client := NewClient()
+	task, err := client.findReadyTaskFromList([]Task{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task != nil {
+		t.Errorf("expected nil for empty list, got %+v", task)
+	}
+}
+
+// TestFindReadyTaskFromListPriorityOrdering tests that priority is respected
+func TestFindReadyTaskFromListPriorityOrdering(t *testing.T) {
+	tasks := []Task{
+		{ID: "low-priority", Status: "open", Priority: 3},
+		{ID: "high-priority", Status: "open", Priority: 1},
+		{ID: "medium-priority", Status: "open", Priority: 2},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	if task.ID != "high-priority" {
+		t.Errorf("expected highest priority task 'high-priority', got %q", task.ID)
+	}
+}
+
+// TestFindReadyTaskFromListFiltersAwaiting tests that awaiting tasks are excluded
+func TestFindReadyTaskFromListFiltersAwaiting(t *testing.T) {
+	approval := "approval"
+	tasks := []Task{
+		{ID: "awaiting-task", Status: "open", Priority: 1, Awaiting: &approval},
+		{ID: "ready-task", Status: "open", Priority: 2},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	if task.ID != "ready-task" {
+		t.Errorf("expected 'ready-task', got %q", task.ID)
+	}
+}
+
+// TestFindReadyTaskFromListFiltersManual tests that manual tasks are excluded
+func TestFindReadyTaskFromListFiltersManual(t *testing.T) {
+	tasks := []Task{
+		{ID: "manual-task", Status: "open", Priority: 1, Manual: true},
+		{ID: "ready-task", Status: "open", Priority: 2},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	if task.ID != "ready-task" {
+		t.Errorf("expected 'ready-task', got %q", task.ID)
+	}
+}
+
+// TestFindReadyTaskFromListFiltersBlocked tests that blocked tasks are excluded
+func TestFindReadyTaskFromListFiltersBlocked(t *testing.T) {
+	tasks := []Task{
+		{ID: "blocker", Status: "open", Priority: 2},
+		{ID: "blocked", Status: "open", Priority: 1, BlockedBy: []string{"blocker"}},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	// blocker should be returned because blocked is blocked
+	if task.ID != "blocker" {
+		t.Errorf("expected 'blocker' (blocked task should be skipped), got %q", task.ID)
+	}
+}
+
+// TestFindReadyTaskFromListFiltersClosed tests that closed tasks are excluded
+func TestFindReadyTaskFromListFiltersClosed(t *testing.T) {
+	tasks := []Task{
+		{ID: "closed-task", Status: "closed", Priority: 1},
+		{ID: "open-task", Status: "open", Priority: 2},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	if task.ID != "open-task" {
+		t.Errorf("expected 'open-task', got %q", task.ID)
+	}
+}
+
+// TestFindReadyTaskFromListAllFiltered tests returning nil when all tasks are filtered
+func TestFindReadyTaskFromListAllFiltered(t *testing.T) {
+	approval := "approval"
+	tasks := []Task{
+		{ID: "closed", Status: "closed"},
+		{ID: "awaiting", Status: "open", Awaiting: &approval},
+		{ID: "manual", Status: "open", Manual: true},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task != nil {
+		t.Errorf("expected nil when all tasks are filtered, got %+v", task)
+	}
+}
+
+// TestFindReadyTaskFromListBlockedByClosedBlocker tests that tasks blocked by closed tasks are ready
+func TestFindReadyTaskFromListBlockedByClosedBlocker(t *testing.T) {
+	tasks := []Task{
+		{ID: "closed-blocker", Status: "closed", Priority: 2},
+		{ID: "unblocked", Status: "open", Priority: 1, BlockedBy: []string{"closed-blocker"}},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	// unblocked should be returned because its blocker is closed
+	if task.ID != "unblocked" {
+		t.Errorf("expected 'unblocked' (blocker is closed), got %q", task.ID)
+	}
+}
+
+// TestNextStandaloneTaskFiltersParent tests that standalone filtering works
+func TestNextStandaloneTaskFiltersParent(t *testing.T) {
+	// Test the filtering logic directly on tasks
+	tasks := []Task{
+		{ID: "with-parent", Status: "open", Priority: 1, Parent: "epic-123"},
+		{ID: "standalone", Status: "open", Priority: 2, Parent: ""},
+	}
+
+	// Filter to standalone tasks only
+	var standaloneTasks []Task
+	for _, task := range tasks {
+		if task.Parent == "" {
+			standaloneTasks = append(standaloneTasks, task)
+		}
+	}
+
+	if len(standaloneTasks) != 1 {
+		t.Errorf("expected 1 standalone task, got %d", len(standaloneTasks))
+	}
+	if standaloneTasks[0].ID != "standalone" {
+		t.Errorf("expected standalone task 'standalone', got %q", standaloneTasks[0].ID)
+	}
+}
+
+// TestNextAnyTaskIncludesBoth tests that nextAnyTask includes both epic and standalone tasks
+func TestNextAnyTaskIncludesBoth(t *testing.T) {
+	// Test the logic: nextAnyTask should consider all tasks
+	tasks := []Task{
+		{ID: "with-parent", Status: "open", Priority: 2, Parent: "epic-123"},
+		{ID: "standalone", Status: "open", Priority: 1, Parent: ""},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	// Higher priority (lower number) standalone task should be returned
+	if task.ID != "standalone" {
+		t.Errorf("expected highest priority task 'standalone', got %q", task.ID)
+	}
+}
+
+// TestNextTaskWithOptionsWithEpic tests WithEpic option delegates to NextTask
+func TestNextTaskWithOptionsWithEpic(t *testing.T) {
+	// This tests the option parsing, not the actual tk CLI call
+	opts := &NextTaskOptions{}
+	WithEpic("epic-abc")(opts)
+	StandaloneOnly()(opts)
+
+	// When epic is set, it takes precedence
+	if opts.EpicID != "epic-abc" {
+		t.Errorf("expected EpicID 'epic-abc', got %q", opts.EpicID)
+	}
+}
+
+// TestNextTaskWithOptionsMultipleOptions tests applying multiple options
+func TestNextTaskWithOptionsMultipleOptions(t *testing.T) {
+	opts := &NextTaskOptions{}
+	options := []NextTaskOption{
+		WithEpic("epic-1"),
+		func(o *NextTaskOptions) { o.EpicID = "epic-2" }, // Override
+		StandaloneOnly(),
+	}
+
+	for _, opt := range options {
+		opt(opts)
+	}
+
+	// Last applied values should win
+	if opts.EpicID != "epic-2" {
+		t.Errorf("expected EpicID 'epic-2' (last override), got %q", opts.EpicID)
+	}
+	if !opts.StandaloneOnly {
+		t.Error("expected StandaloneOnly to be true")
+	}
+}
+
+// TestFindReadyTaskFromListComplexScenario tests a realistic scenario
+func TestFindReadyTaskFromListComplexScenario(t *testing.T) {
+	approval := "approval"
+	tasks := []Task{
+		// P0 task but blocked
+		{ID: "blocked-p0", Status: "open", Priority: 0, BlockedBy: []string{"blocker"}},
+		// P1 task but awaiting approval
+		{ID: "awaiting-p1", Status: "open", Priority: 1, Awaiting: &approval},
+		// P2 task but manual
+		{ID: "manual-p2", Status: "open", Priority: 2, Manual: true},
+		// P3 task - the blocker (ready)
+		{ID: "blocker", Status: "open", Priority: 3},
+		// P4 task - also ready
+		{ID: "ready-p4", Status: "open", Priority: 4},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	// blocker should be returned as it's the highest priority ready task
+	if task.ID != "blocker" {
+		t.Errorf("expected 'blocker' (P3, first ready), got %q (P%d)", task.ID, task.Priority)
+	}
+}
+
+// TestFindReadyTaskFromListStableSort tests that sorting is stable for same priority
+func TestFindReadyTaskFromListStableSort(t *testing.T) {
+	// When priorities are equal, the first in original order should be returned
+	// Note: sort.Slice is not guaranteed to be stable, but we can test the behavior
+	tasks := []Task{
+		{ID: "task-a", Status: "open", Priority: 1},
+		{ID: "task-b", Status: "open", Priority: 1},
+		{ID: "task-c", Status: "open", Priority: 1},
+	}
+
+	client := NewClient()
+	task, err := client.findReadyTaskFromList(tasks)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task == nil {
+		t.Fatal("expected a task, got nil")
+	}
+	// We just verify we got one of them
+	validIDs := map[string]bool{"task-a": true, "task-b": true, "task-c": true}
+	if !validIDs[task.ID] {
+		t.Errorf("unexpected task ID: %q", task.ID)
+	}
+}

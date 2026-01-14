@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pengelbrecht/ticker/internal/agent"
@@ -21,6 +22,31 @@ type Client struct {
 // NewClient creates a new Ticks client with default settings.
 func NewClient() *Client {
 	return &Client{Command: "tk"}
+}
+
+// NextTaskOptions configures the behavior of NextTask.
+type NextTaskOptions struct {
+	// EpicID filters to tasks under a specific epic. Empty means search all tasks.
+	EpicID string
+	// StandaloneOnly when true, only returns tasks without a parent epic.
+	StandaloneOnly bool
+}
+
+// NextTaskOption is a functional option for configuring NextTask.
+type NextTaskOption func(*NextTaskOptions)
+
+// WithEpic sets the epic ID to search within.
+func WithEpic(epicID string) NextTaskOption {
+	return func(opts *NextTaskOptions) {
+		opts.EpicID = epicID
+	}
+}
+
+// StandaloneOnly filters to tasks without a parent epic.
+func StandaloneOnly() NextTaskOption {
+	return func(opts *NextTaskOptions) {
+		opts.StandaloneOnly = true
+	}
 }
 
 // NextTask returns the next open, unblocked task for the given epic that is ready for agent work.
@@ -60,6 +86,128 @@ func (c *Client) NextTask(epicID string) (*Task, error) {
 	// We need to find the next task that's ready for agent work.
 	// Get all tasks and filter locally.
 	return c.findNextReadyTask(epicID)
+}
+
+// NextTaskWithOptions returns the next open, unblocked task ready for agent work.
+// Uses functional options to configure behavior:
+//   - WithEpic(epicID): search within a specific epic (default behavior of NextTask)
+//   - StandaloneOnly(): only return tasks without a parent epic
+//
+// If no options are provided, searches all tasks (any epic or standalone).
+// Returns nil if no tasks are available.
+func (c *Client) NextTaskWithOptions(opts ...NextTaskOption) (*Task, error) {
+	options := &NextTaskOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	// If epic is specified, use the existing NextTask behavior
+	if options.EpicID != "" {
+		return c.NextTask(options.EpicID)
+	}
+
+	// If standalone only, search for tasks without a parent
+	if options.StandaloneOnly {
+		return c.nextStandaloneTask()
+	}
+
+	// Otherwise, search all tasks (any epic or standalone)
+	return c.nextAnyTask()
+}
+
+// nextAnyTask finds the next ready task from all open tasks, regardless of epic.
+// Tasks are evaluated in priority order (lowest number = highest priority).
+// Returns nil if no tasks are available.
+func (c *Client) nextAnyTask() (*Task, error) {
+	tasks, err := c.ListAllTasks()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.findReadyTaskFromList(tasks)
+}
+
+// nextStandaloneTask finds the next ready task that has no parent epic.
+// Tasks are evaluated in priority order (lowest number = highest priority).
+// Returns nil if no standalone tasks are available.
+func (c *Client) nextStandaloneTask() (*Task, error) {
+	tasks, err := c.ListAllTasks()
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter to only standalone tasks (no parent)
+	var standaloneTasks []Task
+	for _, t := range tasks {
+		if t.Parent == "" {
+			standaloneTasks = append(standaloneTasks, t)
+		}
+	}
+
+	return c.findReadyTaskFromList(standaloneTasks)
+}
+
+// findReadyTaskFromList finds the first ready task from a list of tasks.
+// A task is ready if it is:
+// 1. Open (not closed)
+// 2. Not blocked by any open task
+// 3. Not awaiting human action (awaiting=nil AND manual=false)
+// Tasks are sorted by priority (lowest number = highest priority) before selection.
+func (c *Client) findReadyTaskFromList(tasks []Task) (*Task, error) {
+	if len(tasks) == 0 {
+		return nil, nil
+	}
+
+	// Sort by priority (lowest number = highest priority)
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].Priority < tasks[j].Priority
+	})
+
+	// Build a map of all task IDs for checking blocker status
+	taskMap := make(map[string]*Task)
+	for i := range tasks {
+		taskMap[tasks[i].ID] = &tasks[i]
+	}
+
+	// Build a set of blocked task IDs
+	blockedIDs := make(map[string]bool)
+	for _, t := range tasks {
+		for _, blockerID := range t.BlockedBy {
+			// A task is blocked if any of its blockers exist and are not closed
+			// We need to check all tasks, not just ones in our list
+			blocker, exists := taskMap[blockerID]
+			if exists && blocker.Status != "closed" {
+				blockedIDs[t.ID] = true
+				break
+			}
+			// For blockers not in our list, we need to fetch them
+			if !exists {
+				blockerTask, err := c.GetTask(blockerID)
+				if err == nil && blockerTask != nil && blockerTask.Status != "closed" {
+					blockedIDs[t.ID] = true
+					break
+				}
+			}
+		}
+	}
+
+	// Find the first task that is ready
+	for _, t := range tasks {
+		if t.Status != "open" {
+			continue
+		}
+		if blockedIDs[t.ID] {
+			continue
+		}
+		if t.IsAwaitingHuman() {
+			continue
+		}
+		// Found a ready task
+		taskCopy := t
+		return &taskCopy, nil
+	}
+
+	return nil, nil
 }
 
 // ListAwaitingTasks returns all tasks awaiting human attention under the given epic.
@@ -214,6 +362,27 @@ func (c *Client) ListTasks(epicID string) ([]Task, error) {
 	out, err := c.run("list", "--parent", epicID, "--all", "--json")
 	if err != nil {
 		return nil, fmt.Errorf("tk list --parent %s: %w", epicID, err)
+	}
+
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	// tk list --json returns {"ticks": [...]}
+	var wrapper listOutput
+	if err := json.Unmarshal(out, &wrapper); err != nil {
+		return nil, fmt.Errorf("parse tasks JSON: %w", err)
+	}
+	return wrapper.Ticks, nil
+}
+
+// ListAllTasks returns all tasks regardless of parent epic.
+// Tasks are returned sorted by priority (lowest number = highest priority).
+func (c *Client) ListAllTasks() ([]Task, error) {
+	out, err := c.run("list", "--type", "task", "--status", "open", "--all", "--json")
+	if err != nil {
+		return nil, fmt.Errorf("tk list --type task: %w", err)
 	}
 
 	out = bytes.TrimSpace(out)
