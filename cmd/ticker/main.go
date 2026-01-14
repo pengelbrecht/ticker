@@ -1141,6 +1141,17 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	// Initial task list load
 	go refreshTasks()
 
+	// Start file watcher for external tick changes
+	ticksWatcher := engine.NewTicksWatcher("")
+	defer ticksWatcher.Close()
+	if changes := ticksWatcher.Changes(); changes != nil {
+		go func() {
+			for range changes {
+				refreshTasks()
+			}
+		}()
+	}
+
 	// Wire engine callbacks to send TUI messages
 
 	// Track previous snapshot state for delta-based TUI updates
