@@ -187,8 +187,11 @@ func (c *Client) CloseEpic(epicID, reason string) error {
 }
 
 // AddNote adds a note to an epic or task.
-func (c *Client) AddNote(issueID, message string) error {
-	_, err := c.run("note", issueID, message)
+// Optional extra args can be passed (e.g., "--from", "human").
+func (c *Client) AddNote(issueID, message string, extraArgs ...string) error {
+	args := []string{"note", issueID, message}
+	args = append(args, extraArgs...)
+	_, err := c.run(args...)
 	if err != nil {
 		return fmt.Errorf("tk note %s: %w", issueID, err)
 	}
@@ -224,6 +227,25 @@ func (c *Client) ClearAwaiting(taskID string) error {
 	_, err := c.run("update", taskID, "--awaiting=")
 	if err != nil {
 		return fmt.Errorf("tk update %s --awaiting=: %w", taskID, err)
+	}
+	return nil
+}
+
+// SetVerdict sets the verdict on a task and optionally adds feedback as a note.
+// The feedback note is added BEFORE setting the verdict to ensure the note is
+// available when the verdict triggers any downstream processing.
+func (c *Client) SetVerdict(taskID string, verdict string, feedback string) error {
+	// Add feedback note first (if provided) to avoid race condition
+	if feedback != "" {
+		if err := c.AddNote(taskID, feedback, "--from", "human"); err != nil {
+			return fmt.Errorf("adding feedback note: %w", err)
+		}
+	}
+
+	// Set verdict - this triggers processing in tk CLI
+	_, err := c.run("update", taskID, "--verdict", verdict)
+	if err != nil {
+		return fmt.Errorf("tk update %s --verdict %s: %w", taskID, verdict, err)
 	}
 	return nil
 }
