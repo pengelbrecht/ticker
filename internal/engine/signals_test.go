@@ -169,6 +169,116 @@ func TestParseSignals(t *testing.T) {
 			wantSignal: SignalBlocked,
 			wantReason: "Need credentials for https://api.example.com",
 		},
+		// New handoff signal types
+		{
+			name:       "approval needed signal with context",
+			output:     "Ready for review. <promise>APPROVAL_NEEDED: Please approve the database migration</promise>",
+			wantSignal: SignalApprovalNeeded,
+			wantReason: "Please approve the database migration",
+		},
+		{
+			name:       "approval needed signal without context",
+			output:     "<promise>APPROVAL_NEEDED</promise>",
+			wantSignal: SignalApprovalNeeded,
+			wantReason: "",
+		},
+		{
+			name:       "input needed signal with context",
+			output:     "<promise>INPUT_NEEDED: What should the default timeout be?</promise>",
+			wantSignal: SignalInputNeeded,
+			wantReason: "What should the default timeout be?",
+		},
+		{
+			name:       "input needed signal without context",
+			output:     "<promise>INPUT_NEEDED</promise>",
+			wantSignal: SignalInputNeeded,
+			wantReason: "",
+		},
+		{
+			name:       "review requested signal with context",
+			output:     "<promise>REVIEW_REQUESTED: Please review the API changes before I continue</promise>",
+			wantSignal: SignalReviewRequested,
+			wantReason: "Please review the API changes before I continue",
+		},
+		{
+			name:       "review requested signal without context",
+			output:     "<promise>REVIEW_REQUESTED</promise>",
+			wantSignal: SignalReviewRequested,
+			wantReason: "",
+		},
+		{
+			name:       "content review signal with context",
+			output:     "<promise>CONTENT_REVIEW: Please verify the generated documentation is accurate</promise>",
+			wantSignal: SignalContentReview,
+			wantReason: "Please verify the generated documentation is accurate",
+		},
+		{
+			name:       "content review signal without context",
+			output:     "<promise>CONTENT_REVIEW</promise>",
+			wantSignal: SignalContentReview,
+			wantReason: "",
+		},
+		{
+			name:       "escalate signal with context",
+			output:     "<promise>ESCALATE: This security issue requires senior engineer review</promise>",
+			wantSignal: SignalEscalate,
+			wantReason: "This security issue requires senior engineer review",
+		},
+		{
+			name:       "escalate signal without context",
+			output:     "<promise>ESCALATE</promise>",
+			wantSignal: SignalEscalate,
+			wantReason: "",
+		},
+		{
+			name:       "checkpoint signal with context",
+			output:     "<promise>CHECKPOINT: Saving state before refactoring</promise>",
+			wantSignal: SignalCheckpoint,
+			wantReason: "Saving state before refactoring",
+		},
+		{
+			name:       "checkpoint signal without context",
+			output:     "<promise>CHECKPOINT</promise>",
+			wantSignal: SignalCheckpoint,
+			wantReason: "",
+		},
+		// Priority tests for new signals
+		{
+			name:       "complete takes priority over approval needed",
+			output:     "<promise>APPROVAL_NEEDED: review</promise> <promise>COMPLETE</promise>",
+			wantSignal: SignalComplete,
+			wantReason: "",
+		},
+		{
+			name:       "eject takes priority over input needed",
+			output:     "<promise>INPUT_NEEDED: question</promise> <promise>EJECT: reason</promise>",
+			wantSignal: SignalEject,
+			wantReason: "reason",
+		},
+		{
+			name:       "blocked takes priority over review requested",
+			output:     "<promise>REVIEW_REQUESTED: review</promise> <promise>BLOCKED: blocked</promise>",
+			wantSignal: SignalBlocked,
+			wantReason: "blocked",
+		},
+		{
+			name:       "approval needed takes priority over input needed",
+			output:     "<promise>INPUT_NEEDED: input</promise> <promise>APPROVAL_NEEDED: approval</promise>",
+			wantSignal: SignalApprovalNeeded,
+			wantReason: "approval",
+		},
+		{
+			name:       "unknown signal returns none",
+			output:     "<promise>UNKNOWN_SIGNAL: something</promise>",
+			wantSignal: SignalNone,
+			wantReason: "",
+		},
+		{
+			name:       "escalate with colon in context",
+			output:     "<promise>ESCALATE: Error: critical failure detected</promise>",
+			wantSignal: SignalEscalate,
+			wantReason: "Error: critical failure detected",
+		},
 	}
 
 	for _, tt := range tests {
