@@ -1130,6 +1130,42 @@ EXAMPLES:
     tk list --awaiting --json | jq '.[] | {id, title, awaiting}'
 ```
 
+### tk next --awaiting
+
+```
+tk next - Get next task to work on
+
+USAGE:
+    tk next [epic-id] [flags]
+
+FLAGS:
+    --awaiting [type]      Get next task awaiting human (instead of agent)
+                           No value: any awaiting type
+                           With value: specific type(s), comma-separated
+
+DESCRIPTION:
+    Without --awaiting: Returns next task for agent (awaiting=null, not blocked, open)
+    With --awaiting: Returns next task for human (awaiting!=null)
+
+    Tasks are returned in priority order (lowest priority number first).
+
+EXAMPLES:
+    # Agent's next task
+    tk next epic-123
+
+    # Human's next task (any type)
+    tk next epic-123 --awaiting
+
+    # Human's next approval to review
+    tk next epic-123 --awaiting approval
+
+    # Human's next content or review task
+    tk next epic-123 --awaiting content,review
+
+    # Human's next task across all epics
+    tk next --awaiting
+```
+
 ### tk note
 
 ```
@@ -1203,7 +1239,8 @@ TASK FILTERING:
 
 HUMAN WORKFLOW:
     While ticker runs, humans can:
-    - tk list --awaiting        See what needs attention
+    - tk next --awaiting        Get next task needing human attention
+    - tk list --awaiting        See all tasks needing attention
     - tk approve <id>           Approve completed work
     - tk reject <id> "reason"   Reject with feedback
 
@@ -1236,7 +1273,8 @@ EXAMPLES:
 - [ ] Add `tk reject` command
 - [ ] Add `--from` flag to `tk note`
 - [ ] Add `--awaiting` filter to `tk list`
-- [ ] Update `tk next` to exclude awaiting != null
+- [ ] Update `tk next` to exclude awaiting != null (agent mode)
+- [ ] Add `tk next --awaiting` for human mode
 - [ ] Update `tk ready` to exclude awaiting != null
 - [ ] Implement verdict processing logic
 - [ ] Deprecate `--manual` flag (alias to `--awaiting work`)
