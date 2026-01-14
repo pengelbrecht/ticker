@@ -62,6 +62,93 @@ type mockTicksClient struct {
 	notes       []string
 	closedTasks []string
 	addedNotes  []string
+
+	// Awaiting/verdict workflow support
+	awaitingState map[string]string      // taskID -> awaiting value
+	verdictState  map[string]string      // taskID -> verdict value
+	structuredNotes map[string][]ticks.Note // taskID -> structured notes
+
+	// State change tracking for assertions
+	setAwaitingCalls []setAwaitingCall
+	setVerdictCalls  []setVerdictCall
+}
+
+// setAwaitingCall records a SetAwaiting call for test assertions.
+type setAwaitingCall struct {
+	TaskID   string
+	Awaiting string
+	Note     string
+}
+
+// setVerdictCall records a SetVerdict call for test assertions.
+type setVerdictCall struct {
+	TaskID   string
+	Verdict  string
+	Feedback string
+}
+
+// newMockTicksClient creates a new mock ticks client with initialized maps.
+func newMockTicksClient() *mockTicksClient {
+	return &mockTicksClient{
+		awaitingState:   make(map[string]string),
+		verdictState:    make(map[string]string),
+		structuredNotes: make(map[string][]ticks.Note),
+	}
+}
+
+// GetAwaiting returns the current awaiting state for a task.
+func (m *mockTicksClient) GetAwaiting(taskID string) string {
+	if m.awaitingState == nil {
+		return ""
+	}
+	return m.awaitingState[taskID]
+}
+
+// GetVerdict returns the current verdict for a task.
+func (m *mockTicksClient) GetVerdict(taskID string) string {
+	if m.verdictState == nil {
+		return ""
+	}
+	return m.verdictState[taskID]
+}
+
+// ClearAwaiting clears the awaiting state for a task.
+func (m *mockTicksClient) ClearAwaiting(taskID string) error {
+	if m.awaitingState != nil {
+		delete(m.awaitingState, taskID)
+	}
+	return nil
+}
+
+// SimulateVerdictProcessing simulates what happens when a verdict is processed.
+// For approved verdicts on approval/review/content awaiting types, the task would close.
+// For rejected verdicts, the awaiting state is cleared and task returns to queue.
+func (m *mockTicksClient) SimulateVerdictProcessing(taskID string) {
+	awaiting := m.GetAwaiting(taskID)
+	verdict := m.GetVerdict(taskID)
+
+	if awaiting == "" || verdict == "" {
+		return
+	}
+
+	// Clear transient fields
+	delete(m.awaitingState, taskID)
+	delete(m.verdictState, taskID)
+
+	// Determine if task should close based on awaiting type and verdict
+	shouldClose := false
+	switch awaiting {
+	case "work", "approval", "review", "content":
+		shouldClose = (verdict == "approved")
+	case "input", "escalation":
+		shouldClose = (verdict == "rejected")
+	case "checkpoint":
+		shouldClose = false
+	}
+
+	if shouldClose {
+		m.closedTasks = append(m.closedTasks, taskID)
+	}
 }
 
 func (m *mockTicksClient) GetEpic(epicID string) (*ticks.Epic, error) {
@@ -95,6 +182,91 @@ func (m *mockTicksClient) CloseTask(taskID, reason string) error {
 }
 
 func (m *mockTicksClient) SetStatus(issueID, status string) error {
+	return nil
+}
+
+// SetAwaiting updates the awaiting field of a task.
+// Tracks the call for test assertions and updates internal state.
+func (m *mockTicksClient) SetAwaiting(taskID, awaiting, note string) error {
+	// Initialize map if nil
+	if m.awaitingState == nil {
+		m.awaitingState = make(map[string]string)
+	}
+
+	// Track the call for assertions
+	m.setAwaitingCalls = append(m.setAwaitingCalls, setAwaitingCall{
+		TaskID:   taskID,
+		Awaiting: awaiting,
+		Note:     note,
+	})
+
+	// Update state
+	m.awaitingState[taskID] = awaiting
+
+	// Add note if provided
+	if note != "" {
+		m.addedNotes = append(m.addedNotes, note)
+	}
+
+	return nil
+}
+
+// SetVerdict sets the verdict on a task and optionally adds feedback.
+// Tracks the call for test assertions and can simulate verdict processing.
+func (m *mockTicksClient) SetVerdict(taskID, verdict, feedback string) error {
+	// Initialize maps if nil
+	if m.verdictState == nil {
+		m.verdictState = make(map[string]string)
+	}
+	if m.structuredNotes == nil {
+		m.structuredNotes = make(map[string][]ticks.Note)
+	}
+
+	// Track the call for assertions
+	m.setVerdictCalls = append(m.setVerdictCalls, setVerdictCall{
+		TaskID:   taskID,
+		Verdict:  verdict,
+		Feedback: feedback,
+	})
+
+	// Update state
+	m.verdictState[taskID] = verdict
+
+	// Add feedback as human note if provided
+	if feedback != "" {
+		m.structuredNotes[taskID] = append(m.structuredNotes[taskID], ticks.Note{
+			Content: feedback,
+			Author:  "human",
+		})
+	}
+
+	return nil
+}
+
+// GetHumanNotes returns only notes from humans for a task.
+func (m *mockTicksClient) GetHumanNotes(taskID string) ([]ticks.Note, error) {
+	if m.structuredNotes == nil {
+		return nil, nil
+	}
+
+	var humanNotes []ticks.Note
+	for _, n := range m.structuredNotes[taskID] {
+		if n.Author == "human" {
+			humanNotes = append(humanNotes, n)
+		}
+	}
+	return humanNotes, nil
+}
+
+// AddHumanNote adds a note from a human to a task.
+func (m *mockTicksClient) AddHumanNote(taskID, message string) error {
+	if m.structuredNotes == nil {
+		m.structuredNotes = make(map[string][]ticks.Note)
+	}
+	m.structuredNotes[taskID] = append(m.structuredNotes[taskID], ticks.Note{
+		Content: message,
+		Author:  "human",
+	})
 	return nil
 }
 
@@ -1069,5 +1241,262 @@ func TestSignalHandlingLogic(t *testing.T) {
 				t.Errorf("expectHandleSignal=%v but isHandoffSignal=%v", tt.expectHandleSignal, isHandoffSignal)
 			}
 		})
+	}
+}
+
+// Tests for mockTicksClient awaiting/verdict workflow
+
+func TestMockTicksClient_SetAwaiting(t *testing.T) {
+	mock := newMockTicksClient()
+
+	// Test SetAwaiting
+	err := mock.SetAwaiting("task-1", "approval", "Work complete, needs approval")
+	if err != nil {
+		t.Fatalf("SetAwaiting failed: %v", err)
+	}
+
+	// Verify state was updated
+	if mock.GetAwaiting("task-1") != "approval" {
+		t.Errorf("awaiting state = %q, want %q", mock.GetAwaiting("task-1"), "approval")
+	}
+
+	// Verify call was tracked
+	if len(mock.setAwaitingCalls) != 1 {
+		t.Fatalf("expected 1 setAwaitingCall, got %d", len(mock.setAwaitingCalls))
+	}
+	call := mock.setAwaitingCalls[0]
+	if call.TaskID != "task-1" || call.Awaiting != "approval" || call.Note != "Work complete, needs approval" {
+		t.Errorf("setAwaitingCall = %+v, want TaskID=task-1, Awaiting=approval, Note=Work complete...", call)
+	}
+
+	// Verify note was added
+	if len(mock.addedNotes) != 1 || mock.addedNotes[0] != "Work complete, needs approval" {
+		t.Errorf("addedNotes = %v, want [Work complete, needs approval]", mock.addedNotes)
+	}
+}
+
+func TestMockTicksClient_SetVerdict(t *testing.T) {
+	mock := newMockTicksClient()
+
+	// Test SetVerdict with feedback
+	err := mock.SetVerdict("task-1", "rejected", "Please add more tests")
+	if err != nil {
+		t.Fatalf("SetVerdict failed: %v", err)
+	}
+
+	// Verify state was updated
+	if mock.GetVerdict("task-1") != "rejected" {
+		t.Errorf("verdict state = %q, want %q", mock.GetVerdict("task-1"), "rejected")
+	}
+
+	// Verify call was tracked
+	if len(mock.setVerdictCalls) != 1 {
+		t.Fatalf("expected 1 setVerdictCall, got %d", len(mock.setVerdictCalls))
+	}
+	call := mock.setVerdictCalls[0]
+	if call.TaskID != "task-1" || call.Verdict != "rejected" || call.Feedback != "Please add more tests" {
+		t.Errorf("setVerdictCall = %+v, want TaskID=task-1, Verdict=rejected, Feedback=Please add more tests", call)
+	}
+
+	// Verify feedback was added as human note
+	notes, err := mock.GetHumanNotes("task-1")
+	if err != nil {
+		t.Fatalf("GetHumanNotes failed: %v", err)
+	}
+	if len(notes) != 1 || notes[0].Content != "Please add more tests" || notes[0].Author != "human" {
+		t.Errorf("humanNotes = %v, want [{Content:Please add more tests Author:human}]", notes)
+	}
+}
+
+func TestMockTicksClient_GetHumanNotes(t *testing.T) {
+	mock := newMockTicksClient()
+
+	// Add a mix of human and agent notes
+	mock.AddHumanNote("task-1", "Human feedback 1")
+	mock.AddHumanNote("task-1", "Human feedback 2")
+
+	// Also add an agent note via addedNotes (simulating AddNote)
+	mock.structuredNotes["task-1"] = append(mock.structuredNotes["task-1"], ticks.Note{
+		Content: "Agent progress note",
+		Author:  "agent",
+	})
+
+	// Get human notes only
+	notes, err := mock.GetHumanNotes("task-1")
+	if err != nil {
+		t.Fatalf("GetHumanNotes failed: %v", err)
+	}
+
+	if len(notes) != 2 {
+		t.Fatalf("expected 2 human notes, got %d", len(notes))
+	}
+
+	for i, note := range notes {
+		if note.Author != "human" {
+			t.Errorf("note[%d].Author = %q, want %q", i, note.Author, "human")
+		}
+	}
+}
+
+func TestMockTicksClient_SimulateVerdictProcessing(t *testing.T) {
+	tests := []struct {
+		name        string
+		awaiting    string
+		verdict     string
+		wantClosed  bool
+	}{
+		{
+			name:       "approval approved - closes",
+			awaiting:   "approval",
+			verdict:    "approved",
+			wantClosed: true,
+		},
+		{
+			name:       "approval rejected - stays open",
+			awaiting:   "approval",
+			verdict:    "rejected",
+			wantClosed: false,
+		},
+		{
+			name:       "review approved - closes",
+			awaiting:   "review",
+			verdict:    "approved",
+			wantClosed: true,
+		},
+		{
+			name:       "content approved - closes",
+			awaiting:   "content",
+			verdict:    "approved",
+			wantClosed: true,
+		},
+		{
+			name:       "work approved - closes (human did it)",
+			awaiting:   "work",
+			verdict:    "approved",
+			wantClosed: true,
+		},
+		{
+			name:       "work rejected - stays open (back to agent)",
+			awaiting:   "work",
+			verdict:    "rejected",
+			wantClosed: false,
+		},
+		{
+			name:       "input approved - stays open (answer provided)",
+			awaiting:   "input",
+			verdict:    "approved",
+			wantClosed: false,
+		},
+		{
+			name:       "input rejected - closes (can't proceed)",
+			awaiting:   "input",
+			verdict:    "rejected",
+			wantClosed: true,
+		},
+		{
+			name:       "escalation approved - stays open (direction given)",
+			awaiting:   "escalation",
+			verdict:    "approved",
+			wantClosed: false,
+		},
+		{
+			name:       "escalation rejected - closes (won't do)",
+			awaiting:   "escalation",
+			verdict:    "rejected",
+			wantClosed: true,
+		},
+		{
+			name:       "checkpoint approved - stays open (always back to agent)",
+			awaiting:   "checkpoint",
+			verdict:    "approved",
+			wantClosed: false,
+		},
+		{
+			name:       "checkpoint rejected - stays open (always back to agent)",
+			awaiting:   "checkpoint",
+			verdict:    "rejected",
+			wantClosed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockTicksClient()
+
+			// Set up awaiting and verdict state
+			mock.SetAwaiting("task-1", tt.awaiting, "test note")
+			mock.SetVerdict("task-1", tt.verdict, "")
+
+			// Process the verdict
+			mock.SimulateVerdictProcessing("task-1")
+
+			// Check if task was closed
+			wasClosed := false
+			for _, id := range mock.closedTasks {
+				if id == "task-1" {
+					wasClosed = true
+					break
+				}
+			}
+
+			if wasClosed != tt.wantClosed {
+				t.Errorf("task closed = %v, want %v", wasClosed, tt.wantClosed)
+			}
+
+			// Verify transient fields were cleared
+			if mock.GetAwaiting("task-1") != "" {
+				t.Error("awaiting should be cleared after verdict processing")
+			}
+			if mock.GetVerdict("task-1") != "" {
+				t.Error("verdict should be cleared after verdict processing")
+			}
+		})
+	}
+}
+
+func TestMockTicksClient_ClearAwaiting(t *testing.T) {
+	mock := newMockTicksClient()
+
+	// Set awaiting
+	mock.SetAwaiting("task-1", "review", "needs review")
+	if mock.GetAwaiting("task-1") != "review" {
+		t.Fatal("awaiting should be set")
+	}
+
+	// Clear it
+	err := mock.ClearAwaiting("task-1")
+	if err != nil {
+		t.Fatalf("ClearAwaiting failed: %v", err)
+	}
+
+	// Verify cleared
+	if mock.GetAwaiting("task-1") != "" {
+		t.Errorf("awaiting = %q, want empty after ClearAwaiting", mock.GetAwaiting("task-1"))
+	}
+}
+
+func TestMockTicksClient_StateTracking(t *testing.T) {
+	mock := newMockTicksClient()
+
+	// Perform multiple operations
+	mock.SetAwaiting("task-1", "approval", "note1")
+	mock.SetAwaiting("task-2", "review", "note2")
+	mock.SetVerdict("task-1", "approved", "looks good")
+	mock.SetVerdict("task-2", "rejected", "needs changes")
+
+	// Verify all calls were tracked
+	if len(mock.setAwaitingCalls) != 2 {
+		t.Errorf("expected 2 setAwaitingCalls, got %d", len(mock.setAwaitingCalls))
+	}
+	if len(mock.setVerdictCalls) != 2 {
+		t.Errorf("expected 2 setVerdictCalls, got %d", len(mock.setVerdictCalls))
+	}
+
+	// Verify specific calls
+	if mock.setAwaitingCalls[0].TaskID != "task-1" {
+		t.Error("first setAwaitingCall should be task-1")
+	}
+	if mock.setVerdictCalls[1].Feedback != "needs changes" {
+		t.Error("second setVerdictCall feedback should be 'needs changes'")
 	}
 }
