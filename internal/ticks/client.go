@@ -204,6 +204,30 @@ func (c *Client) SetStatus(issueID, status string) error {
 	return nil
 }
 
+// SetAwaiting updates the awaiting field of a task via tk update.
+// If note is provided, it is added as a note to provide context.
+func (c *Client) SetAwaiting(taskID string, awaiting string, note string) error {
+	_, err := c.run("update", taskID, "--awaiting", awaiting)
+	if err != nil {
+		return fmt.Errorf("tk update %s --awaiting %s: %w", taskID, awaiting, err)
+	}
+
+	// Add context as note if provided
+	if note != "" {
+		return c.AddNote(taskID, note)
+	}
+	return nil
+}
+
+// ClearAwaiting clears the awaiting field of a task, indicating it's ready for agent work.
+func (c *Client) ClearAwaiting(taskID string) error {
+	_, err := c.run("update", taskID, "--awaiting=")
+	if err != nil {
+		return fmt.Errorf("tk update %s --awaiting=: %w", taskID, err)
+	}
+	return nil
+}
+
 // GetNotes returns the notes for an epic or task.
 // Notes are parsed from the tk show output.
 func (c *Client) GetNotes(epicID string) ([]string, error) {
