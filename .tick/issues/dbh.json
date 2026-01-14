@@ -1,0 +1,12 @@
+{
+  "id": "dbh",
+  "title": "Make git verifier more permissive - only check task-generated changes",
+  "description": "Git verifier currently fails if there are any uncommitted changes. This is too strict because:\n1. Users may have pre-existing uncommitted work\n2. Only changes made during task execution should be verified\n\nProposed approach:\n1. At task START: snapshot current uncommitted files (git status --porcelain)\n2. At task END: check for uncommitted files\n3. Only flag files that are NEW since start (weren't in initial snapshot)\n\nThis allows users to have dirty working directories while still catching agent-created uncommitted changes.\n\nFiles to investigate:\n- internal/verify/ - verification system\n- internal/engine/engine.go - where verification is triggered\n\nEdge cases to consider:\n- Files modified (not new) during task - should these be flagged?\n- Files deleted during task\n- Files in .gitignore",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T22:48:09.081231Z",
+  "updated_at": "2026-01-14T22:48:09.081231Z"
+}

@@ -3895,3 +3895,231 @@ func TestTabStateSynchronization(t *testing.T) {
 		t.Errorf("expected iteration 5 after switching back, got %d", m.iteration)
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Status Icon and Awaiting Tests (for Agent-Human Workflow)
+// -----------------------------------------------------------------------------
+
+func TestTaskInfo_StatusIcon_AllEmojiIcons(t *testing.T) {
+	// Test that all status icons render as the correct emoji
+	testCases := []struct {
+		name       string
+		task       TaskInfo
+		expectIcon string
+	}{
+		{
+			name:       "open task shows white circle",
+			task:       TaskInfo{ID: "t1", Status: TaskStatusOpen},
+			expectIcon: "⚪",
+		},
+		{
+			name:       "in progress task shows blue circle",
+			task:       TaskInfo{ID: "t2", Status: TaskStatusInProgress},
+			expectIcon: "🔵",
+		},
+		{
+			name:       "closed task shows green checkmark",
+			task:       TaskInfo{ID: "t3", Status: TaskStatusClosed},
+			expectIcon: "✅",
+		},
+		{
+			name:       "blocked task shows red circle",
+			task:       TaskInfo{ID: "t4", Status: TaskStatusOpen, BlockedBy: []string{"t1"}},
+			expectIcon: "🔴",
+		},
+		{
+			name:       "awaiting task shows human icon",
+			task:       TaskInfo{ID: "t5", Status: TaskStatusOpen, Awaiting: "approval"},
+			expectIcon: "👤",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			icon := tc.task.StatusIcon()
+			if !strings.Contains(icon, tc.expectIcon) {
+				t.Errorf("expected icon to contain '%s', got '%s'", tc.expectIcon, icon)
+			}
+		})
+	}
+}
+
+func TestTaskInfo_StatusIcon_AwaitingPriority(t *testing.T) {
+	// Awaiting takes highest priority - should show 👤 regardless of other states
+
+	// Awaiting + Open
+	task1 := TaskInfo{ID: "t1", Status: TaskStatusOpen, Awaiting: "approval"}
+	icon1 := task1.StatusIcon()
+	if !strings.Contains(icon1, "👤") {
+		t.Errorf("awaiting+open: expected 👤, got %s", icon1)
+	}
+
+	// Awaiting + Blocked
+	task2 := TaskInfo{ID: "t2", Status: TaskStatusOpen, Awaiting: "input", BlockedBy: []string{"blocker"}}
+	icon2 := task2.StatusIcon()
+	if !strings.Contains(icon2, "👤") {
+		t.Errorf("awaiting+blocked: expected 👤, got %s", icon2)
+	}
+
+	// Various awaiting types all show human icon
+	awaitingTypes := []string{"work", "approval", "input", "review", "content", "escalation", "checkpoint"}
+	for _, awaitType := range awaitingTypes {
+		task := TaskInfo{ID: "t", Status: TaskStatusOpen, Awaiting: awaitType}
+		icon := task.StatusIcon()
+		if !strings.Contains(icon, "👤") {
+			t.Errorf("awaiting type '%s': expected 👤, got %s", awaitType, icon)
+		}
+	}
+}
+
+func TestTaskInfo_StatusIcon_BlockedPriority(t *testing.T) {
+	// Blocked takes priority over plain open, but not over awaiting
+
+	// Blocked + Open (no awaiting) -> should show 🔴
+	task1 := TaskInfo{ID: "t1", Status: TaskStatusOpen, BlockedBy: []string{"blocker1"}}
+	icon1 := task1.StatusIcon()
+	if !strings.Contains(icon1, "🔴") {
+		t.Errorf("blocked+open: expected 🔴, got %s", icon1)
+	}
+	if strings.Contains(icon1, "⚪") {
+		t.Errorf("blocked+open: should NOT show ⚪, got %s", icon1)
+	}
+
+	// Blocked + Awaiting -> awaiting wins, should show 👤
+	task2 := TaskInfo{ID: "t2", Status: TaskStatusOpen, BlockedBy: []string{"blocker1"}, Awaiting: "approval"}
+	icon2 := task2.StatusIcon()
+	if !strings.Contains(icon2, "👤") {
+		t.Errorf("blocked+awaiting: expected 👤, got %s", icon2)
+	}
+	if strings.Contains(icon2, "🔴") {
+		t.Errorf("blocked+awaiting: should NOT show 🔴, got %s", icon2)
+	}
+
+	// Multiple blockers still shows blocked
+	task3 := TaskInfo{ID: "t3", Status: TaskStatusOpen, BlockedBy: []string{"b1", "b2", "b3"}}
+	icon3 := task3.StatusIcon()
+	if !strings.Contains(icon3, "🔴") {
+		t.Errorf("multiple blockers: expected 🔴, got %s", icon3)
+	}
+}
+
+func TestTaskInfo_StatusIcon_InProgressNotAffectedByBlockers(t *testing.T) {
+	// In progress status should show 🔵 even if blockers are present
+	// (edge case - shouldn't happen in practice but tests implementation)
+	task := TaskInfo{ID: "t1", Status: TaskStatusInProgress, BlockedBy: []string{"blocker"}}
+	icon := task.StatusIcon()
+	if !strings.Contains(icon, "🔵") {
+		t.Errorf("in_progress with blocker: expected 🔵, got %s", icon)
+	}
+}
+
+func TestTaskInfo_StatusIcon_ClosedNotAffectedByBlockers(t *testing.T) {
+	// Closed status should show ✅ even if blockers are present
+	// (edge case - shouldn't happen in practice but tests implementation)
+	task := TaskInfo{ID: "t1", Status: TaskStatusClosed, BlockedBy: []string{"blocker"}}
+	icon := task.StatusIcon()
+	if !strings.Contains(icon, "✅") {
+		t.Errorf("closed with blocker: expected ✅, got %s", icon)
+	}
+}
+
+func TestUpdate_TasksUpdateMsg_WithAwaiting(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Create tasks with various awaiting states
+	tasks := []TaskInfo{
+		{ID: "task1", Title: "Open Task", Status: TaskStatusOpen},
+		{ID: "task2", Title: "Awaiting Approval", Status: TaskStatusOpen, Awaiting: "approval"},
+		{ID: "task3", Title: "Awaiting Input", Status: TaskStatusOpen, Awaiting: "input"},
+		{ID: "task4", Title: "Closed Task", Status: TaskStatusClosed},
+	}
+
+	msg := TasksUpdateMsg{Tasks: tasks}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Verify awaiting field is preserved
+	if len(m.tasks) != 4 {
+		t.Fatalf("expected 4 tasks, got %d", len(m.tasks))
+	}
+
+	// Find tasks and verify awaiting field
+	taskMap := make(map[string]TaskInfo)
+	for _, task := range m.tasks {
+		taskMap[task.ID] = task
+	}
+
+	if taskMap["task1"].Awaiting != "" {
+		t.Errorf("task1 should have empty awaiting, got '%s'", taskMap["task1"].Awaiting)
+	}
+	if taskMap["task2"].Awaiting != "approval" {
+		t.Errorf("task2 should have awaiting 'approval', got '%s'", taskMap["task2"].Awaiting)
+	}
+	if taskMap["task3"].Awaiting != "input" {
+		t.Errorf("task3 should have awaiting 'input', got '%s'", taskMap["task3"].Awaiting)
+	}
+	if taskMap["task4"].Awaiting != "" {
+		t.Errorf("task4 should have empty awaiting, got '%s'", taskMap["task4"].Awaiting)
+	}
+}
+
+func TestUpdate_TasksUpdateMsg_AwaitingRendersCorrectIcon(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Send tasks with awaiting state
+	tasks := []TaskInfo{
+		{ID: "task1", Title: "Awaiting Review", Status: TaskStatusOpen, Awaiting: "review"},
+	}
+
+	msg := TasksUpdateMsg{Tasks: tasks}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Verify the task's StatusIcon shows the human icon
+	if len(m.tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(m.tasks))
+	}
+
+	icon := m.tasks[0].StatusIcon()
+	if !strings.Contains(icon, "👤") {
+		t.Errorf("task with awaiting should show 👤 icon, got %s", icon)
+	}
+}
+
+func TestUpdate_TasksUpdateMsg_AwaitingWithBlockedRendersHumanIcon(t *testing.T) {
+	m := New(Config{})
+	m.width = 100
+	m.height = 30
+
+	// Create task that is both blocked AND awaiting
+	tasks := []TaskInfo{
+		{ID: "blocker", Title: "Blocker Task", Status: TaskStatusOpen},
+		{ID: "blocked_awaiting", Title: "Blocked and Awaiting", Status: TaskStatusOpen, BlockedBy: []string{"blocker"}, Awaiting: "escalation"},
+	}
+
+	msg := TasksUpdateMsg{Tasks: tasks}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	// Find the blocked_awaiting task
+	var blockedAwaitingTask TaskInfo
+	for _, task := range m.tasks {
+		if task.ID == "blocked_awaiting" {
+			blockedAwaitingTask = task
+			break
+		}
+	}
+
+	// Verify awaiting takes priority over blocked
+	icon := blockedAwaitingTask.StatusIcon()
+	if !strings.Contains(icon, "👤") {
+		t.Errorf("task with both blocked and awaiting should show 👤 (awaiting priority), got %s", icon)
+	}
+	if strings.Contains(icon, "🔴") {
+		t.Errorf("task with both blocked and awaiting should NOT show 🔴, got %s", icon)
+	}
+}

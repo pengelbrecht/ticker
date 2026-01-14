@@ -2,7 +2,7 @@
   "id": "2b8",
   "title": "Add tests for new status icons and awaiting display",
   "description": "Add unit tests for new StatusIcon() behavior and awaiting field handling.\n\nFile: internal/tui/model_test.go\n\nTests to add:\n1. TestTaskInfo_StatusIcon_Emoji - verify all emoji icons render correctly\n2. TestTaskInfo_StatusIcon_AwaitingPriority - awaiting takes priority over open\n3. TestTaskInfo_StatusIcon_BlockedPriority - blocked takes priority over open but not awaiting\n4. TestUpdate_TasksUpdate_WithAwaiting - verify awaiting field propagates\n\nExample test:\n```go\nfunc TestTaskInfo_StatusIcon_Awaiting(t *testing.T) {\n    task := TaskInfo{\n        ID:       \"abc\",\n        Status:   TaskStatusOpen,\n        Awaiting: \"approval\",\n    }\n    icon := task.StatusIcon()\n    if !strings.Contains(icon, \"👤\") {\n        t.Errorf(\"expected human icon for awaiting task, got %s\", icon)\n    }\n}\n```",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -13,5 +13,7 @@
   "parent": "zyv",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T22:37:11.392507Z",
-  "updated_at": "2026-01-14T22:37:11.392507Z"
+  "updated_at": "2026-01-14T22:49:07.206958Z",
+  "closed_at": "2026-01-14T22:49:07.206958Z",
+  "closed_reason": "Added comprehensive unit tests for StatusIcon() emoji icons and Awaiting field handling. Tests cover: all 5 emoji icons (⚪🔵✅🔴👤), awaiting priority over blocked/open states, blocked priority over open, and TasksUpdateMsg propagation of Awaiting field. 8 new test functions added to model_test.go."
 }
