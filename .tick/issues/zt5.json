@@ -2,11 +2,12 @@
   "id": "zt5",
   "title": "Agent-Human Workflow Implementation",
   "description": "Implement the collaborative workflow between AI agents (via ticker) and humans for task completion, as specified in docs/AGENT_HUMAN_WORKFLOW.md. This enables agents to hand off tasks to humans for approval, input, review, etc., and continue working on other tasks while waiting.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "epic",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:10:51.16502Z",
-  "updated_at": "2026-01-14T16:10:51.16502Z"
+  "updated_at": "2026-01-14T21:55:44.688595Z",
+  "closed_at": "2026-01-14T21:55:44.688595Z"
 }
