@@ -60,6 +60,44 @@ through tasks until completion, ejection, or budget limits are reached.
 When multiple epics are provided, they run in parallel in isolated git worktrees.
 Use --parallel to control concurrency (default: number of epics).
 
+AGENT SIGNALS:
+  The agent communicates task state via XML signals in its output:
+
+  COMPLETE          Task fully done, close the tick
+  APPROVAL_NEEDED   Work done, needs human sign-off before closing
+  INPUT_NEEDED      Agent needs information or decision from human
+  REVIEW_REQUESTED  PR created, needs code review before merging
+  CONTENT_REVIEW    UI/copy/design needs human judgment
+  ESCALATE          Found unexpected issue, needs human direction
+  CHECKPOINT        Phase complete, verify before continuing
+  EJECT             Agent cannot complete, human must do the work
+  BLOCKED           (Legacy) Maps to INPUT_NEEDED
+
+  Format: <promise>SIGNAL_TYPE</promise> or <promise>SIGNAL_TYPE: context</promise>
+
+TASK FILTERING:
+  Ticker automatically skips tasks where:
+  - awaiting is set (task waiting for human response)
+  - blocked by another open task
+  - status is closed
+
+  This means ticker never blocks on human input. After any handoff signal,
+  it immediately continues to the next available task.
+
+HUMAN WORKFLOW:
+  While ticker runs, humans can review and respond to handed-off tasks:
+
+  List tasks needing attention:
+    tk list --awaiting              # All tasks awaiting human
+    tk list --awaiting approval     # Only approval requests
+    tk next --awaiting              # Get next task for human
+
+  Respond to tasks:
+    tk approve <id>                 # Approve work (closes or returns to agent)
+    tk reject <id> "feedback"       # Reject with feedback (returns to agent)
+
+  After approve/reject, the task returns to ticker's queue if not closed.
+
 Exit codes:
   0 - Success (all epics completed)
   1 - Max iterations reached

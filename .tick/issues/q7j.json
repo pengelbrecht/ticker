@@ -2,12 +2,14 @@
   "id": "q7j",
   "title": "Update ticker run help text with workflow documentation",
   "description": "Update 'ticker run --help' to include agent signal and human workflow documentation:\n\nAdd sections for:\n- AGENT SIGNALS: List all 8 signal types and meanings\n- TASK FILTERING: Explain awaiting exclusion  \n- HUMAN WORKFLOW: Show tk approve/reject/next --awaiting workflow\n\nReference docs/AGENT_HUMAN_WORKFLOW.md 'ticker CLI Help' section.\n\nAcceptance criteria:\n- [ ] Signal types listed in help\n- [ ] Task filtering explained\n- [ ] Human workflow commands shown\n- [ ] --watch flag documented (when implemented)",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "eso",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:43:15.09168Z",
-  "updated_at": "2026-01-14T16:43:15.09168Z"
+  "updated_at": "2026-01-14T17:51:23.857609Z",
+  "closed_at": "2026-01-14T17:51:23.857609Z",
+  "closed_reason": "Updated cmd/ticker/main.go runCmd Long description to include AGENT SIGNALS section (all 9 signal types), TASK FILTERING section (explains awaiting exclusion), and HUMAN WORKFLOW section (tk approve/reject/next --awaiting commands). Help text now matches docs/AGENT_HUMAN_WORKFLOW.md format."
 }
