@@ -1,0 +1,17 @@
+{
+  "id": "9oz",
+  "title": "Prevent agents from reverting code outside their task scope",
+  "description": "## Problem\n\nAn agent working on task 129 reverted 5000+ lines of code from other completed tasks, thinking they were 'out of scope' for its epic.\n\n## Root Cause\n\nThe agent interpreted 'scope' too literally from the epic name and decided to revert code that was already committed from previous tasks.\n\n## Solution\n\nUpdate the agent prompt (internal/engine/prompt.go) to explicitly warn against reverting code from other tasks:\n\n1. Agent CAN revert changes from its own current iteration\n2. Agent CAN revert changes from previous iterations of the SAME task\n3. Agent SHOULD NOT revert large amounts of code from OTHER tasks without explicit instruction\n\n## Detection Heuristic\n\nIf a revert affects files that weren't modified in the current task's commits, it's likely reverting other tasks' work.\n\n## Acceptance Criteria\n\n- Prompt updated with clear guidance about reverts\n- Agent understands it should not 'clean up' code from other tasks",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "labels": [
+    "bug",
+    "prompt"
+  ],
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T21:23:24.428077Z",
+  "updated_at": "2026-01-14T21:23:54.378097Z",
+  "closed_at": "2026-01-14T21:23:54.378097Z"
+}

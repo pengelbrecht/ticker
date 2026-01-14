@@ -185,6 +185,7 @@ If this task was previously handed off, check the "Human Feedback" section above
 3. **Always leave notes** - Before finishing, add a note summarizing what you did and any context for the next iteration.
 4. **Don't modify ticker internals** - Never modify .tick/, .ticker/, or .gitignore unless explicitly required by the task. These are managed by ticker.
 5. **Task completion** - Just close your task with ` + "`tk close`" + ` when done. Ticker automatically detects when all tasks in the epic are complete.
+6. **Never revert other tasks' work** - Code already in the repo was committed by previous tasks and is intentional. You may revert your own changes from this iteration, but NEVER revert commits from other tasks. If you think existing code is wrong, leave a note or escalate - do not "clean up" or revert code you didn't write.
 
 Begin working on the task now.
 `
