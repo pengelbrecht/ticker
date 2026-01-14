@@ -226,6 +226,28 @@ func (c *Client) CloseTask(taskID, reason string) error {
 	return nil
 }
 
+// CompleteTask handles task completion, respecting the requires field.
+// If the task has a requires field set (e.g., "approval", "review", "content"),
+// the task is routed to human review via SetAwaiting instead of closing.
+// Tasks without requires are closed directly with the provided summary.
+// The requires field persists through rejection cycles.
+func (c *Client) CompleteTask(taskID string, summary string) error {
+	task, err := c.GetTask(taskID)
+	if err != nil {
+		return fmt.Errorf("getting task for completion: %w", err)
+	}
+
+	// Check for pre-declared approval gate
+	if task.Requires != nil && *task.Requires != "" {
+		// Route to human instead of closing
+		note := fmt.Sprintf("Work complete, requires %s", *task.Requires)
+		return c.SetAwaiting(taskID, *task.Requires, note)
+	}
+
+	// No gate - close directly
+	return c.CloseTask(taskID, summary)
+}
+
 // ReopenTask reopens a closed task.
 func (c *Client) ReopenTask(taskID string) error {
 	_, err := c.run("reopen", taskID)

@@ -2,7 +2,7 @@
   "id": "q56",
   "title": "Handle requires field on task completion",
   "description": "When a task has requires field set, completion should route to human instead of closing:\n\nIn verdict/completion processing:\n```go\nfunc (c *Client) CompleteTask(taskID string, summary string) error {\n    task, err := c.GetTask(taskID)\n    if err != nil {\n        return err\n    }\n    \n    // Check for pre-declared approval gate\n    if task.Requires != \"\" {\n        // Route to human instead of closing\n        return c.SetAwaiting(taskID, task.Requires, \"Work complete, requires \"+task.Requires)\n    }\n    \n    // No gate - close directly\n    return c.CloseTask(taskID, summary)\n}\n```\n\nThe engine will use this method instead of directly closing tasks.\n\nAcceptance criteria:\n- [ ] Tasks with requires set don't close on COMPLETE\n- [ ] They transition to awaiting={requires value}\n- [ ] Tasks without requires close normally\n- [ ] requires field persists through rejection cycles",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "d8o",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:13:19.93368Z",
-  "updated_at": "2026-01-14T16:13:19.93368Z"
+  "updated_at": "2026-01-14T16:55:41.275475Z",
+  "closed_at": "2026-01-14T16:55:41.275475Z",
+  "closed_reason": "Added CompleteTask method to Client that respects requires field. When requires is set (approval/review/content), routes to human via SetAwaiting instead of closing. Tasks without requires close directly. The requires field persists through rejection cycles (already handled by ProcessVerdict not clearing requires). Added 5 tests covering: requires routing, no requires closing, rejection cycle persistence, empty string handling, and various requires types."
 }

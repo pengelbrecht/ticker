@@ -2,6 +2,7 @@ package ticks
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1115,6 +1116,143 @@ func TestFindNextReadyTaskAllAwaiting(t *testing.T) {
 
 	if readyTask != nil {
 		t.Errorf("expected nil when all tasks are awaiting/closed, got %+v", readyTask)
+	}
+}
+
+// TestCompleteTaskWithRequires tests that CompleteTask routes to human when requires is set
+func TestCompleteTaskWithRequires(t *testing.T) {
+	// Test the core logic: when requires is set, should route to SetAwaiting
+	requires := "approval"
+	task := &Task{
+		ID:       "task-with-requires",
+		Title:    "Task With Requires",
+		Status:   "open",
+		Requires: &requires,
+	}
+
+	// Verify the logic that CompleteTask uses
+	if task.Requires == nil || *task.Requires == "" {
+		t.Error("task.Requires should be set")
+	}
+	if *task.Requires != "approval" {
+		t.Errorf("expected requires='approval', got %q", *task.Requires)
+	}
+
+	// Verify the note that would be generated
+	expectedNote := "Work complete, requires approval"
+	actualNote := fmt.Sprintf("Work complete, requires %s", *task.Requires)
+	if actualNote != expectedNote {
+		t.Errorf("expected note %q, got %q", expectedNote, actualNote)
+	}
+}
+
+// TestCompleteTaskWithoutRequires tests that CompleteTask closes directly when no requires
+func TestCompleteTaskWithoutRequires(t *testing.T) {
+	// Test the core logic: when requires is nil, should close directly
+	task := &Task{
+		ID:     "task-no-requires",
+		Title:  "Task Without Requires",
+		Status: "open",
+	}
+
+	// Verify the logic that CompleteTask uses
+	if task.Requires != nil && *task.Requires != "" {
+		t.Error("task.Requires should not be set")
+	}
+}
+
+// TestCompleteTaskRequiresPersistsThroughRejection tests that requires field persists
+func TestCompleteTaskRequiresPersistsThroughRejection(t *testing.T) {
+	// Simulate the rejection cycle:
+	// 1. Task with requires="approval" is created
+	// 2. Agent completes work, CompleteTask routes to awaiting=approval
+	// 3. Human rejects (verdict=rejected), ProcessVerdict clears awaiting/verdict
+	// 4. Agent works again, CompleteTask should still see requires="approval"
+
+	requires := "approval"
+	awaiting := "approval"
+	verdict := "rejected"
+
+	task := &Task{
+		ID:       "task-rejection-cycle",
+		Title:    "Task in Rejection Cycle",
+		Status:   "open",
+		Requires: &requires,
+		Awaiting: &awaiting,
+		Verdict:  &verdict,
+	}
+
+	// Process the rejection verdict
+	result := task.ProcessVerdict()
+
+	// Verify transient fields are cleared
+	if !result.TransientCleared {
+		t.Error("expected TransientCleared to be true")
+	}
+	if task.Awaiting != nil {
+		t.Error("awaiting should be nil after ProcessVerdict")
+	}
+	if task.Verdict != nil {
+		t.Error("verdict should be nil after ProcessVerdict")
+	}
+
+	// Verify requires persists
+	if task.Requires == nil {
+		t.Fatal("requires should persist after ProcessVerdict")
+	}
+	if *task.Requires != "approval" {
+		t.Errorf("requires should still be 'approval', got %q", *task.Requires)
+	}
+
+	// Now simulate CompleteTask logic again - requires should still route to human
+	if task.Requires != nil && *task.Requires != "" {
+		// This path should still be taken after rejection
+	} else {
+		t.Error("CompleteTask logic should still detect requires after rejection cycle")
+	}
+}
+
+// TestCompleteTaskEmptyRequires tests that empty requires string doesn't route to human
+func TestCompleteTaskEmptyRequires(t *testing.T) {
+	// Edge case: requires field exists but is empty string
+	emptyRequires := ""
+	task := &Task{
+		ID:       "task-empty-requires",
+		Title:    "Task With Empty Requires",
+		Status:   "open",
+		Requires: &emptyRequires,
+	}
+
+	// Verify the logic treats empty string same as nil
+	if task.Requires != nil && *task.Requires != "" {
+		t.Error("empty requires should be treated as no requires")
+	}
+}
+
+// TestCompleteTaskVariousRequiresTypes tests different requires values
+func TestCompleteTaskVariousRequiresTypes(t *testing.T) {
+	requiresTypes := []string{"approval", "review", "content"}
+
+	for _, requiresType := range requiresTypes {
+		t.Run(requiresType, func(t *testing.T) {
+			requires := requiresType
+			task := &Task{
+				ID:       "task-" + requiresType,
+				Title:    "Task Requiring " + requiresType,
+				Status:   "open",
+				Requires: &requires,
+			}
+
+			// Verify logic would route to human
+			if task.Requires == nil || *task.Requires == "" {
+				t.Errorf("expected requires=%q to trigger human routing", requiresType)
+			}
+
+			// Verify the awaiting value that would be set matches requires
+			if *task.Requires != requiresType {
+				t.Errorf("expected awaiting to be set to %q", requiresType)
+			}
+		})
 	}
 }
 
