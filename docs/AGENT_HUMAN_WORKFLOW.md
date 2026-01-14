@@ -13,12 +13,26 @@ Currently, ticks has a `manual` boolean flag that makes ticker skip tasks entire
 
 ## State Model
 
-### Two Enum Fields
+### Three Enum Fields
 
 ```
-awaiting: null | work | approval | input | review | content | escalation | checkpoint
-verdict:  null | approved | rejected
+requires: null | approval | review | content          # pre-declared gate (set at creation, persistent)
+awaiting: null | work | approval | input | review | content | escalation | checkpoint  # current state (transient)
+verdict:  null | approved | rejected                  # human response (transient)
 ```
+
+### Requires Field
+
+The `requires` field allows humans to **pre-declare** that a tick needs approval before closing, without relying on agent judgment.
+
+| Value | Meaning |
+|-------|---------|
+| `null` | No pre-declared gate (default) |
+| `approval` | Must have human sign-off before closing |
+| `review` | Must have PR review before closing |
+| `content` | Must have content/design review before closing |
+
+**Key behavior:** When agent signals `COMPLETE` on a tick with `requires` set, the engine sets `awaiting` to the `requires` value instead of closing the tick.
 
 ### Awaiting Values
 
@@ -251,6 +265,49 @@ sequenceDiagram
     Note over T: Tick closed
 ```
 
+### 8. Pre-Declared Approval Gate
+
+Human knows upfront that a tick needs approval, regardless of agent judgment.
+
+**Examples:** All security changes, all API changes, all UI work for a specific epic
+
+```mermaid
+sequenceDiagram
+    participant H as Human
+    participant T as Tick
+    participant A as Agent
+
+    H->>T: Create tick with requires=approval
+    Note over T: requires=approval, awaiting=null
+
+    A->>T: Pick up task (tk next returns it)
+    A->>A: Work on task
+    A->>T: Signal COMPLETE
+    Note over T: Engine sees requires=approval
+    Note over T: Sets awaiting=approval (not closed)
+    A->>A: Continue to next task
+
+    H->>T: Review work
+    alt Approved
+        H->>T: verdict=approved
+        Note over T: Tick closed
+    else Rejected
+        H->>T: verdict=rejected
+        H->>T: Add feedback note
+        Note over T: awaiting=null, verdict=null
+        Note over T: requires=approval (unchanged)
+        A->>T: Pick up task again
+        A->>A: Read feedback, retry
+        A->>T: Signal COMPLETE
+        Note over T: awaiting=approval again
+    end
+```
+
+**Key differences from agent-initiated approval:**
+- Human sets `requires` at creation time, not agent at completion time
+- `requires` persists through rejection cycles (agent can't bypass it)
+- Agent doesn't need to know or decide whether approval is needed
+
 ## State Transition Diagram
 
 ```mermaid
@@ -258,6 +315,7 @@ stateDiagram-v2
     [*] --> Open: Task created
 
     Open --> AwaitingHuman: Agent signals handoff
+    Open --> AwaitingHuman: Agent COMPLETE + requires set
 
     state AwaitingHuman {
         [*] --> work
@@ -272,7 +330,7 @@ stateDiagram-v2
     AwaitingHuman --> Closed: verdict=approved (terminal)
     AwaitingHuman --> Open: verdict=rejected OR verdict=approved (non-terminal)
 
-    Open --> Closed: Agent signals COMPLETE
+    Open --> Closed: Agent signals COMPLETE (no requires)
 
     note right of AwaitingHuman
         Terminal awaiting types (approved = close):
@@ -285,6 +343,11 @@ stateDiagram-v2
         - input
         - escalation
         - checkpoint
+
+        Pre-declared gates (requires field):
+        - approval, review, content
+        - Triggered on COMPLETE signal
+        - Persists through rejection cycles
     end note
 ```
 
@@ -369,6 +432,10 @@ Add to tick schema:
 type Tick struct {
     // ... existing fields ...
 
+    // Requires declares a gate that must be passed before closing
+    // Set at creation time, persists through the tick lifecycle
+    Requires *string `json:"requires,omitempty"` // approval|review|content
+
     // Awaiting indicates the tick is waiting for human action
     // null means agent's turn, any other value means human's turn
     Awaiting *string `json:"awaiting,omitempty"` // work|approval|input|review|content|escalation|checkpoint
@@ -395,7 +462,12 @@ Migration: `manual: true` → `awaiting: "work"`
 ### New Flags
 
 ```bash
-# Create with awaiting
+# Create with pre-declared approval gate
+tk create "Security-sensitive task" --requires approval
+tk create "UI redesign" --requires content
+tk create "API change" --requires review
+
+# Create with awaiting (immediate human assignment)
 tk create "Task title" --awaiting work
 
 # Update awaiting
@@ -566,6 +638,10 @@ func ParseSignal(output string) (Signal, string) {
 func (e *Engine) handleSignal(tick *Tick, signal Signal, context string) error {
     switch signal {
     case SignalComplete:
+        // Check for pre-declared approval gate
+        if tick.Requires != "" {
+            return e.setAwaiting(tick, tick.Requires, "Work complete, requires "+tick.Requires)
+        }
         return e.ticks.Close(tick.ID, "Completed by agent")
 
     case SignalEject:
@@ -781,3 +857,397 @@ handoff_history: [
   { verdict: "approved", timestamp: "..." }
 ]
 ```
+
+---
+
+# LLM/Agent Workflow Instructions
+
+This section provides detailed instructions for LLMs operating as agents within the ticker system. These instructions should be included in agent system prompts and ticker skill definitions.
+
+## Agent System Prompt (for ticker)
+
+Include this in the agent's system prompt:
+
+```markdown
+# Ticker Task Execution
+
+You are working on tasks managed by the ticker system. Each task comes from a tick (issue) in the ticks issue tracker.
+
+## Completing Tasks
+
+When you finish a task, emit one of these signals:
+
+### Task Complete
+If you have fully completed the task with no issues:
+<promise>COMPLETE</promise>
+
+### Need Human Approval
+If the work is done but should be reviewed before closing (security changes, migrations, API changes):
+<promise>APPROVAL_NEEDED: Brief description of what needs approval</promise>
+
+### Need Human Input
+If you need information or a decision from a human to proceed:
+<promise>INPUT_NEEDED: Your specific question here</promise>
+
+### PR Ready for Review
+If you created a pull request that needs code review:
+<promise>REVIEW_REQUESTED: https://github.com/org/repo/pull/123</promise>
+
+### Content Needs Review
+If you created UI, copy, or design work that needs human judgment:
+<promise>CONTENT_REVIEW: Description of what to review (e.g., "New error messages in PaymentForm")</promise>
+
+### Found Unexpected Issue
+If you discovered something that needs human decision (security issue, scope creep, architectural choice):
+<promise>ESCALATE: Description of the issue and options</promise>
+
+### Checkpoint (Multi-Phase Work)
+If you completed a phase and need verification before continuing:
+<promise>CHECKPOINT: Summary of completed phase and what's next</promise>
+
+### Cannot Complete (Human Must Do It)
+If the task requires human action (credentials, physical setup, external access):
+<promise>EJECT: Reason why human must do this</promise>
+
+## Reading Human Feedback
+
+When you pick up a task, check the notes for human feedback. If you see notes marked as human feedback:
+1. Read and understand the feedback
+2. Address all points raised
+3. Then proceed with the task
+
+## Pre-Declared Gates
+
+Some tasks have `requires` set (e.g., `requires: approval`). You don't need to handle this - just signal COMPLETE when done, and the system will automatically route to human approval.
+
+## Important Rules
+
+1. **One signal per task** - Emit exactly one signal when done
+2. **Be specific** - Include helpful context after the colon
+3. **Don't guess** - If you need human input, ask via INPUT_NEEDED
+4. **Don't skip gates** - If something feels like it needs approval, use APPROVAL_NEEDED
+```
+
+## Ticker Skill Definition
+
+For LLM orchestration systems that use skill/tool definitions:
+
+```yaml
+name: ticker
+description: |
+  Ticker orchestrates AI agents to complete tasks from the ticks issue tracker.
+  The agent works on tasks sequentially, signaling completion or handoff to humans.
+
+signals:
+  COMPLETE:
+    description: Task fully completed, close the tick
+    format: "<promise>COMPLETE</promise>"
+
+  APPROVAL_NEEDED:
+    description: Work done but needs human sign-off before closing
+    format: "<promise>APPROVAL_NEEDED: reason</promise>"
+    when_to_use:
+      - Security-sensitive changes
+      - Database migrations
+      - API contract changes
+      - Dependency major version upgrades
+      - Anything with significant risk
+
+  INPUT_NEEDED:
+    description: Agent needs information or decision from human
+    format: "<promise>INPUT_NEEDED: question</promise>"
+    when_to_use:
+      - Business logic decisions
+      - Configuration choices
+      - Clarification on requirements
+      - "Which X should I use?" questions
+
+  REVIEW_REQUESTED:
+    description: PR created, needs code review
+    format: "<promise>REVIEW_REQUESTED: pr_url</promise>"
+    when_to_use:
+      - After creating any pull request
+      - Include full PR URL
+
+  CONTENT_REVIEW:
+    description: UI, copy, or design needs human judgment
+    format: "<promise>CONTENT_REVIEW: description</promise>"
+    when_to_use:
+      - User-facing text changes
+      - UI component styling
+      - Error messages
+      - Marketing copy
+      - Anything subjective
+
+  ESCALATE:
+    description: Unexpected issue found, needs human direction
+    format: "<promise>ESCALATE: issue</promise>"
+    when_to_use:
+      - Security vulnerabilities discovered
+      - Scope larger than expected
+      - Architectural decisions needed
+      - Conflicting requirements
+
+  CHECKPOINT:
+    description: Phase complete, verify before next phase
+    format: "<promise>CHECKPOINT: summary</promise>"
+    when_to_use:
+      - Multi-phase migrations
+      - Large refactors (verify approach on one module)
+      - Any work where early validation saves rework
+
+  EJECT:
+    description: Task requires human to complete
+    format: "<promise>EJECT: reason</promise>"
+    when_to_use:
+      - Needs credentials agent doesn't have
+      - Physical or manual setup required
+      - External system access needed
+      - Agent genuinely cannot do it
+
+workflow:
+  on_task_start:
+    - Read task description from tick
+    - Check notes for human feedback (if returning to task)
+    - Address any feedback before proceeding
+
+  on_task_complete:
+    - Emit exactly one signal
+    - Include helpful context
+    - System routes to next task or human
+
+human_feedback:
+  location: tick notes (marked with --from human)
+  when_present:
+    - Previous handoff was rejected
+    - Human provided requested input
+    - Human gave direction on escalation
+  action: Address all feedback points before proceeding
+```
+
+---
+
+# CLI Help Text Examples
+
+## ticks (tk) CLI Help
+
+### tk create
+
+```
+tk create - Create a new tick
+
+USAGE:
+    tk create <title> [flags]
+
+FLAGS:
+    -d, --description string   Tick description
+    -t, --type string          Tick type: task, epic (default "task")
+    -p, --priority int         Priority: 0=critical, 1=high, 2=medium, 3=low, 4=backlog (default 2)
+    -l, --labels string        Comma-separated labels
+    --parent string            Parent epic ID
+    --blocked-by string        ID of blocking tick
+
+    --requires string          Pre-declared approval gate: approval, review, content
+                               Tick will route to human after agent completes
+    --awaiting string          Immediate human assignment: work, approval, input, review, content, escalation, checkpoint
+                               Tick will be skipped by agent until human responds
+
+    --manual                   [DEPRECATED] Use --awaiting=work instead
+
+EXAMPLES:
+    # Simple task
+    tk create "Fix login bug" -d "Users can't login with SSO"
+
+    # Task requiring approval before closing
+    tk create "Update auth flow" --requires approval
+
+    # Task requiring content review (UI/copy)
+    tk create "Redesign error messages" --requires content
+
+    # Task assigned directly to human
+    tk create "Configure AWS credentials" --awaiting work
+
+    # Task under an epic
+    tk create "Implement payment API" --parent epic-123
+```
+
+### tk approve / tk reject
+
+```
+tk approve - Approve a tick awaiting human verdict
+
+USAGE:
+    tk approve <id>
+
+DESCRIPTION:
+    Sets verdict=approved on the tick. Depending on the awaiting type:
+    - approval, review, content, work: Closes the tick
+    - input, escalation, checkpoint: Returns tick to agent queue
+
+EXAMPLES:
+    tk approve abc123
+
+---
+
+tk reject - Reject a tick awaiting human verdict
+
+USAGE:
+    tk reject <id> [feedback]
+
+DESCRIPTION:
+    Sets verdict=rejected on the tick. Adds optional feedback as a human note.
+    Tick returns to agent queue (or closes for input/escalation rejection).
+
+EXAMPLES:
+    tk reject abc123
+    tk reject abc123 "Error messages too harsh, soften the tone"
+```
+
+### tk list --awaiting
+
+```
+tk list - List ticks
+
+USAGE:
+    tk list [flags]
+
+FLAGS:
+    --awaiting [type]      Filter by awaiting status
+                           No value: all ticks awaiting human
+                           With value: specific type(s), comma-separated
+
+EXAMPLES:
+    # All ticks awaiting human action
+    tk list --awaiting
+
+    # Only ticks awaiting approval
+    tk list --awaiting approval
+
+    # Ticks awaiting approval or review
+    tk list --awaiting approval,review
+
+    # Show what needs your attention
+    tk list --awaiting --json | jq '.[] | {id, title, awaiting}'
+```
+
+### tk note
+
+```
+tk note - Add a note to a tick
+
+USAGE:
+    tk note <id> <message> [flags]
+
+FLAGS:
+    --from string    Note author: agent, human (default "agent")
+
+DESCRIPTION:
+    Notes provide context for agent-human handoffs:
+    - Agent notes: Context about work, questions, PR links
+    - Human notes: Feedback, answers, direction
+
+    The --from flag helps distinguish note sources for the agent.
+
+EXAMPLES:
+    # Agent adding context
+    tk note abc123 "PR ready: https://github.com/org/repo/pull/456"
+
+    # Human providing feedback (after rejection)
+    tk note abc123 "Use friendlier language in error messages" --from human
+
+    # Human answering a question
+    tk note abc123 "Use Stripe for payment processing" --from human
+```
+
+## ticker CLI Help
+
+### ticker run
+
+```
+ticker run - Run the ticker engine on an epic
+
+USAGE:
+    ticker run <epic-id> [flags]
+    ticker run --auto [flags]
+
+FLAGS:
+    --headless          Run without TUI
+    --auto              Auto-select next ready epic
+    --max-iterations    Maximum iterations per task (default 10)
+    --max-cost          Maximum cost in dollars (default 10.0)
+
+DESCRIPTION:
+    Ticker runs AI agents on tasks within an epic. The engine:
+
+    1. Gets next available task (tk next)
+    2. Runs agent on task
+    3. Detects agent signal (COMPLETE, APPROVAL_NEEDED, etc.)
+    4. Updates tick state accordingly
+    5. Continues to next task (never blocks on human)
+
+AGENT SIGNALS:
+    COMPLETE           Task done, close tick
+    APPROVAL_NEEDED    Work done, needs human sign-off
+    INPUT_NEEDED       Agent needs information from human
+    REVIEW_REQUESTED   PR needs code review
+    CONTENT_REVIEW     UI/copy needs human judgment
+    ESCALATE           Found issue, needs human direction
+    CHECKPOINT         Phase done, needs verification
+    EJECT              Agent can't do it, human must
+
+TASK FILTERING:
+    Ticker skips tasks where:
+    - awaiting is set (waiting for human)
+    - blocked by another task
+    - status is closed
+
+HUMAN WORKFLOW:
+    While ticker runs, humans can:
+    - tk list --awaiting        See what needs attention
+    - tk approve <id>           Approve completed work
+    - tk reject <id> "reason"   Reject with feedback
+
+    Approved/rejected tasks return to the queue for ticker to pick up.
+
+EXAMPLES:
+    # Run on specific epic
+    ticker run epic-abc123
+
+    # Run headless (CI/automation)
+    ticker run epic-abc123 --headless
+
+    # Auto-select next epic
+    ticker run --auto
+```
+
+---
+
+# Implementation Checklist
+
+## ticks (tk CLI)
+
+- [ ] Add `requires` field to tick schema
+- [ ] Add `awaiting` field to tick schema
+- [ ] Add `verdict` field to tick schema
+- [ ] Add `--requires` flag to `tk create` and `tk update`
+- [ ] Add `--awaiting` flag to `tk create` and `tk update`
+- [ ] Add `--verdict` flag to `tk update`
+- [ ] Add `tk approve` command
+- [ ] Add `tk reject` command
+- [ ] Add `--from` flag to `tk note`
+- [ ] Add `--awaiting` filter to `tk list`
+- [ ] Update `tk next` to exclude awaiting != null
+- [ ] Update `tk ready` to exclude awaiting != null
+- [ ] Implement verdict processing logic
+- [ ] Deprecate `--manual` flag (alias to `--awaiting work`)
+- [ ] Update help text with workflow examples
+
+## ticker (Engine)
+
+- [ ] Add new signal parsing (APPROVAL_NEEDED, INPUT_NEEDED, etc.)
+- [ ] Implement signal → awaiting mapping
+- [ ] Handle `requires` field on COMPLETE signal
+- [ ] Update loop to continue after handoff signals
+- [ ] Build context with human feedback notes
+- [ ] Update agent system prompt with signal documentation
+- [ ] Update CLI help text with workflow documentation
