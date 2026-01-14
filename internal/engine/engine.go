@@ -16,10 +16,28 @@ import (
 	"github.com/pengelbrecht/ticker/internal/worktree"
 )
 
+// TicksClient defines the interface for ticks operations used by the Engine.
+// This allows for mocking in tests while the production code uses *ticks.Client.
+type TicksClient interface {
+	GetEpic(epicID string) (*ticks.Epic, error)
+	GetTask(taskID string) (*ticks.Task, error)
+	NextTask(epicID string) (*ticks.Task, error)
+	HasOpenTasks(epicID string) (bool, error)
+	CloseTask(taskID, reason string) error
+	CloseEpic(epicID, reason string) error
+	ReopenTask(taskID string) error
+	AddNote(issueID, message string, extraArgs ...string) error
+	GetNotes(epicID string) ([]string, error)
+	GetHumanNotes(issueID string) ([]ticks.Note, error)
+	SetStatus(issueID, status string) error
+	SetAwaiting(taskID, awaiting, note string) error
+	SetRunRecord(taskID string, record *agent.RunRecord) error
+}
+
 // Engine orchestrates the Ralph iteration loop.
 type Engine struct {
 	agent      agent.Agent
-	ticks      *ticks.Client
+	ticks      TicksClient
 	budget     *budget.Tracker
 	checkpoint *checkpoint.Manager
 	prompt     *PromptBuilder
@@ -202,7 +220,7 @@ type IterationResult struct {
 }
 
 // NewEngine creates a new engine with the given dependencies.
-func NewEngine(a agent.Agent, t *ticks.Client, b *budget.Tracker, c *checkpoint.Manager) *Engine {
+func NewEngine(a agent.Agent, t TicksClient, b *budget.Tracker, c *checkpoint.Manager) *Engine {
 	return &Engine{
 		agent:      a,
 		ticks:      t,

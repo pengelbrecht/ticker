@@ -2,7 +2,7 @@
   "id": "x34",
   "title": "Add unit tests for signal to awaiting mapping",
   "description": "Test the handleSignal function in internal/engine/engine_test.go:\n\n```go\nfunc TestEngine_HandleSignal(t *testing.T) {\n    tests := []struct {\n        name            string\n        signal          Signal\n        taskRequires    string  // task.Requires value\n        wantAwaiting    string\n        wantClosed      bool\n    }{\n        {\"complete_no_requires\", SignalComplete, \"\", \"\", true},\n        {\"complete_with_approval\", SignalComplete, \"approval\", \"approval\", false},\n        {\"complete_with_review\", SignalComplete, \"review\", \"review\", false},\n        {\"eject\", SignalEject, \"\", \"work\", false},\n        {\"approval_needed\", SignalApprovalNeeded, \"\", \"approval\", false},\n        {\"input_needed\", SignalInputNeeded, \"\", \"input\", false},\n        {\"review_requested\", SignalReviewRequested, \"\", \"review\", false},\n        {\"content_review\", SignalContentReview, \"\", \"content\", false},\n        {\"escalate\", SignalEscalate, \"\", \"escalation\", false},\n        {\"checkpoint\", SignalCheckpoint, \"\", \"checkpoint\", false},\n    }\n    \n    for _, tt := range tests {\n        t.Run(tt.name, func(t *testing.T) {\n            mock := newMockTicksClient()\n            engine := NewEngine(mock, nil)\n            \n            task := \u0026ticks.Task{ID: \"test\", Requires: tt.taskRequires}\n            err := engine.handleSignal(task, tt.signal, \"test context\")\n            \n            assert.NoError(t, err)\n            assert.Equal(t, tt.wantAwaiting, mock.awaitingState[\"test\"])\n            assert.Equal(t, tt.wantClosed, mock.closedTasks[\"test\"])\n        })\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] All signal → awaiting mappings verified\n- [ ] requires field honored on COMPLETE\n- [ ] Context passed to SetAwaiting\n- [ ] Correct tasks closed vs awaiting",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "9bd",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:15:24.992311Z",
-  "updated_at": "2026-01-14T16:15:24.992311Z"
+  "updated_at": "2026-01-14T18:06:51.852197Z",
+  "closed_at": "2026-01-14T18:06:51.852197Z",
+  "closed_reason": "Added comprehensive handleSignal unit tests: (1) Introduced TicksClient interface to enable mock injection; (2) TestEngine_HandleSignal - tests all 13 signal cases including COMPLETE with/without requires gates; (3) TestEngine_HandleSignal_ContextPassedToSetAwaiting - verifies context passed correctly; (4) TestEngine_HandleSignal_CompleteWithRequiresUsesCorrectNote - verifies note format for gates; (5) TestEngine_HandleSignal_AllSignalToAwaitingMappings - validates all signalToAwaiting map entries; (6) TestEngine_HandleSignal_UnknownSignalIsNoOp - verifies graceful handling. Updated mockTicksClient with closedTasks map. Files: internal/engine/engine.go, internal/engine/engine_test.go"
 }

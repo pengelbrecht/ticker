@@ -60,7 +60,7 @@ type mockTicksClient struct {
 	tasks       []*ticks.Task
 	taskIndex   int
 	notes       []string
-	closedTasks []string
+	closedTasks map[string]bool // taskID -> closed (for easy lookup in tests)
 	addedNotes  []string
 
 	// Awaiting/verdict workflow support
@@ -90,6 +90,7 @@ type setVerdictCall struct {
 // newMockTicksClient creates a new mock ticks client with initialized maps.
 func newMockTicksClient() *mockTicksClient {
 	return &mockTicksClient{
+		closedTasks:     make(map[string]bool),
 		awaitingState:   make(map[string]string),
 		verdictState:    make(map[string]string),
 		structuredNotes: make(map[string][]ticks.Note),
@@ -147,7 +148,10 @@ func (m *mockTicksClient) SimulateVerdictProcessing(taskID string) {
 	}
 
 	if shouldClose {
-		m.closedTasks = append(m.closedTasks, taskID)
+		if m.closedTasks == nil {
+			m.closedTasks = make(map[string]bool)
+		}
+		m.closedTasks[taskID] = true
 	}
 }
 
@@ -171,13 +175,16 @@ func (m *mockTicksClient) GetNotes(epicID string) ([]string, error) {
 	return m.notes, nil
 }
 
-func (m *mockTicksClient) AddNote(issueID, message string) error {
+func (m *mockTicksClient) AddNote(issueID, message string, extraArgs ...string) error {
 	m.addedNotes = append(m.addedNotes, message)
 	return nil
 }
 
 func (m *mockTicksClient) CloseTask(taskID, reason string) error {
-	m.closedTasks = append(m.closedTasks, taskID)
+	if m.closedTasks == nil {
+		m.closedTasks = make(map[string]bool)
+	}
+	m.closedTasks[taskID] = true
 	return nil
 }
 
@@ -273,6 +280,31 @@ func (m *mockTicksClient) AddHumanNote(taskID, message string) error {
 func (m *mockTicksClient) HasOpenTasks(epicID string) (bool, error) {
 	// Return true if there are tasks remaining
 	return m.taskIndex < len(m.tasks), nil
+}
+
+func (m *mockTicksClient) GetTask(taskID string) (*ticks.Task, error) {
+	for _, t := range m.tasks {
+		if t.ID == taskID {
+			return t, nil
+		}
+	}
+	return nil, errors.New("task not found")
+}
+
+func (m *mockTicksClient) CloseEpic(epicID, reason string) error {
+	return nil
+}
+
+func (m *mockTicksClient) ReopenTask(taskID string) error {
+	// Remove from closedTasks if present
+	if m.closedTasks != nil {
+		delete(m.closedTasks, taskID)
+	}
+	return nil
+}
+
+func (m *mockTicksClient) SetRunRecord(taskID string, record *agent.RunRecord) error {
+	return nil
 }
 
 func TestNewEngine(t *testing.T) {
@@ -1431,13 +1463,7 @@ func TestMockTicksClient_SimulateVerdictProcessing(t *testing.T) {
 			mock.SimulateVerdictProcessing("task-1")
 
 			// Check if task was closed
-			wasClosed := false
-			for _, id := range mock.closedTasks {
-				if id == "task-1" {
-					wasClosed = true
-					break
-				}
-			}
+			wasClosed := mock.closedTasks["task-1"]
 
 			if wasClosed != tt.wantClosed {
 				t.Errorf("task closed = %v, want %v", wasClosed, tt.wantClosed)
@@ -1498,5 +1524,316 @@ func TestMockTicksClient_StateTracking(t *testing.T) {
 	}
 	if mock.setVerdictCalls[1].Feedback != "needs changes" {
 		t.Error("second setVerdictCall feedback should be 'needs changes'")
+	}
+}
+
+// TestEngine_HandleSignal tests the handleSignal function with all signal types
+// and verifies correct awaiting state and task closure behavior.
+func TestEngine_HandleSignal(t *testing.T) {
+	tests := []struct {
+		name         string
+		signal       Signal
+		taskRequires string // task.Requires value (empty means nil)
+		context      string
+		wantAwaiting string
+		wantClosed   bool
+	}{
+		// COMPLETE signal without requires - should close task
+		{
+			name:         "complete_no_requires",
+			signal:       SignalComplete,
+			taskRequires: "",
+			context:      "task done",
+			wantAwaiting: "",
+			wantClosed:   true,
+		},
+		// COMPLETE signal with approval gate - should set awaiting, not close
+		{
+			name:         "complete_with_approval",
+			signal:       SignalComplete,
+			taskRequires: "approval",
+			context:      "task done",
+			wantAwaiting: "approval",
+			wantClosed:   false,
+		},
+		// COMPLETE signal with review gate - should set awaiting, not close
+		{
+			name:         "complete_with_review",
+			signal:       SignalComplete,
+			taskRequires: "review",
+			context:      "task done",
+			wantAwaiting: "review",
+			wantClosed:   false,
+		},
+		// COMPLETE signal with content gate
+		{
+			name:         "complete_with_content",
+			signal:       SignalComplete,
+			taskRequires: "content",
+			context:      "task done",
+			wantAwaiting: "content",
+			wantClosed:   false,
+		},
+		// EJECT signal - maps to "work" awaiting
+		{
+			name:         "eject",
+			signal:       SignalEject,
+			taskRequires: "",
+			context:      "needs npm install",
+			wantAwaiting: "work",
+			wantClosed:   false,
+		},
+		// BLOCKED signal - maps to "input" awaiting (legacy)
+		{
+			name:         "blocked",
+			signal:       SignalBlocked,
+			taskRequires: "",
+			context:      "missing credentials",
+			wantAwaiting: "input",
+			wantClosed:   false,
+		},
+		// APPROVAL_NEEDED signal
+		{
+			name:         "approval_needed",
+			signal:       SignalApprovalNeeded,
+			taskRequires: "",
+			context:      "implementation complete, needs sign-off",
+			wantAwaiting: "approval",
+			wantClosed:   false,
+		},
+		// INPUT_NEEDED signal
+		{
+			name:         "input_needed",
+			signal:       SignalInputNeeded,
+			taskRequires: "",
+			context:      "which database should I use?",
+			wantAwaiting: "input",
+			wantClosed:   false,
+		},
+		// REVIEW_REQUESTED signal
+		{
+			name:         "review_requested",
+			signal:       SignalReviewRequested,
+			taskRequires: "",
+			context:      "https://github.com/org/repo/pull/123",
+			wantAwaiting: "review",
+			wantClosed:   false,
+		},
+		// CONTENT_REVIEW signal
+		{
+			name:         "content_review",
+			signal:       SignalContentReview,
+			taskRequires: "",
+			context:      "please review the error messages",
+			wantAwaiting: "content",
+			wantClosed:   false,
+		},
+		// ESCALATE signal
+		{
+			name:         "escalate",
+			signal:       SignalEscalate,
+			taskRequires: "",
+			context:      "found security vulnerability",
+			wantAwaiting: "escalation",
+			wantClosed:   false,
+		},
+		// CHECKPOINT signal
+		{
+			name:         "checkpoint",
+			signal:       SignalCheckpoint,
+			taskRequires: "",
+			context:      "phase 1 complete",
+			wantAwaiting: "checkpoint",
+			wantClosed:   false,
+		},
+		// SignalNone - no-op
+		{
+			name:         "signal_none",
+			signal:       SignalNone,
+			taskRequires: "",
+			context:      "",
+			wantAwaiting: "",
+			wantClosed:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockTicksClient()
+
+			// Create engine with mock client
+			engine := NewEngine(nil, mock, nil, nil)
+
+			// Build task with optional Requires field
+			task := &ticks.Task{ID: "test-task"}
+			if tt.taskRequires != "" {
+				requires := tt.taskRequires
+				task.Requires = &requires
+			}
+
+			// Call handleSignal
+			err := engine.handleSignal(task, tt.signal, tt.context)
+
+			// Verify no error
+			if err != nil {
+				t.Fatalf("handleSignal returned error: %v", err)
+			}
+
+			// Verify awaiting state
+			gotAwaiting := mock.GetAwaiting("test-task")
+			if gotAwaiting != tt.wantAwaiting {
+				t.Errorf("awaiting = %q, want %q", gotAwaiting, tt.wantAwaiting)
+			}
+
+			// Verify task closed state
+			gotClosed := mock.closedTasks["test-task"]
+			if gotClosed != tt.wantClosed {
+				t.Errorf("closed = %v, want %v", gotClosed, tt.wantClosed)
+			}
+		})
+	}
+}
+
+// TestEngine_HandleSignal_ContextPassedToSetAwaiting verifies that the context
+// is correctly passed to SetAwaiting for handoff signals.
+func TestEngine_HandleSignal_ContextPassedToSetAwaiting(t *testing.T) {
+	tests := []struct {
+		name    string
+		signal  Signal
+		context string
+	}{
+		{"eject_with_context", SignalEject, "needs manual npm install"},
+		{"approval_needed_with_context", SignalApprovalNeeded, "API design needs human review"},
+		{"input_needed_with_context", SignalInputNeeded, "Which database: postgres or mysql?"},
+		{"review_requested_with_url", SignalReviewRequested, "https://github.com/org/repo/pull/456"},
+		{"content_review_with_context", SignalContentReview, "Please check error message wording"},
+		{"escalate_with_context", SignalEscalate, "Found potential SQL injection"},
+		{"checkpoint_with_context", SignalCheckpoint, "Phase 1: database schema complete"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newMockTicksClient()
+			engine := NewEngine(nil, mock, nil, nil)
+			task := &ticks.Task{ID: "ctx-task"}
+
+			err := engine.handleSignal(task, tt.signal, tt.context)
+			if err != nil {
+				t.Fatalf("handleSignal returned error: %v", err)
+			}
+
+			// Verify the context was passed in the SetAwaiting call
+			if len(mock.setAwaitingCalls) != 1 {
+				t.Fatalf("expected 1 SetAwaiting call, got %d", len(mock.setAwaitingCalls))
+			}
+
+			call := mock.setAwaitingCalls[0]
+			if call.TaskID != "ctx-task" {
+				t.Errorf("SetAwaiting taskID = %q, want %q", call.TaskID, "ctx-task")
+			}
+			if call.Note != tt.context {
+				t.Errorf("SetAwaiting note = %q, want %q", call.Note, tt.context)
+			}
+		})
+	}
+}
+
+// TestEngine_HandleSignal_CompleteWithRequiresUsesCorrectNote verifies that
+// when COMPLETE signal is emitted with a requires gate, the note includes
+// the requires type.
+func TestEngine_HandleSignal_CompleteWithRequiresUsesCorrectNote(t *testing.T) {
+	tests := []struct {
+		requires string
+		wantNote string
+	}{
+		{"approval", "Work complete, requires approval"},
+		{"review", "Work complete, requires review"},
+		{"content", "Work complete, requires content"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.requires, func(t *testing.T) {
+			mock := newMockTicksClient()
+			engine := NewEngine(nil, mock, nil, nil)
+
+			requires := tt.requires
+			task := &ticks.Task{ID: "gate-task", Requires: &requires}
+
+			err := engine.handleSignal(task, SignalComplete, "ignored context")
+			if err != nil {
+				t.Fatalf("handleSignal returned error: %v", err)
+			}
+
+			// Verify SetAwaiting was called with correct note
+			if len(mock.setAwaitingCalls) != 1 {
+				t.Fatalf("expected 1 SetAwaiting call, got %d", len(mock.setAwaitingCalls))
+			}
+
+			call := mock.setAwaitingCalls[0]
+			if call.Note != tt.wantNote {
+				t.Errorf("SetAwaiting note = %q, want %q", call.Note, tt.wantNote)
+			}
+			if call.Awaiting != tt.requires {
+				t.Errorf("SetAwaiting awaiting = %q, want %q", call.Awaiting, tt.requires)
+			}
+		})
+	}
+}
+
+// TestEngine_HandleSignal_AllSignalToAwaitingMappings verifies that all entries
+// in signalToAwaiting map are correctly handled by handleSignal.
+func TestEngine_HandleSignal_AllSignalToAwaitingMappings(t *testing.T) {
+	for signal, expectedAwaiting := range signalToAwaiting {
+		t.Run(signal.String(), func(t *testing.T) {
+			mock := newMockTicksClient()
+			engine := NewEngine(nil, mock, nil, nil)
+			task := &ticks.Task{ID: "map-test"}
+
+			err := engine.handleSignal(task, signal, "test context")
+			if err != nil {
+				t.Fatalf("handleSignal returned error: %v", err)
+			}
+
+			gotAwaiting := mock.GetAwaiting("map-test")
+			if gotAwaiting != expectedAwaiting {
+				t.Errorf("handleSignal(%v) set awaiting = %q, want %q", signal, gotAwaiting, expectedAwaiting)
+			}
+
+			// Should NOT close task for handoff signals
+			if mock.closedTasks["map-test"] {
+				t.Errorf("handleSignal(%v) should not close task", signal)
+			}
+		})
+	}
+}
+
+// TestEngine_HandleSignal_UnknownSignalIsNoOp verifies that unknown signals
+// are gracefully ignored (return nil, no state changes).
+func TestEngine_HandleSignal_UnknownSignalIsNoOp(t *testing.T) {
+	mock := newMockTicksClient()
+	engine := NewEngine(nil, mock, nil, nil)
+	task := &ticks.Task{ID: "unknown-test"}
+
+	// Signal(999) is an unknown signal value
+	unknownSignal := Signal(999)
+
+	err := engine.handleSignal(task, unknownSignal, "should be ignored")
+	if err != nil {
+		t.Fatalf("handleSignal should not return error for unknown signal: %v", err)
+	}
+
+	// No awaiting state should be set
+	if mock.GetAwaiting("unknown-test") != "" {
+		t.Error("unknown signal should not set awaiting state")
+	}
+
+	// No SetAwaiting calls
+	if len(mock.setAwaitingCalls) != 0 {
+		t.Errorf("expected 0 SetAwaiting calls, got %d", len(mock.setAwaitingCalls))
+	}
+
+	// Task should not be closed
+	if mock.closedTasks["unknown-test"] {
+		t.Error("unknown signal should not close task")
 	}
 }
