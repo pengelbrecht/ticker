@@ -1,0 +1,194 @@
+{
+  "closed_at": "2026-01-14T20:50:42.522866Z",
+  "closed_reason": "Added --debounce flag to CLI and engine. Debounce waits after task becomes available before picking it up, then re-fetches to capture any human edits made during the wait. Default is 0 (disabled) for backwards compatibility. Added 6 comprehensive tests covering all edge cases.",
+  "created_at": "2026-01-14T16:16:51.007854Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Add optional debounce to prevent race conditions when human is still editing:\n\n```bash\nticker run --auto --debounce 2s  # Wait 2s before picking up newly available tasks\n```\n\nImplementation:\n```go\nfunc (e *Engine) getNextTaskWithDebounce() (*ticks.Task, error) {\n    task, err := e.ticks.NextTask(e.epicID)\n    if err != nil || task == nil {\n        return task, err\n    }\n    \n    if e.config.DebounceInterval \u003e 0 {\n        // Task just became available - wait for potential follow-up edits\n        time.Sleep(e.config.DebounceInterval)\n        \n        // Re-fetch to get any updates (human might have added notes)\n        return e.ticks.GetTask(task.ID)\n    }\n    \n    return task, nil\n}\n```\n\nThis prevents race conditions like:\n1. Human runs: tk reject abc123\n2. Ticker picks up task (awaiting cleared)\n3. Human runs: tk note abc123 \"feedback\"\n4. Agent misses the feedback\n\nWith debounce, ticker waits for human to finish editing.\n\nAcceptance criteria:\n- [ ] --debounce flag configures wait time\n- [ ] Re-fetches task after debounce\n- [ ] Default is no debounce (backwards compat)\n- [ ] Short debounce (1-2s) recommended for safety",
+  "id": "32y",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "8x8",
+  "priority": 2,
+  "run": {
+    "session_id": "995dccab-0b34-4e31-a9ee-d6c50412175e",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T21:46:31.148848+01:00",
+    "ended_at": "2026-01-14T21:51:12.507724+01:00",
+    "output": "I'll start by reviewing the current codebase to understand how the engine works and where to add the debounce functionality.\n\nI now understand the structure. The `RunConfig` struct in `engine.go` contains the watch mode settings. I need to:\n\n1. Add a `DebounceInterval` field to `RunConfig`\n2. Add the `--debounce` flag to the CLI\n3. Implement the debounce logic in the engine's task pickup\n\nLet me also check if there's a `GetTask` method on the ticks client that I'll need for re-fetching the task after debounce.\n\nLet me check the TicksClient interface to confirm we have `GetTask` for re-fetching.\n\n`GetTask` exists on the client, and it's already in the `TicksClient` interface (as shown in `engine.go:24`). Now let me implement the changes.\n\nFirst, I'll add the `DebounceInterval` field to `RunConfig`:\n\nNow let me add the debounce logic in the main loop where we get the next task. I need to find where `task, err := e.ticks.NextTask(config.EpicID)` is called in the main loop:\n\nNow I need to add the debounce logic right after getting the task and before stuck loop detection. I'll add it after line 420 (after error check) and before line 422 (the nil check):\n\nNow I need to implement the `getNextTaskWithDebounce` method. I'll add it near the end of the file, before the `handleWatchIdle` function:\n\nNow let me add the `--debounce` flag to the CLI in `main.go`:\n\nNow I need to read the flag in `runRun` and pass it to the appropriate engine configurations. Let me find where the other flags are read:\n\nI need to add the debounce flag reading:\n\nNow I need to pass the debounce interval to the various functions that run the engine. Let me find the function signatures:\n\nNow let me find where these functions are called and update the signatures:\n\nI need to update the function calls and signatures to include debounceInterval. Let me update them all:\n\nNow let me update the `runWithTUI` function signature:\n\nNow I need to update the engine config in `runWithTUI` to include `DebounceInterval`. Let me find that:\n\nNow let me update the `runHeadless` function signature:\n\nNow let me find and update the engine config in `runHeadless`:\n\nNow let me add tests for the debounce functionality. Let me first check what existing engine tests look like:\n\nThis is a comprehensive test file. I'll add tests for the debounce functionality. Let me add them at the end of the file:\n\nNow let me run the tests to make sure everything works:\n\nLet me see the rest of the test output:\n\nAll tests pass. Let me also run all tests to make sure nothing else broke:\n\nAll tests pass. Let me also verify the build works:\n\nNow let me close the task and create a commit:\n\nNow let me add a note to the epic for future iterations:\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3753
+      },
+      {
+        "name": "Read",
+        "duration_ms": 947
+      },
+      {
+        "name": "Read",
+        "duration_ms": 508
+      },
+      {
+        "name": "Read",
+        "duration_ms": 615
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3692
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1401
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4275
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1009
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2929
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1024
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7468
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3982
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4862
+      },
+      {
+        "name": "Read",
+        "duration_ms": 938
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3113
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1806
+      },
+      {
+        "name": "Read",
+        "duration_ms": 992
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4301
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2550
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1058
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4377
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2996
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1098
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3846
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2727
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 710
+      },
+      {
+        "name": "Read",
+        "duration_ms": 590
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1492
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 43885
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3829
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2041
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1545
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1310
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1630
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3644
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3303
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1144
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 6660
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2767
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3574
+      }
+    ],
+    "metrics": {
+      "input_tokens": 10,
+      "output_tokens": 11646,
+      "cache_read_tokens": 3452146,
+      "cache_creation_tokens": 187593,
+      "cost_usd": 3.2138802500000008,
+      "duration_ms": 280793
+    },
+    "success": true,
+    "num_turns": 41
+  },
+  "status": "closed",
+  "title": "Add debounce on task pickup for race condition prevention",
+  "type": "task",
+  "updated_at": "2026-01-14T20:50:42.522866Z"
+}

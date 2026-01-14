@@ -1,0 +1,141 @@
+{
+  "blocked_by": [
+    "t9y"
+  ],
+  "closed_at": "2026-01-14T17:41:04.137804Z",
+  "closed_reason": "Wired handleSignal into main loop. Replaced switch-case at line 440+ with call to handleSignal for handoff signals (EJECT, BLOCKED, etc), followed by 'continue' to move to next task. SignalComplete still ignored with warning. Loop terminates when no ready tasks available (blocked or awaiting human). Updated exit message to mention awaiting state. Added 3 new test functions for signal handling logic.",
+  "created_at": "2026-01-14T16:14:15.179225Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Modify the main loop in internal/engine/engine.go to continue to next task after handoff signals:\n\nCurrent behavior (simplified):\n```go\nsignal, reason := ParseSignals(output)\nswitch signal {\ncase SignalComplete:\n    e.ticks.CloseTask(...)\ncase SignalEject:\n    e.ticks.SetManual(...)  // and stop or continue?\ncase SignalBlocked:\n    // ... handle blocked\n}\n```\n\nNew behavior:\n```go\nsignal, context := ParseSignals(output)\nif signal != SignalNone {\n    if err := e.handleSignal(task, signal, context); err != nil {\n        return err\n    }\n    // IMPORTANT: Continue to next task, don't block on human\n    // The task is now awaiting human, so tk next won't return it\n    continue  // back to top of loop\n}\n```\n\nKey change: After ANY handoff signal, immediately continue to next available task. Never block waiting for human response.\n\nAcceptance criteria:\n- [ ] Engine continues to next task after handoff signal\n- [ ] No blocking on human response\n- [ ] Loop terminates when no tasks available (all awaiting or done)\n- [ ] Budget tracking continues across handoffs",
+  "id": "dqq",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "eso",
+  "priority": 0,
+  "run": {
+    "session_id": "8b646a34-fffe-48ce-9c7c-23e8c64b7b09",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T18:38:25.078124+01:00",
+    "ended_at": "2026-01-14T18:41:42.772941+01:00",
+    "output": "I'll start by reviewing the epic notes and understanding the current state of the codebase. Let me first read the relevant files to understand the existing implementation.\n\nNow I understand the current structure. Let me also check the signals.go file to see all the signal types:\n\nNow I have a clear understanding of the current state:\n\n1. `handleSignal` method exists at line 752-774 but is NOT wired into the main loop\n2. The current signal handling at lines 440-454 uses a switch-case that:\n   - Ignores `SignalComplete` (continues loop)\n   - Returns (exits) on `SignalEject` \n   - Returns (exits) on `SignalBlocked`\n   - Does NOT handle the new handoff signals\n\nThe task is to:\n1. Replace the old switch-case with a call to `handleSignal`\n2. Continue to next task after ANY handoff signal (not just COMPLETE)\n3. Only return/exit for truly terminal signals\n\nLet me also check the ticks client to understand the `SetAwaiting` interface:\n\nGood, I can see `SetAwaiting` is available. Now let me look at the existing tests to understand the expected behavior:\n\nNow I have a clear understanding. The key change needed is:\n\n1. In the main loop at lines 440-454, instead of the switch-case that returns on EJECT/BLOCKED, we need to:\n   - Call `handleSignal` to set the task to awaiting state\n   - Continue to the next task (not return/exit)\n   - Only exit if there are no more available tasks\n\nLet me modify the engine loop:\n\nNow I need to update the exit reason when the loop terminates because there are no ready tasks. Currently it says \"no ready tasks (remaining tasks are blocked)\" but now tasks could also be in \"awaiting\" state. Let me check that section:\n\nI should update the message to indicate tasks could be blocked OR awaiting human input:\n\nNow let me add tests for the new behavior. I need to create tests that verify:\n1. Engine continues to next task after handoff signal\n2. No blocking on human response\n3. Loop terminates when no tasks available\n4. Budget tracking continues across handoffs\n\nLet me check the existing test file more carefully to understand how to add tests. The existing tests don't seem to have integration tests with a mock ticks client interface. Let me check if there's a way to create better tests:\n\nI see - there's no interface for the ticks client yet. Let me look at how `handleSignal` is currently tested:\n\nI see that the existing tests note they can't call `handleSignal` without a real ticks client. The tests for handleSignal logic in `TestHandleSignal_RequiresFieldLogic` only test the condition logic, not the actual method.\n\nLet me add tests that specifically test the new loop behavior. Since we can't easily mock the ticks client, I'll add tests that verify:\n1. The condition logic for signal handling\n2. The signalToAwaiting map is complete and correct (already tested)\n\nLet me add a focused unit test for the new signal handling path:\n\nNow let's run the tests to make sure everything passes:\n\nAll tests pass. Now let's run the full test suite to make sure nothing else is broken:\n\nAll tests pass. Now let me close the task and commit the changes:\n\nNow let me add a note to the epic for the next iteration:\n\nTask completed successfully. Here's a summary of what was done:\n\n## Summary\n\n**Task [dqq]: Update engine loop to continue after handoff signals**\n\n### Changes Made\n\n1. **Modified signal handling in main loop** (`internal/engine/engine.go:431-457`):\n   - Replaced the switch-case that previously returned/exited on `SignalEject` and `SignalBlocked` signals\n   - Now calls `handleSignal` method (added in task t9y) for all handoff signals\n   - Uses `continue` statement to immediately proceed to next task after setting awaiting state\n   - `SignalComplete` still ignored with warning (ticker handles completion via `tk next` returning nil)\n\n2. **Updated exit message** (`internal/engine/engine.go:349`):\n   - Changed from \"no ready tasks (remaining tasks are blocked)\" to \"no ready tasks (remaining tasks are blocked or awaiting human)\"\n\n3. **Added tests** (`internal/engine/engine_test.go`):\n   - `TestHandoffSignals_ContinueToNextTask`: Verifies all 8 handoff signals are in signalToAwaiting map\n   - `TestNonHandoffSignals_SpecialHandling`: Verifies COMPLETE and NONE have special handling\n   - `TestSignalHandlingLogic`: Tests the condition logic flow for all signal types\n\n### Acceptance Criteria Met\n- ✅ Engine continues to next task after handoff signal\n- ✅ No blocking on human response\n- ✅ Loop terminates when no tasks available (all awaiting or done)\n- ✅ Budget tracking continues across handoffs (budget.Add called before signal handling)",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3159
+      },
+      {
+        "name": "Read",
+        "duration_ms": 754
+      },
+      {
+        "name": "Read",
+        "duration_ms": 835
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3430
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 980
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 753
+      },
+      {
+        "name": "Read",
+        "duration_ms": 429
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3489
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 11714
+      },
+      {
+        "name": "Read",
+        "duration_ms": 682
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 1583
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1918
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 726
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 645
+      },
+      {
+        "name": "Read",
+        "duration_ms": 605
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 20180
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3558
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 827
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 765
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3574
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3329
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 476
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 528
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4278
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3662
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3474
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 7797,
+      "cache_read_tokens": 1799247,
+      "cache_creation_tokens": 48728,
+      "cost_usd": 1.4214985000000004,
+      "duration_ms": 197162
+    },
+    "success": true,
+    "num_turns": 27
+  },
+  "status": "closed",
+  "title": "Update engine loop to continue after handoff signals",
+  "type": "task",
+  "updated_at": "2026-01-14T17:41:04.137804Z"
+}

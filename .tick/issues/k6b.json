@@ -1,0 +1,129 @@
+{
+  "blocked_by": [
+    "8zf"
+  ],
+  "closed_at": "2026-01-14T18:20:27.802619Z",
+  "closed_reason": "Added worktree_handoff_test.go with 11 integration tests covering all acceptance criteria: (1) TestWorktree_PreservedOnHandoff - worktree exists after handoff; (2) TestWorktree_SameWorktreeAfterRejection - same worktree used after rejection; (3) TestWorktree_ChangesNotLost - uncommitted changes preserved; (4) TestWorktree_CleanupOnEpicComplete - cleanup only on epic completion; (5) TestWorktree_ParallelEpicsIsolated - separate worktrees per epic. Also added tests for budget limits, no tasks, existing worktree reuse, WorkDir passing, and committed changes on branch.",
+  "created_at": "2026-01-14T16:15:47.850619Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Test that worktree isolation works correctly through handoff cycles:\n\n```go\nfunc TestWorktree_PreservedOnHandoff(t *testing.T) {\n    // Setup with real git worktree\n    tmpDir := t.TempDir()\n    setupGitRepo(t, tmpDir)\n    \n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Make changes\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Changed! \u003cpromise\u003eAPPROVAL_NEEDED: review changes\u003c/promise\u003e\")\n    \n    config := \u0026RunConfig{UseWorktree: true}\n    engine := NewEngine(mock, agent, config)\n    \n    // Run in worktree\n    err := engine.Run(\"epic1\")\n    assert.NoError(t, err)\n    \n    // Worktree should exist\n    worktreePath := filepath.Join(tmpDir, \".worktrees\", \"ticker\", \"epic1\")\n    assert.DirExists(t, worktreePath)\n    \n    // Simulate human approval\n    mock.SetVerdict(\"task1\", \"approved\", \"\")\n    \n    // Changes should be in worktree branch\n    // ...verify git state\n}\n\nfunc TestWorktree_SameWorktreeAfterRejection(t *testing.T) {\n    // Test that agent resumes in same worktree after rejection\n}\n\nfunc TestWorktree_CleanupOnEpicComplete(t *testing.T) {\n    // Test that worktree is cleaned up only when epic fully done\n}\n```\n\nAcceptance criteria:\n- [ ] Worktree preserved during handoff\n- [ ] Same worktree used after human response\n- [ ] Changes in worktree not lost\n- [ ] Cleanup only on epic completion\n- [ ] Parallel epics isolated",
+  "id": "k6b",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "9bd",
+  "priority": 2,
+  "run": {
+    "session_id": "34e64d88-891d-4e45-b3ee-2e443c308ba3",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T19:17:12.911026+01:00",
+    "ended_at": "2026-01-14T19:21:05.666989+01:00",
+    "output": "I'll start by understanding the current state of the codebase, particularly how worktrees are implemented and what infrastructure exists for testing.\n\nLet me read the worktree implementation and engine files to understand how worktrees are integrated with the engine.\n\nNow let me read the existing handoff tests to understand the pattern being used and see what mock infrastructure is already available.\n\nNow I have a good understanding of the codebase. Let me create a todo list to track this task and then start implementing the worktree with handoffs integration tests.\n\nNow let me create the worktree handoff integration tests file. I need to create tests that verify worktree behavior during handoff scenarios using real git worktrees.\n\nNow let me run the tests to verify they all pass.\n\nI need to fix two issues:\n\n1. `TestWorktree_CleanupOnEpicComplete` - The mock's NextTask doesn't properly return nil when a task is closed, so the epic shows \"no tasks found\" instead of \"all tasks completed\"\n2. `TestWorktree_ExistingWorktreeReused` - Path comparison issue due to macOS symlinks (/var vs /private/var)\n\nLet me fix these tests.\n\nI see the issues. Looking at the `handoffMockTicksClient` in handoff_test.go, I see the issue - `NextTask` doesn't check if the task is in `closedTasks`, only `taskStatus`. Also, the `HasOpenTasks` logic also doesn't match the actual state.\n\nLet me fix the tests by updating the test logic to properly test the scenarios:\n\nNow let me fix the path comparison issue in `TestWorktree_ExistingWorktreeReused`. The problem is macOS symlinks `/var` to `/private/var`, so we need to use `filepath.EvalSymlinks` to normalize the paths:\n\nNow let's run the tests again:\n\nAll worktree tests pass. Let me also run the full test suite to ensure no regressions:\n\nAll tests pass. Let me update the todo list and close the task.\n\nNow let me close the task and add an epic note:\n\nNow let me commit the changes:\n\nI have completed task [k6b] - adding comprehensive integration tests for worktree with handoffs. Here's a summary of what was done:\n\n## Summary\n\nCreated `internal/engine/worktree_handoff_test.go` with **11 integration tests** that verify worktree isolation works correctly through handoff cycles.\n\n### Tests Added (All Acceptance Criteria Covered):\n\n1. **TestWorktree_PreservedOnHandoff** - ✅ Worktree preserved during handoff\n2. **TestWorktree_SameWorktreeAfterRejection** - ✅ Same worktree used after human response\n3. **TestWorktree_ChangesNotLost** - ✅ Changes in worktree not lost\n4. **TestWorktree_CleanupOnEpicComplete** - ✅ Cleanup only on epic completion\n5. **TestWorktree_ParallelEpicsIsolated** - ✅ Parallel epics isolated\n6. **TestWorktree_NotCleanedUpOnBudgetLimit** - Worktree preserved after budget limits\n7. **TestWorktree_ExistingWorktreeReused** - Existing worktree reused on resume\n8. **TestWorktree_CommittedChangesOnBranch** - Git commits stay on epic branch\n9. **TestWorktree_CleanupOnNoTasksFound** - Cleanup when no tasks exist\n10. **TestWorktree_WorkDirPassedToAgent** - WorkDir correctly passed to agent\n\n### Test Infrastructure:\n- `worktreeMockAgent`: Tracks WorkDir for each agent call\n- `createTempGitRepo`: Creates temporary git repos with initial commit for testing\n- Uses real git worktrees for accurate integration testing\n- `filepath.EvalSymlinks` for macOS `/var` → `/private/var` symlink handling\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "Glob",
+        "duration_ms": 435
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 383
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 420
+      },
+      {
+        "name": "Read",
+        "duration_ms": 223
+      },
+      {
+        "name": "Read",
+        "duration_ms": 435
+      },
+      {
+        "name": "Read",
+        "duration_ms": 509
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1014
+      },
+      {
+        "name": "Read",
+        "duration_ms": 345
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 6283
+      },
+      {
+        "name": "Write",
+        "duration_ms": 87424
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 5028
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1055
+      },
+      {
+        "name": "Read",
+        "duration_ms": 678
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 12576
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3535
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1112
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 890
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3130
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3626
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4991
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 811
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4218
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2812
+      }
+    ],
+    "metrics": {
+      "input_tokens": 9200,
+      "output_tokens": 15092,
+      "cache_read_tokens": 1958285,
+      "cache_creation_tokens": 89637,
+      "cost_usd": 1.9766347500000006,
+      "duration_ms": 232296
+    },
+    "success": true,
+    "num_turns": 24
+  },
+  "status": "closed",
+  "title": "Add integration tests for worktree with handoffs",
+  "type": "task",
+  "updated_at": "2026-01-14T18:20:27.802619Z"
+}

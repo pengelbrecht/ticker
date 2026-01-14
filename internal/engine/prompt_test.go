@@ -121,15 +121,29 @@ func TestPromptBuilder_Build_FullContext(t *testing.T) {
 	if !strings.Contains(prompt, "Always leave notes") {
 		t.Error("prompt missing always leave notes rule")
 	}
-	// Check exit signals (only EJECT and BLOCKED - no COMPLETE)
-	if !strings.Contains(prompt, "Exit signals") {
-		t.Error("prompt missing exit signals section")
+	// Check handoff signals section (all 8 signal types documented)
+	if !strings.Contains(prompt, "## Handoff Signals") {
+		t.Error("prompt missing handoff signals section")
 	}
-	if !strings.Contains(prompt, "<promise>EJECT:") {
-		t.Error("prompt missing EJECT signal example")
+	// Verify all 8 signals are documented
+	handoffSignals := []string{
+		"<promise>COMPLETE</promise>",
+		"<promise>APPROVAL_NEEDED:",
+		"<promise>INPUT_NEEDED:",
+		"<promise>REVIEW_REQUESTED:",
+		"<promise>CONTENT_REVIEW:",
+		"<promise>ESCALATE:",
+		"<promise>CHECKPOINT:",
+		"<promise>EJECT:",
 	}
-	if !strings.Contains(prompt, "<promise>BLOCKED:") {
-		t.Error("prompt missing BLOCKED signal example")
+	for _, sig := range handoffSignals {
+		if !strings.Contains(prompt, sig) {
+			t.Errorf("prompt missing handoff signal: %s", sig)
+		}
+	}
+	// Check human feedback documentation
+	if !strings.Contains(prompt, "## Reading Human Feedback") {
+		t.Error("prompt missing reading human feedback section")
 	}
 }
 
@@ -260,6 +274,8 @@ func TestPromptBuilder_Build_ContainsAllRequiredSections(t *testing.T) {
 		"## Current Task",
 		"Review Epic Notes First",
 		"## Instructions",
+		"## Handoff Signals",
+		"## Reading Human Feedback",
 		"## Rules",
 	}
 
@@ -290,5 +306,98 @@ func TestPromptBuilder_Build_TaskIDInCloseCommand(t *testing.T) {
 	// The close command should reference the task ID
 	if !strings.Contains(prompt, "tk close abc123") {
 		t.Error("prompt should contain tk close command with task ID")
+	}
+}
+
+func TestPromptBuilder_Build_WithHumanFeedback(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 2,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Fix login bug",
+			Description: "The login form has a bug.",
+		},
+		HumanFeedback: []ticks.Note{
+			{Content: "The fix didn't work, login still fails for users with special characters in password", Author: "human"},
+			{Content: "Also please add input validation", Author: "human"},
+		},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Check for human feedback section
+	if !strings.Contains(prompt, "## Human Feedback") {
+		t.Error("prompt missing human feedback section")
+	}
+	if !strings.Contains(prompt, "This task was previously handed to a human") {
+		t.Error("prompt missing human feedback intro text")
+	}
+	if !strings.Contains(prompt, "The fix didn't work, login still fails for users with special characters in password") {
+		t.Error("prompt missing first human feedback note")
+	}
+	if !strings.Contains(prompt, "Also please add input validation") {
+		t.Error("prompt missing second human feedback note")
+	}
+	if !strings.Contains(prompt, "Address this feedback before proceeding") {
+		t.Error("prompt missing feedback instruction")
+	}
+}
+
+func TestPromptBuilder_Build_NoHumanFeedback(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Simple task",
+			Description: "Do something.",
+		},
+		HumanFeedback: nil,
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should not have human feedback section when none provided
+	if strings.Contains(prompt, "## Human Feedback") {
+		t.Error("prompt should not have human feedback section when none provided")
+	}
+	if strings.Contains(prompt, "This task was previously handed to a human") {
+		t.Error("prompt should not have human feedback intro when none provided")
+	}
+}
+
+func TestPromptBuilder_Build_EmptyHumanFeedback(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Simple task",
+			Description: "Do something.",
+		},
+		HumanFeedback: []ticks.Note{},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should not have human feedback section when slice is empty
+	if strings.Contains(prompt, "## Human Feedback") {
+		t.Error("prompt should not have human feedback section when slice is empty")
 	}
 }

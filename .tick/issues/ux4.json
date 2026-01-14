@@ -1,0 +1,94 @@
+{
+  "closed_at": "2026-01-14T17:24:56.060074Z",
+  "closed_reason": "Added 6 new signal types (SignalApprovalNeeded, SignalInputNeeded, SignalReviewRequested, SignalContentReview, SignalEscalate, SignalCheckpoint) to internal/engine/signals.go. Updated String() method to return correct names for all signals. Kept SignalBlocked for backwards compatibility. Added test cases for all new signals in signals_test.go.",
+  "created_at": "2026-01-14T16:13:45.649069Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Update internal/engine/signals.go to add new signal types:\n\n```go\ntype Signal int\n\nconst (\n    SignalNone Signal = iota\n    SignalComplete\n    SignalEject\n    SignalBlocked           // Legacy, maps to input\n    SignalApprovalNeeded    // NEW\n    SignalInputNeeded       // NEW  \n    SignalReviewRequested   // NEW\n    SignalContentReview     // NEW\n    SignalEscalate          // NEW\n    SignalCheckpoint        // NEW\n)\n\nfunc (s Signal) String() string {\n    switch s {\n    case SignalComplete:\n        return \"COMPLETE\"\n    case SignalEject:\n        return \"EJECT\"\n    case SignalBlocked:\n        return \"BLOCKED\"\n    case SignalApprovalNeeded:\n        return \"APPROVAL_NEEDED\"\n    case SignalInputNeeded:\n        return \"INPUT_NEEDED\"\n    case SignalReviewRequested:\n        return \"REVIEW_REQUESTED\"\n    case SignalContentReview:\n        return \"CONTENT_REVIEW\"\n    case SignalEscalate:\n        return \"ESCALATE\"\n    case SignalCheckpoint:\n        return \"CHECKPOINT\"\n    default:\n        return \"NONE\"\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] All 8 signal types defined as constants\n- [ ] String() method returns correct signal names\n- [ ] SignalBlocked kept for backwards compatibility",
+  "id": "ux4",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "eso",
+  "priority": 0,
+  "run": {
+    "session_id": "63b0ef86-0f15-4d68-9377-0fc3aa37e121",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T18:24:02.706574+01:00",
+    "ended_at": "2026-01-14T18:25:25.050908+01:00",
+    "output": "I'll start by reading the current signals.go file to understand the existing implementation.\n\nNow I'll update the signal types to add all 8 handoff signal types as specified in the task.\n\nNow I'll update the String() method to return correct signal names for all the new types.\n\nLet me verify the changes look correct by reading the file.\n\nNow let me check if there are existing tests for signals that I need to run.\n\nI need to add test cases for the new signal types in the `TestSignal_String` test. Let me update the test file.\n\nNow let me run the tests to make sure everything passes.\n\nAll tests pass. Let me also run all engine tests to make sure I haven't broken anything.\n\nAll tests pass. Now let me close the task and commit the changes.\n\nNow let me add a note to the epic for future iterations.\n\nTask complete. I've:\n\n1. **Extended Signal type** in `internal/engine/signals.go` with all 8 signal types:\n   - SignalNone, SignalComplete, SignalEject, SignalBlocked (existing)\n   - SignalApprovalNeeded, SignalInputNeeded, SignalReviewRequested, SignalContentReview, SignalEscalate, SignalCheckpoint (new)\n\n2. **Updated String() method** to return correct names for all signals\n\n3. **Kept SignalBlocked** for backwards compatibility with a comment noting it maps to InputNeeded\n\n4. **Added test cases** for all new signals in `signals_test.go`\n\n5. **All tests pass**\n\n6. **Committed** with message: `feat(engine): Add handoff signal types for agent-human workflow [ux4]`\n\n7. **Added epic note** mentioning that ParseSignals() will need to be updated in a future task to detect the new signal types.",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 615
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4325
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2837
+      },
+      {
+        "name": "Read",
+        "duration_ms": 331
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 350
+      },
+      {
+        "name": "Read",
+        "duration_ms": 700
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2636
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 827
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 620
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2791
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 465
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 530
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 559
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2123
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2451
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 2898,
+      "cache_read_tokens": 762853,
+      "cache_creation_tokens": 19711,
+      "cost_usd": 0.5936832499999999,
+      "duration_ms": 81933
+    },
+    "success": true,
+    "num_turns": 16
+  },
+  "status": "closed",
+  "title": "Extend Signal type to support all handoff signals",
+  "type": "task",
+  "updated_at": "2026-01-14T17:24:56.060074Z"
+}

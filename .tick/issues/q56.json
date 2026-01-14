@@ -1,0 +1,121 @@
+{
+  "blocked_by": [
+    "ztr"
+  ],
+  "closed_at": "2026-01-14T16:55:41.275475Z",
+  "closed_reason": "Added CompleteTask method to Client that respects requires field. When requires is set (approval/review/content), routes to human via SetAwaiting instead of closing. Tasks without requires close directly. The requires field persists through rejection cycles (already handled by ProcessVerdict not clearing requires). Added 5 tests covering: requires routing, no requires closing, rejection cycle persistence, empty string handling, and various requires types.",
+  "created_at": "2026-01-14T16:13:19.93368Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "When a task has requires field set, completion should route to human instead of closing:\n\nIn verdict/completion processing:\n```go\nfunc (c *Client) CompleteTask(taskID string, summary string) error {\n    task, err := c.GetTask(taskID)\n    if err != nil {\n        return err\n    }\n    \n    // Check for pre-declared approval gate\n    if task.Requires != \"\" {\n        // Route to human instead of closing\n        return c.SetAwaiting(taskID, task.Requires, \"Work complete, requires \"+task.Requires)\n    }\n    \n    // No gate - close directly\n    return c.CloseTask(taskID, summary)\n}\n```\n\nThe engine will use this method instead of directly closing tasks.\n\nAcceptance criteria:\n- [ ] Tasks with requires set don't close on COMPLETE\n- [ ] They transition to awaiting={requires value}\n- [ ] Tasks without requires close normally\n- [ ] requires field persists through rejection cycles",
+  "id": "q56",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "d8o",
+  "priority": 1,
+  "run": {
+    "session_id": "33fcc1f9-fd49-41fd-bd8f-df91260e01fe",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T17:53:42.010142+01:00",
+    "ended_at": "2026-01-14T17:56:07.736941+01:00",
+    "output": "I'll start by reviewing the current task and understanding the codebase structure. Let me first read the relevant files to understand the existing implementation.\n\nNow I understand the codebase. I need to implement a `CompleteTask` method on the Client that:\n1. Checks if the task has a `Requires` field set\n2. If yes, routes to human by calling `SetAwaiting` with the requires value\n3. If no, closes the task directly\n\nLet me also check the existing tests to understand the testing patterns.\n\nNow I have a good understanding of the codebase. Let me also check how the engine currently handles task completion to understand where `CompleteTask` would be called.\n\nNow I have a clear picture. The engine currently doesn't use `CloseTask` or `CompleteTask` directly - the agent is responsible for calling `tk close` to complete tasks. The task mentions that the engine will use `CompleteTask` instead of directly closing tasks.\n\nLet me create the `CompleteTask` method. Based on the task specification:\n\n1. `CompleteTask` gets the task\n2. If `task.Requires` is set, call `SetAwaiting` with the requires value\n3. Otherwise, call `CloseTask` normally\n\nNow let me add tests for the `CompleteTask` method. I'll mark the first todo as complete and start on tests.\n\nNow I need to add the `fmt` import since I'm using `fmt.Sprintf` in the tests. Let me check if it's already imported.\n\nI need to add the `fmt` import.\n\nNow let me run the tests.\n\nAll new tests pass. Let me run all the tests in the ticks package to make sure I didn't break anything.\n\nAll tests pass. Let me also run the full test suite to make sure nothing else is broken.\n\nAll tests pass. Now let me update the todos and close the task.\n\nTask q56 is complete. I implemented the `CompleteTask` method on the `Client` struct that:\n\n1. **Gets the task** to check its `Requires` field\n2. **Routes to human** if `task.Requires` is set (non-nil and non-empty string) by calling `SetAwaiting` with the requires value\n3. **Closes directly** if no requires field is set via `CloseTask`\n\nThe implementation correctly handles all acceptance criteria:\n- Tasks with `requires` set don't close on COMPLETE - they transition to `awaiting={requires value}`\n- Tasks without `requires` close normally\n- The `requires` field persists through rejection cycles (already handled by `ProcessVerdict` which clears `awaiting`/`verdict` but NOT `requires`)",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 468
+      },
+      {
+        "name": "Read",
+        "duration_ms": 390
+      },
+      {
+        "name": "Read",
+        "duration_ms": 692
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1139
+      },
+      {
+        "name": "Read",
+        "duration_ms": 484
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2124
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6394
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1195
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 18437
+      },
+      {
+        "name": "Read",
+        "duration_ms": 515
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 1378
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2194
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 980
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 754
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1271
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 784
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1278
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3527
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3826
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2756
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1090
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5275,
+      "cache_read_tokens": 1599633,
+      "cache_creation_tokens": 52446,
+      "cost_usd": 1.277309,
+      "duration_ms": 145296
+    },
+    "success": true,
+    "num_turns": 22
+  },
+  "status": "closed",
+  "title": "Handle requires field on task completion",
+  "type": "task",
+  "updated_at": "2026-01-14T16:55:41.275475Z"
+}

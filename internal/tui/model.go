@@ -169,6 +169,9 @@ type VerifyResultMsg struct {
 	Summary string // Human-readable summary of results
 }
 
+// IdleMsg indicates the engine has entered idle state (watch mode).
+type IdleMsg struct{}
+
 // -----------------------------------------------------------------------------
 // Multi-Epic Tab Messages - Tab management for parallel epic execution
 // -----------------------------------------------------------------------------
@@ -1235,6 +1238,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Note: Cost is accumulated through IterationEndMsg, not overwritten here
 		if msg.Iterations > 0 {
 			m.iteration = msg.Iterations
+		}
+
+	case IdleMsg:
+		// Watch mode: engine is idling, waiting for tasks
+		// Update status to show idle state
+		m.liveStatus = "idle"
+		// Add idle indicator to output if viewing live
+		if m.viewingTask == "" {
+			idleText := "\n[IDLE] Waiting for tasks to become available...\n"
+			m.output += idleText
+			m.updateOutputViewport()
 		}
 
 	case TasksUpdateMsg:

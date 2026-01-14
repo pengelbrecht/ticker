@@ -1,0 +1,90 @@
+{
+  "closed_at": "2026-01-14T17:51:23.857609Z",
+  "closed_reason": "Updated cmd/ticker/main.go runCmd Long description to include AGENT SIGNALS section (all 9 signal types), TASK FILTERING section (explains awaiting exclusion), and HUMAN WORKFLOW section (tk approve/reject/next --awaiting commands). Help text now matches docs/AGENT_HUMAN_WORKFLOW.md format.",
+  "created_at": "2026-01-14T16:43:15.09168Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Update 'ticker run --help' to include agent signal and human workflow documentation:\n\nAdd sections for:\n- AGENT SIGNALS: List all 8 signal types and meanings\n- TASK FILTERING: Explain awaiting exclusion  \n- HUMAN WORKFLOW: Show tk approve/reject/next --awaiting workflow\n\nReference docs/AGENT_HUMAN_WORKFLOW.md 'ticker CLI Help' section.\n\nAcceptance criteria:\n- [ ] Signal types listed in help\n- [ ] Task filtering explained\n- [ ] Human workflow commands shown\n- [ ] --watch flag documented (when implemented)",
+  "id": "q7j",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "eso",
+  "priority": 2,
+  "run": {
+    "session_id": "6cbe6cfb-4d08-4b54-9964-47ab36c816ab",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T18:50:03.989589+01:00",
+    "ended_at": "2026-01-14T18:51:50.288694+01:00",
+    "output": "I'll start by reviewing the current state of the `ticker run` command help text and the referenced documentation.\n\nNow let me read the current main.go to understand the existing CLI structure.\n\nNow I understand the current structure. The `runCmd` has a `Long` field with help text that gets displayed when using `ticker run --help`. I need to update this to include the agent signals, task filtering, and human workflow documentation as specified in the task and referenced from `docs/AGENT_HUMAN_WORKFLOW.md`.\n\nLet me also check the current help text format by running the help command and looking at what the existing signals look like in the internal/engine package.\n\nNow I have a clear picture of the signals. Let me update the `runCmd` Long description in main.go to include comprehensive help text for agent signals, task filtering, and human workflow. I'll reference the exact format from `docs/AGENT_HUMAN_WORKFLOW.md`.\n\nNow let me run the tests to make sure everything still works.\n\nThe help text looks good. Now let me run the tests to make sure nothing is broken.\n\nAll tests pass. Now let me verify the acceptance criteria from the task:\n\n1. ✅ Signal types listed in help - All 9 signal types are listed (COMPLETE, APPROVAL_NEEDED, INPUT_NEEDED, REVIEW_REQUESTED, CONTENT_REVIEW, ESCALATE, CHECKPOINT, EJECT, BLOCKED)\n2. ✅ Task filtering explained - The \"TASK FILTERING\" section explains the awaiting exclusion\n3. ✅ Human workflow commands shown - The \"HUMAN WORKFLOW\" section shows tk approve/reject/next --awaiting commands\n4. ⏸️ --watch flag documented (when implemented) - The task notes this is for when the flag is implemented; it's not implemented yet\n\nThe task mentions the --watch flag should be documented \"when implemented\" - checking the flags, it's not yet implemented (not in the init() function). The acceptance criteria says \"(when implemented)\" so this is expected and not a blocker.\n\nLet me close the task and commit the changes.\n\nTask completed. I've updated `ticker run --help` to include:\n\n1. **AGENT SIGNALS** - Lists all 9 signal types (COMPLETE, APPROVAL_NEEDED, INPUT_NEEDED, REVIEW_REQUESTED, CONTENT_REVIEW, ESCALATE, CHECKPOINT, EJECT, BLOCKED) with descriptions and the XML format\n2. **TASK FILTERING** - Explains that ticker skips tasks with awaiting set, blocked tasks, and closed tasks\n3. **HUMAN WORKFLOW** - Shows the tk commands for human interaction (list --awaiting, next --awaiting, approve, reject)\n\nThe --watch flag acceptance criterion notes \"(when implemented)\" - since the flag isn't implemented yet, it wasn't documented. This is consistent with the task requirements.",
+    "tools": [
+      {
+        "name": "Glob",
+        "duration_ms": 494
+      },
+      {
+        "name": "Read",
+        "duration_ms": 951
+      },
+      {
+        "name": "Read",
+        "duration_ms": 754
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 382
+      },
+      {
+        "name": "Read",
+        "duration_ms": 681
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 16195
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 958
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1257
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 568
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1881
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 695
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 666
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2680
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1886
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 2936,
+      "cache_read_tokens": 1112155,
+      "cache_creation_tokens": 56245,
+      "cost_usd": 0.9983677500000002,
+      "duration_ms": 105822
+    },
+    "success": true,
+    "num_turns": 15
+  },
+  "status": "closed",
+  "title": "Update ticker run help text with workflow documentation",
+  "type": "task",
+  "updated_at": "2026-01-14T17:51:23.857609Z"
+}

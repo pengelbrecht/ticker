@@ -16,10 +16,28 @@ import (
 	"github.com/pengelbrecht/ticker/internal/worktree"
 )
 
+// TicksClient defines the interface for ticks operations used by the Engine.
+// This allows for mocking in tests while the production code uses *ticks.Client.
+type TicksClient interface {
+	GetEpic(epicID string) (*ticks.Epic, error)
+	GetTask(taskID string) (*ticks.Task, error)
+	NextTask(epicID string) (*ticks.Task, error)
+	HasOpenTasks(epicID string) (bool, error)
+	CloseTask(taskID, reason string) error
+	CloseEpic(epicID, reason string) error
+	ReopenTask(taskID string) error
+	AddNote(issueID, message string, extraArgs ...string) error
+	GetNotes(epicID string) ([]string, error)
+	GetHumanNotes(issueID string) ([]ticks.Note, error)
+	SetStatus(issueID, status string) error
+	SetAwaiting(taskID, awaiting, note string) error
+	SetRunRecord(taskID string, record *agent.RunRecord) error
+}
+
 // Engine orchestrates the Ralph iteration loop.
 type Engine struct {
 	agent      agent.Agent
-	ticks      *ticks.Client
+	ticks      TicksClient
 	budget     *budget.Tracker
 	checkpoint *checkpoint.Manager
 	prompt     *PromptBuilder
@@ -36,6 +54,9 @@ type Engine struct {
 	// Verification callbacks for TUI status display (optional)
 	OnVerificationStart func(taskID string)
 	OnVerificationEnd   func(taskID string, results *verify.Results)
+
+	// Watch mode callback - called when no tasks available and entering idle state.
+	OnIdle func()
 
 	// Rich streaming callback for real-time agent state updates.
 	// Called whenever agent state changes (text, thinking, tools, metrics).
@@ -88,16 +109,68 @@ type RunConfig struct {
 	// If set, the agent runs in this directory instead of the current directory.
 	// Used by parallel runner to pass pre-created worktree paths.
 	WorkDir string
+
+	// Watch enables watch mode - engine idles when no tasks available instead of exiting.
+	Watch bool
+
+	// WatchTimeout is the maximum duration to watch for tasks (0 = unlimited).
+	// Only used when Watch is true.
+	WatchTimeout time.Duration
+
+	// WatchPollInterval is how often to poll for new tasks when idle (0 = 10s default).
+	// Only used when Watch is true.
+	WatchPollInterval time.Duration
+
+	// DebounceInterval is how long to wait after a task becomes available before picking it up.
+	// This prevents race conditions when a human is still editing (e.g., adding notes after reject).
+	// 0 means no debounce (default, backwards compatible).
+	DebounceInterval time.Duration
 }
 
 // Defaults for RunConfig.
 const (
-	DefaultMaxIterations   = 50
-	DefaultMaxCost         = 0 // Disabled by default (most users have subscriptions)
-	DefaultCheckpointEvery = 5
-	DefaultAgentTimeout    = 30 * time.Minute
-	DefaultMaxTaskRetries  = 3
+	DefaultMaxIterations     = 50
+	DefaultMaxCost           = 0 // Disabled by default (most users have subscriptions)
+	DefaultCheckpointEvery   = 5
+	DefaultAgentTimeout      = 30 * time.Minute
+	DefaultMaxTaskRetries    = 3
+	DefaultWatchPollInterval = 10 * time.Second
 )
+
+// Exit reason constants for worktree cleanup decisions.
+const (
+	// ExitReasonAllTasksCompleted indicates epic is fully done - cleanup worktree.
+	ExitReasonAllTasksCompleted = "all tasks completed"
+
+	// ExitReasonNoTasksFound indicates no tasks to work on - cleanup worktree.
+	ExitReasonNoTasksFound = "no tasks found"
+
+	// ExitReasonTasksAwaitingHuman indicates tasks are blocked/awaiting - preserve worktree.
+	ExitReasonTasksAwaitingHuman = "no ready tasks (remaining tasks are blocked or awaiting human)"
+
+	// ExitReasonWatchTimeout indicates watch mode timed out - preserve worktree.
+	ExitReasonWatchTimeout = "watch timeout"
+)
+
+// ShouldCleanupWorktree determines if a worktree should be removed based on exit reason.
+// Returns true only when the epic is fully complete (all tasks done or no tasks found).
+// Returns false for handoffs, budget limits, interruptions, and other cases where
+// the worktree should be preserved for resumption.
+func ShouldCleanupWorktree(exitReason string) bool {
+	// Only cleanup when epic is truly complete
+	switch exitReason {
+	case ExitReasonAllTasksCompleted, ExitReasonNoTasksFound:
+		return true
+	default:
+		// Preserve worktree for:
+		// - Tasks awaiting human intervention
+		// - Context cancellation (user interrupt)
+		// - Budget limits (may resume)
+		// - Stuck on task (needs debugging)
+		// - Any other unexpected exit
+		return false
+	}
+}
 
 // RunResult contains the outcome of an engine run.
 type RunResult struct {
@@ -170,7 +243,7 @@ type IterationResult struct {
 }
 
 // NewEngine creates a new engine with the given dependencies.
-func NewEngine(a agent.Agent, t *ticks.Client, b *budget.Tracker, c *checkpoint.Manager) *Engine {
+func NewEngine(a agent.Agent, t TicksClient, b *budget.Tracker, c *checkpoint.Manager) *Engine {
 	return &Engine{
 		agent:      a,
 		ticks:      t,
@@ -187,7 +260,7 @@ func (e *Engine) EnableVerification() {
 }
 
 // Run executes the engine loop until completion, signal, or budget exceeded.
-func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) {
+func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, err error) {
 	// Apply defaults
 	if config.MaxIterations == 0 {
 		config.MaxIterations = DefaultMaxIterations
@@ -201,6 +274,15 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 	}
 	if config.AgentTimeout == 0 {
 		config.AgentTimeout = DefaultAgentTimeout
+	}
+	if config.Watch && config.WatchPollInterval == 0 {
+		config.WatchPollInterval = DefaultWatchPollInterval
+	}
+
+	// Calculate watch deadline (0 = unlimited)
+	var watchDeadline time.Time
+	if config.Watch && config.WatchTimeout > 0 {
+		watchDeadline = time.Now().Add(config.WatchTimeout)
 	}
 
 	// Initialize state
@@ -218,7 +300,6 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Determine repo root
 		repoRoot := config.RepoRoot
 		if repoRoot == "" {
-			var err error
 			repoRoot, err = os.Getwd()
 			if err != nil {
 				return nil, fmt.Errorf("getting working directory: %w", err)
@@ -226,7 +307,6 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		}
 
 		// Create worktree manager
-		var err error
 		wtManager, err = worktree.NewManager(repoRoot)
 		if err != nil {
 			return nil, fmt.Errorf("creating worktree manager: %w", err)
@@ -249,11 +329,14 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Set the work directory in state
 		state.workDir = wt.Path
 
-		// Ensure cleanup on exit (success, error, or panic)
+		// Cleanup worktree based on exit reason when function returns.
+		// Only cleanup when epic is truly complete (all tasks done or no tasks found).
+		// Preserve worktree for handoffs, interruptions, and budget limits.
 		defer func() {
-			if wtManager != nil && wt != nil {
-				// Always cleanup worktree on exit
-				_ = wtManager.Remove(config.EpicID)
+			if wtManager != nil && wt != nil && result != nil {
+				if ShouldCleanupWorktree(result.ExitReason) {
+					_ = wtManager.Remove(config.EpicID)
+				}
 			}
 		}()
 	}
@@ -330,8 +413,8 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			}
 		}
 
-		// Get next task
-		task, err := e.ticks.NextTask(config.EpicID)
+		// Get next task with optional debounce
+		task, err := e.getNextTaskWithDebounce(ctx, config)
 		if err != nil {
 			return nil, fmt.Errorf("getting next task: %w", err)
 		}
@@ -345,15 +428,26 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			}
 
 			if hasOpen {
-				// There are tasks but they're all blocked - don't close epic
-				return state.toResult("no ready tasks (remaining tasks are blocked)", e.budget.Usage()), nil
+				// There are tasks but they're all blocked or awaiting human
+				if config.Watch {
+					// Watch mode: enter idle state and poll for changes
+					idleResult := e.handleWatchIdle(ctx, config, state, watchDeadline)
+					if idleResult != nil {
+						// Idle period ended (timeout or context cancelled)
+						return idleResult, nil
+					}
+					// Tasks became available, continue loop
+					continue
+				}
+				// Non-watch mode: exit
+				return state.toResult(ExitReasonTasksAwaitingHuman, e.budget.Usage()), nil
 			}
 
 			// All tasks are closed - epic complete
 			state.signal = SignalComplete
-			reason := "all tasks completed"
+			reason := ExitReasonAllTasksCompleted
 			if state.iteration == 0 {
-				reason = "no tasks found"
+				reason = ExitReasonNoTasksFound
 			}
 			if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
 				// Log but don't fail - epic may already be closed or race condition
@@ -428,7 +522,7 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 			}
 		}
 
-		// Handle signals
+		// Handle signals - process with handleSignal and continue to next task
 		if iterResult.Signal != SignalNone {
 			state.signal = iterResult.Signal
 			state.signalReason = iterResult.SignalReason
@@ -437,19 +531,22 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 				e.OnSignal(iterResult.Signal, iterResult.SignalReason)
 			}
 
-			switch iterResult.Signal {
-			case SignalComplete:
-				// Agent emitted COMPLETE - ignore it and continue loop
-				// Ticker detects completion naturally via tk next returning nil
-				// Log this as a warning since agent shouldn't emit COMPLETE
+			// Special case: COMPLETE signal is ignored (ticker handles completion via tk next)
+			if iterResult.Signal == SignalComplete {
 				if e.OnOutput != nil {
 					e.OnOutput("\n[Warning: Agent emitted COMPLETE signal - ignoring. Ticker handles completion automatically.]\n")
 				}
 				// Continue to next iteration - don't close epic
-			case SignalEject:
-				return state.toResult(fmt.Sprintf("agent ejected: %s", iterResult.SignalReason), e.budget.Usage()), nil
-			case SignalBlocked:
-				return state.toResult(fmt.Sprintf("agent blocked: %s", iterResult.SignalReason), e.budget.Usage()), nil
+			} else {
+				// All other signals (handoff signals) set the task to awaiting state
+				// and continue to the next available task
+				if err := e.handleSignal(task, iterResult.Signal, iterResult.SignalReason); err != nil {
+					// Log error but don't fail - task state update is not critical
+					_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not update task %s awaiting state: %v", task.ID, err))
+				}
+				// Continue to next task - never block waiting for human response
+				// The task is now awaiting human, so tk next won't return it
+				continue
 			}
 		}
 
@@ -537,12 +634,20 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 		notes = nil
 	}
 
+	// Get human feedback notes for this task
+	humanNotes, err := e.ticks.GetHumanNotes(task.ID)
+	if err != nil {
+		// Continue without human notes
+		humanNotes = nil
+	}
+
 	// Build prompt
 	iterCtx := IterationContext{
-		Iteration: state.iteration,
-		Epic:      epic,
-		Task:      task,
-		EpicNotes: notes,
+		Iteration:     state.iteration,
+		Epic:          epic,
+		Task:          task,
+		EpicNotes:     notes,
+		HumanFeedback: humanNotes,
 	}
 
 	if e.OnIterationStart != nil {
@@ -724,6 +829,47 @@ func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput
 	return results
 }
 
+// signalToAwaiting maps signals to their corresponding awaiting states.
+// Signals not in this map don't trigger awaiting (e.g., SignalComplete, SignalNone).
+var signalToAwaiting = map[Signal]string{
+	SignalEject:           "work",
+	SignalBlocked:         "input", // Legacy - maps to InputNeeded for backwards compatibility
+	SignalApprovalNeeded:  "approval",
+	SignalInputNeeded:     "input",
+	SignalReviewRequested: "review",
+	SignalContentReview:   "content",
+	SignalEscalate:        "escalation",
+	SignalCheckpoint:      "checkpoint",
+}
+
+// handleSignal processes an agent signal and updates the task state accordingly.
+// For COMPLETE signals, it checks the task's requires field before closing.
+// For handoff signals (EJECT, BLOCKED, etc.), it sets the task to awaiting state.
+// Returns nil for unknown signals or SignalNone (no-op).
+func (e *Engine) handleSignal(task *ticks.Task, signal Signal, context string) error {
+	switch signal {
+	case SignalNone:
+		// No signal detected - nothing to do
+		return nil
+
+	case SignalComplete:
+		// Check for pre-declared approval gate
+		if task.Requires != nil && *task.Requires != "" {
+			note := "Work complete, requires " + *task.Requires
+			return e.ticks.SetAwaiting(task.ID, *task.Requires, note)
+		}
+		return e.ticks.CloseTask(task.ID, "Completed by agent")
+
+	default:
+		// Check if this signal maps to an awaiting state
+		if awaiting, ok := signalToAwaiting[signal]; ok {
+			return e.ticks.SetAwaiting(task.ID, awaiting, context)
+		}
+		// Unknown signal - gracefully ignore
+		return nil
+	}
+}
+
 // buildVerificationFailureNote creates a note about verification failure.
 // Includes iteration, task ID, and truncated verification output.
 func buildVerificationFailureNote(iteration int, taskID string, results *verify.Results) string {
@@ -749,4 +895,125 @@ func buildVerificationFailureNote(iteration int, taskID string, results *verify.
 
 	sb.WriteString(" Please fix and close the task again.")
 	return sb.String()
+}
+
+// getNextTaskWithDebounce gets the next available task with optional debounce.
+// If DebounceInterval is set, it waits after a task becomes available to allow
+// humans to finish editing (e.g., adding notes after reject).
+// After the debounce wait, it re-fetches the task to get any updates.
+func (e *Engine) getNextTaskWithDebounce(ctx context.Context, config RunConfig) (*ticks.Task, error) {
+	task, err := e.ticks.NextTask(config.EpicID)
+	if err != nil || task == nil {
+		return task, err
+	}
+
+	// No debounce configured - return immediately
+	if config.DebounceInterval <= 0 {
+		return task, nil
+	}
+
+	// Task just became available - wait for potential follow-up edits
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(config.DebounceInterval):
+		// Continue after debounce
+	}
+
+	// Re-fetch the task to get any updates made during debounce period
+	// (e.g., human might have added notes, changed description, etc.)
+	return e.ticks.GetTask(task.ID)
+}
+
+// handleWatchIdle enters idle state and watches for new tasks.
+// Uses fsnotify file watcher when available for faster response,
+// falling back to polling if fsnotify is unavailable.
+// Returns nil if tasks become available (continue processing).
+// Returns a RunResult if watch should end (timeout or cancellation).
+func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *runState, watchDeadline time.Time) *RunResult {
+	// Notify caller that we're entering idle state
+	if e.OnIdle != nil {
+		e.OnIdle()
+	}
+
+	// Try to create a file watcher for the .tick/issues directory
+	// This provides faster response than polling when available
+	watcher := NewTicksWatcher(state.workDir)
+	defer watcher.Close()
+
+	fileChanges := watcher.Changes() // nil if fsnotify unavailable
+
+	// Poll for new tasks until available, timeout, or cancellation
+	for {
+		// Check watch timeout
+		if !watchDeadline.IsZero() && time.Now().After(watchDeadline) {
+			return state.toResult(ExitReasonWatchTimeout, e.budget.Usage())
+		}
+
+		// Wait for file change, poll interval, or cancellation
+		// If file watcher is available, we still poll as a backup to catch changes
+		// that might not trigger fsnotify events (e.g., NFS, some edge cases)
+		select {
+		case <-ctx.Done():
+			e.writeInterruptionNotes(state, config.EpicID)
+			return state.toResult("context cancelled while idle", e.budget.Usage())
+
+		case <-fileChanges:
+			// File change detected - check for new tasks immediately
+			task, err := e.ticks.NextTask(config.EpicID)
+			if err != nil {
+				// Transient error - continue watching
+				continue
+			}
+			if task != nil {
+				// Tasks available - continue processing
+				return nil
+			}
+			// Check if epic is now complete
+			result := e.checkForEpicCompletion(config, state)
+			if result != nil {
+				return result
+			}
+			// Still blocked/awaiting - continue watching
+
+		case <-time.After(config.WatchPollInterval):
+			// Periodic poll - check for new tasks
+			task, err := e.ticks.NextTask(config.EpicID)
+			if err == nil && task != nil {
+				return nil // Tasks available - continue processing
+			}
+
+			// Check if epic is now complete
+			result := e.checkForEpicCompletion(config, state)
+			if result != nil {
+				return result
+			}
+
+			// Still blocked/awaiting - re-trigger OnIdle callback
+			if e.OnIdle != nil {
+				e.OnIdle()
+			}
+		}
+	}
+}
+
+// checkForEpicCompletion checks if all tasks are done and the epic should be closed.
+// Returns a RunResult if epic is complete, nil if still waiting for tasks.
+func (e *Engine) checkForEpicCompletion(config RunConfig, state *runState) *RunResult {
+	hasOpen, err := e.ticks.HasOpenTasks(config.EpicID)
+	if err != nil {
+		return nil // Transient error - continue watching
+	}
+
+	if !hasOpen {
+		// All tasks closed while idle - epic complete
+		state.signal = SignalComplete
+		reason := ExitReasonAllTasksCompleted
+		if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to close epic %s: %v\n", config.EpicID, err)
+		}
+		return state.toResult(reason, e.budget.Usage())
+	}
+
+	return nil // Still blocked/awaiting
 }

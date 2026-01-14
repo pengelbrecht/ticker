@@ -307,15 +307,144 @@ ticker run <epic1> <epic2> --headless        # Parallel epics
 ticker run --auto --parallel 3               # Auto-select epics
 ```
 
-## Signal Protocol
+## Handoff Signal Protocol
 
-When working on a tick, signal completion with XML tags:
+When working on a tick, signal completion or handoff with XML tags. These signals tell the system whether work is complete or needs human involvement.
 
-| Signal | Tag | When to Use |
-|--------|-----|-------------|
-| COMPLETE | `<promise>COMPLETE</promise>` | All work done, tests pass |
-| EJECT | `<promise>EJECT: reason</promise>` | Need human help |
-| BLOCKED | `<promise>BLOCKED: reason</promise>` | Missing credentials |
+### Signal Types
+
+| Signal | Format | When to Use |
+|--------|--------|-------------|
+| COMPLETE | `<promise>COMPLETE</promise>` | Task fully done, all tests pass |
+| APPROVAL_NEEDED | `<promise>APPROVAL_NEEDED: reason</promise>` | Work complete, needs human sign-off before closing |
+| INPUT_NEEDED | `<promise>INPUT_NEEDED: question</promise>` | Need human to answer a question or make a decision |
+| REVIEW_REQUESTED | `<promise>REVIEW_REQUESTED: pr_url</promise>` | PR created, needs code review before merge |
+| CONTENT_REVIEW | `<promise>CONTENT_REVIEW: description</promise>` | UI/copy/design needs human judgment |
+| ESCALATE | `<promise>ESCALATE: issue</promise>` | Found unexpected issue requiring human direction |
+| CHECKPOINT | `<promise>CHECKPOINT: summary</promise>` | Completed a phase, need verification before continuing |
+| EJECT | `<promise>EJECT: reason</promise>` | Cannot complete - requires human to do the work |
+| BLOCKED | `<promise>BLOCKED: reason</promise>` | Legacy signal (maps to INPUT_NEEDED) |
+
+### When to Use Each Signal
+
+**APPROVAL_NEEDED** — Use for:
+- Security-sensitive changes (auth, encryption, access control)
+- Database migrations or schema changes
+- API contract changes that affect consumers
+- Dependency major version upgrades
+- Anything with significant production risk
+
+**INPUT_NEEDED** — Use for:
+- Business logic decisions you can't make alone
+- Configuration choices (which library, which approach)
+- Clarification on ambiguous requirements
+- "Which X should I use?" questions
+
+**REVIEW_REQUESTED** — Use for:
+- After creating any pull request
+- Include the full PR URL in the context
+
+**CONTENT_REVIEW** — Use for:
+- User-facing text changes (error messages, labels)
+- UI component styling or layout decisions
+- Marketing copy or documentation tone
+- Anything subjective requiring human taste
+
+**ESCALATE** — Use for:
+- Security vulnerabilities discovered during work
+- Scope significantly larger than expected
+- Architectural decisions with major tradeoffs
+- Conflicting requirements that need resolution
+
+**CHECKPOINT** — Use for:
+- Multi-phase migrations (verify phase 1 before phase 2)
+- Large refactors (validate approach on one module first)
+- Any work where early validation saves potential rework
+
+**EJECT** — Use for:
+- Needs credentials or secrets the agent doesn't have
+- Physical or manual setup required
+- External system access you genuinely cannot obtain
+- Tasks that truly require human hands
+
+### Format Examples
+
+```xml
+<!-- Task completed successfully -->
+<promise>COMPLETE</promise>
+
+<!-- Work done but needs human approval -->
+<promise>APPROVAL_NEEDED: Database migration adds new user_preferences table with 3 columns</promise>
+
+<!-- Need human input to proceed -->
+<promise>INPUT_NEEDED: Should the rate limiter use sliding window or fixed window algorithm?</promise>
+
+<!-- PR ready for review -->
+<promise>REVIEW_REQUESTED: https://github.com/org/repo/pull/123</promise>
+
+<!-- Content needs human judgment -->
+<promise>CONTENT_REVIEW: New error messages in PaymentForm - tone may need adjustment</promise>
+
+<!-- Found issue needing direction -->
+<promise>ESCALATE: Found SQL injection vulnerability in legacy code - fix now or create separate task?</promise>
+
+<!-- Phase complete, verify before continuing -->
+<promise>CHECKPOINT: Phase 1 complete - migrated 3 of 8 tables. Verify data integrity before continuing</promise>
+
+<!-- Cannot complete, human must do it -->
+<promise>EJECT: Task requires AWS Console access to configure IAM roles</promise>
+```
+
+### Important Rules
+
+1. **One signal per task** — Emit exactly one signal when done
+2. **Be specific** — Include helpful context after the colon
+3. **Don't guess** — If you need human input, use INPUT_NEEDED
+4. **Don't skip gates** — If something feels risky, use APPROVAL_NEEDED
+
+## Reading Human Feedback
+
+When you pick up a task, it may have been previously handed off to a human. Look for:
+
+1. **Human Feedback section** — In the task prompt, a "Human Feedback" section shows responses from humans
+2. **Task notes** — Check notes for answers to questions you asked or feedback on rejected work
+
+**When human feedback is present:**
+- Read and understand all feedback points
+- Address each issue raised
+- Then proceed with the task
+- Don't re-ask questions that were already answered
+
+Human feedback appears after:
+- Approval was rejected (fix the issues noted)
+- Input was provided (use the answer given)
+- Review requested changes (implement the changes)
+- Escalation got direction (follow the decision made)
+- Checkpoint was rejected (redo the phase as directed)
+
+## Pre-Declared Gates (requires field)
+
+Some tasks have a `requires` field set by humans at creation time. This is a **pre-declared approval gate** that you cannot bypass.
+
+| requires value | Meaning |
+|----------------|---------|
+| `approval` | Must have human sign-off before closing |
+| `review` | Must have PR review before closing |
+| `content` | Must have content/design review before closing |
+
+**How it works:**
+- You don't need to know or check the `requires` field
+- Just signal `COMPLETE` when you finish the work
+- The system automatically routes to human approval based on `requires`
+- If rejected, you'll get feedback and the task returns to you
+
+**Example flow:**
+1. Task created with `requires: approval`
+2. Agent works on task, signals `COMPLETE`
+3. System sees `requires: approval`, sets task to await human approval
+4. Human approves → task closes; Human rejects → task returns to agent with feedback
+
+This ensures humans can enforce approval gates on sensitive work without relying on agent judgment
 
 ## Creating Good Ticks
 

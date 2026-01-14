@@ -1,0 +1,134 @@
+{
+  "closed_at": "2026-01-14T21:16:53.448134Z",
+  "closed_reason": "Added IsOnlyTickFilesDirty() and AutoCommitTickFiles() to worktree.Manager. Updated both TUI and headless parallel run paths in main.go to auto-commit .tick/ files instead of failing when only tick files are dirty. Mixed dirty files still fail as before.",
+  "created_at": "2026-01-14T21:01:04.426865Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "When starting a worktree run, if only .tick/issues/*.json files are dirty, auto-commit them instead of failing.\n\n**Problem:**\nTicker modifies tick files during runs (status updates, notes). When user wants to run ticker again, it fails:\n```\nError: Cannot start parallel run - main branch has uncommitted changes\nDirty files:\n  .tick/issues/32y.json\n  ...\n```\n\n**Solution:**\nBefore starting worktree run:\n```go\nif onlyTickFilesDirty() {\n    git add .tick/issues/*.json\n    git commit -m \"chore: Auto-commit tick status updates\"\n    // Continue with worktree run\n}\n```\n\n**Why safe:**\n- Tick files are system-managed metadata, not user code\n- Machine-managed, not hand-edited\n- Committing preserves history (non-destructive)\n- User almost always wants them committed\n\n**Edge case:**\nIf other dirty files exist, require human intervention (current behavior).\n\nAcceptance criteria:\n- [ ] Detect when only .tick/ files are dirty\n- [ ] Auto-commit with standard message\n- [ ] Continue with worktree setup\n- [ ] If mixed dirty files, fail as before",
+  "id": "5pp",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "65x",
+  "priority": 2,
+  "run": {
+    "session_id": "49f1ef05-a6a6-4a47-8205-0a765ed3745f",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T22:13:36.475181+01:00",
+    "ended_at": "2026-01-14T22:17:16.961921+01:00",
+    "output": "I'll start by understanding the current worktree implementation and where the dirty file check happens.\n\nNow let me look at the main.go file where the dirty check happens to understand the full context.\n\nLet me also see the second location (runHeadlessParallel) where this check happens.\n\nNow let me look at the worktree.Manager.IsDirty() method to understand its implementation.\n\nGood. I now understand the current implementation:\n\n1. `IsDirty()` checks `git status --porcelain`, filtering out `.worktrees/` and `.ticker/` directories\n2. It returns the list of dirty files\n3. If dirty, the run command fails with an error message\n\nAccording to the task, I need to:\n1. Detect when only `.tick/` files are dirty\n2. Auto-commit them with a standard message\n3. Continue with worktree setup\n4. If mixed dirty files exist, fail as before\n\nLet me update my todo and look at the full worktree.go structure to add the auto-commit functionality.\n\nNow I understand the full picture. I need to:\n\n1. Add a new method to detect if only `.tick/` files are dirty (separate from `.ticker/` and `.worktrees/`)\n2. Add a method to auto-commit tick files\n3. Update both places in main.go to use this logic\n\nLet me first look at the task description again - it says `.tick/issues/*.json` files. Let me add the functionality to the worktree package.\n\nNow let me update both places in main.go where the dirty check happens. First, the TUI parallel run (around line 416).\n\nNow let me update the second location (headless parallel run, around line 706).\n\nNow let me add tests for the new functionality. Let me look at existing worktree tests.\n\nNow let me add tests for the new `IsOnlyTickFilesDirty` and `AutoCommitTickFiles` functions.\n\nNow let me run the tests to verify everything works.\n\nAll new tests pass. Now let me run all the worktree tests to make sure I haven't broken anything.\n\nAll worktree tests pass. Now let me run all tests to make sure the whole project still works.\n\nAll tests pass. Now let me update my todos and close the task.\n\nThe commit included the .tick symlink being created (which is expected for worktrees - the .tick directory is symlinked to the main repo). Now let me add an epic note.\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3291
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1083
+      },
+      {
+        "name": "Read",
+        "duration_ms": 992
+      },
+      {
+        "name": "Read",
+        "duration_ms": 689
+      },
+      {
+        "name": "Read",
+        "duration_ms": 630
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2712
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1844
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 11117
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2710
+      },
+      {
+        "name": "Read",
+        "duration_ms": 698
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5123
+      },
+      {
+        "name": "Read",
+        "duration_ms": 568
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5835
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3199
+      },
+      {
+        "name": "Read",
+        "duration_ms": 119
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 21037
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2532
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 932
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1117
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 466
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 562
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3699
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2661
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4849
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4386
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 8971,
+      "cache_read_tokens": 1683700,
+      "cache_creation_tokens": 79132,
+      "cost_usd": 1.586465,
+      "duration_ms": 219397
+    },
+    "success": true,
+    "num_turns": 26
+  },
+  "status": "closed",
+  "title": "Auto-commit dirty tick files before worktree run",
+  "type": "task",
+  "updated_at": "2026-01-14T21:16:53.448134Z"
+}

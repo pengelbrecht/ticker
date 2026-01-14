@@ -21,6 +21,10 @@ type IterationContext struct {
 
 	// EpicNotes are notes from previous iterations stored in the epic.
 	EpicNotes []string
+
+	// HumanFeedback contains notes from humans on this task.
+	// These are feedback/responses from human reviewers after handoff.
+	HumanFeedback []ticks.Note
 }
 
 // PromptBuilder constructs prompts for autonomous agent iterations.
@@ -48,6 +52,7 @@ func (pb *PromptBuilder) Build(ctx IterationContext) string {
 		TaskDescription:    "",
 		AcceptanceCriteria: "",
 		EpicNotes:          ctx.EpicNotes,
+		HumanFeedback:      ctx.HumanFeedback,
 	}
 
 	if ctx.Epic != nil {
@@ -82,6 +87,7 @@ type templateData struct {
 	TaskDescription    string
 	AcceptanceCriteria string
 	EpicNotes          []string
+	HumanFeedback      []ticks.Note
 }
 
 // extractAcceptanceCriteria parses acceptance criteria from a task description.
@@ -131,6 +137,16 @@ These notes were left by previous iterations. Read them carefully before startin
 ### Acceptance Criteria
 {{.AcceptanceCriteria}}
 {{end}}
+{{if .HumanFeedback}}
+
+## Human Feedback
+
+This task was previously handed to a human. Their response:
+
+{{range .HumanFeedback}}- {{.Content}}
+{{end}}
+Address this feedback before proceeding.
+{{end}}
 
 ## Instructions
 
@@ -141,16 +157,35 @@ These notes were left by previous iterations. Read them carefully before startin
 5. **Commit your changes** - Create a commit with the task ID in the message.
 6. **Add epic note** - Run ` + "`tk note {{.EpicID}} \"<message>\"`" + ` to leave context for future iterations. Include learnings, gotchas, architectural decisions, or anything the next iteration should know.
 
+## Handoff Signals
+
+When you need human involvement, emit a signal and the system will hand off the task:
+
+| Signal | When to Use |
+|--------|-------------|
+| ` + "`<promise>COMPLETE</promise>`" + ` | Task fully done |
+| ` + "`<promise>APPROVAL_NEEDED: reason</promise>`" + ` | Work complete, needs human sign-off |
+| ` + "`<promise>INPUT_NEEDED: question</promise>`" + ` | Need human to answer a question |
+| ` + "`<promise>REVIEW_REQUESTED: pr_url</promise>`" + ` | PR created, needs code review |
+| ` + "`<promise>CONTENT_REVIEW: description</promise>`" + ` | UI/copy needs human judgment |
+| ` + "`<promise>ESCALATE: issue</promise>`" + ` | Found unexpected issue needing direction |
+| ` + "`<promise>CHECKPOINT: summary</promise>`" + ` | Completed phase, need verification |
+| ` + "`<promise>EJECT: reason</promise>`" + ` | Cannot complete - requires human work |
+
+After emitting a handoff signal, the system moves to another task. When a human responds, you may be assigned this task again with their feedback in the notes.
+
+## Reading Human Feedback
+
+If this task was previously handed off, check the "Human Feedback" section above for the human's response. Address their feedback before proceeding.
+
 ## Rules
 
 1. **One task per iteration** - Focus only on the current task. Do not work on other tasks.
 2. **No questions** - You are autonomous. Make reasonable decisions based on the context provided.
 3. **Always leave notes** - Before finishing, add a note summarizing what you did and any context for the next iteration.
 4. **Don't modify ticker internals** - Never modify .tick/, .ticker/, or .gitignore unless explicitly required by the task. These are managed by ticker.
-5. **Exit signals** - Use these signals ONLY when necessary:
-   - ` + "`<promise>EJECT: reason</promise>`" + ` - Exit for large install (>1GB) or external dependency you cannot install
-   - ` + "`<promise>BLOCKED: reason</promise>`" + ` - Cannot proceed (missing credentials, unclear requirements, etc.)
-6. **Task completion** - Just close your task with ` + "`tk close`" + ` when done. Ticker automatically detects when all tasks in the epic are complete.
+5. **Task completion** - Just close your task with ` + "`tk close`" + ` when done. Ticker automatically detects when all tasks in the epic are complete.
+6. **Never revert other tasks' work** - Code already in the repo was committed by previous tasks and is intentional. You may revert your own changes from this iteration, but NEVER revert commits from other tasks. If you think existing code is wrong, leave a note or escalate - do not "clean up" or revert code you didn't write.
 
 Begin working on the task now.
 `

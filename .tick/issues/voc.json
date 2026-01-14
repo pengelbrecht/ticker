@@ -1,0 +1,105 @@
+{
+  "blocked_by": [
+    "agk"
+  ],
+  "closed_at": "2026-01-14T18:16:38.369345Z",
+  "closed_reason": "Added comprehensive backwards compatibility test suite in internal/ticks/backwards_compat_test.go with 15 test functions covering: manual=true→awaiting=work mapping, NextTask filtering for both manual and awaiting tasks, awaiting field precedence over manual, SetAwaiting/ClearAwaiting clearing Manual, ProcessVerdict clearing Manual, migration-not-required verification with 7 JSON format variations, and edge cases around empty values.",
+  "created_at": "2026-01-14T16:16:10.533397Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Test that existing ticks with manual=true work correctly:\n\n```go\nfunc TestBackwardsCompat_ManualField(t *testing.T) {\n    // Create tick with old manual field\n    task := \u0026ticks.Task{\n        ID:     \"old-task\",\n        Manual: true,\n    }\n    \n    // Should behave as awaiting=work\n    assert.True(t, task.IsAwaitingHuman())\n    assert.Equal(t, \"work\", task.GetAwaitingType())\n}\n\nfunc TestBackwardsCompat_NextExcludesManual(t *testing.T) {\n    mock := newMockTicksClient()\n    mock.addTask(\"t1\", \"Normal task\")\n    mock.addTask(\"t2\", \"Manual task\")\n    mock.tasks[\"t2\"].Manual = true\n    \n    // NextTask should skip manual tasks\n    task, err := mock.NextTask(\"epic1\")\n    assert.NoError(t, err)\n    assert.Equal(t, \"t1\", task.ID)\n}\n\nfunc TestBackwardsCompat_NewAwaitingTakesPrecedence(t *testing.T) {\n    task := \u0026ticks.Task{\n        ID:       \"mixed\",\n        Manual:   true,           // Old field\n        Awaiting: ptr(\"input\"),  // New field\n    }\n    \n    // New field takes precedence\n    assert.Equal(t, \"input\", task.GetAwaitingType())\n}\n```\n\nAcceptance criteria:\n- [ ] manual=true treated as awaiting=work\n- [ ] tk next skips both manual and awaiting tasks\n- [ ] New awaiting field takes precedence\n- [ ] Migration not required (reads both)",
+  "id": "voc",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "9bd",
+  "priority": 1,
+  "run": {
+    "session_id": "eafb668e-f346-4e48-92a6-c0713db2c892",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T19:14:24.894439+01:00",
+    "ended_at": "2026-01-14T19:17:10.089891+01:00",
+    "output": "I'll start by reviewing the current task and understanding the codebase structure for implementing backwards compatibility tests for the manual field.\n\nLet me first check the existing ticks types to understand the Task structure:\n\nI can see the Task struct already has the backwards compatibility logic implemented in `IsAwaitingHuman()` and `GetAwaitingType()`. Let me also check the existing tests and the client to understand how NextTask handles manual/awaiting tasks:\n\nI've reviewed the existing code and tests. I can see that:\n\n1. The `Task` struct already has `Manual` and `Awaiting` fields\n2. `IsAwaitingHuman()` and `GetAwaitingType()` already handle backwards compatibility (manual=true → awaiting=work)\n3. There are already some backwards compatibility tests in `client_test.go` (lines 62-119, 157-203)\n\nHowever, looking at the task requirements, I need to add more comprehensive backwards compatibility tests in the specific format requested. Let me also check the engine tests to see the mockTicksClient pattern:\n\nNow I understand the testing patterns. I see there's already solid test coverage for backwards compatibility in `client_test.go`. Looking at the task requirements more carefully, I need to add comprehensive tests in the format specified:\n\n1. `TestBackwardsCompat_ManualField` - Test that manual=true behaves as awaiting=work\n2. `TestBackwardsCompat_NextExcludesManual` - Test that tk next skips manual tasks\n3. `TestBackwardsCompat_NewAwaitingTakesPrecedence` - Test that new awaiting field takes precedence\n\nLet me create a dedicated test file for backwards compatibility tests:\n\nNow let me create the dedicated backwards compatibility test file:\n\nNow let me run the tests to make sure they all pass:\n\nAll backwards compatibility tests pass. Let me also run all the ticks package tests to make sure I haven't broken anything:\n\nAll tests pass. Let me also run all tests in the repo to make sure everything is still working:\n\nAll tests pass. Now let me update the todo list and close the task:\n\nNow let me close the task and commit the changes:\n\nNow let me add an epic note:\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e\n\n## Summary\n\nI've completed task [voc] - \"Add backwards compatibility tests for manual field\". Here's what was done:\n\n### Created `internal/ticks/backwards_compat_test.go` with 15 test functions:\n\n**Core acceptance criteria covered:**\n1. **manual=true treated as awaiting=work** - `TestBackwardsCompat_ManualField`, `TestBackwardsCompat_ManualFieldFromJSON`\n2. **tk next skips both manual and awaiting tasks** - `TestBackwardsCompat_NextExcludesManual`, `TestBackwardsCompat_NextExcludesAwaitingAndManual`, `TestBackwardsCompat_AllTasksAwaitingOrManual`\n3. **New awaiting field takes precedence** - `TestBackwardsCompat_NewAwaitingTakesPrecedence`\n4. **Migration not required (reads both)** - `TestBackwardsCompat_MigrationNotRequired` (7 JSON format variations)\n\n**Additional coverage:**\n- `TestBackwardsCompat_SetAwaitingClearsManual` - SetAwaiting clears Manual for forward compatibility\n- `TestBackwardsCompat_ClearAwaitingClearsBoth` - ClearAwaiting clears both fields\n- `TestBackwardsCompat_ProcessVerdictClearsManual` - ProcessVerdict clears Manual with other transient fields\n- `TestBackwardsCompat_ListAwaitingIncludesManual/AllTypes` - ListAwaitingTasks includes manual tasks\n- `TestBackwardsCompat_ClientNextTaskFiltering` - File-based client test\n- `TestBackwardsCompat_VerdictOnManualTask` - Upgrade path testing\n- `TestBackwardsCompat_EmptyAwaitingVsManual` - Edge cases\n\nAll 15 tests pass and the existing test suite remains green.",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 646
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 349
+      },
+      {
+        "name": "Read",
+        "duration_ms": 638
+      },
+      {
+        "name": "Read",
+        "duration_ms": 408
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 311
+      },
+      {
+        "name": "Read",
+        "duration_ms": 726
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2001
+      },
+      {
+        "name": "Write",
+        "duration_ms": 66083
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 962
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 889
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 689
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1866
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3393
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 546
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4171
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3298
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 973
+      }
+    ],
+    "metrics": {
+      "input_tokens": 9305,
+      "output_tokens": 9451,
+      "cache_read_tokens": 1435177,
+      "cache_creation_tokens": 72983,
+      "cost_usd": 1.4732842500000003,
+      "duration_ms": 164323
+    },
+    "success": true,
+    "num_turns": 18
+  },
+  "status": "closed",
+  "title": "Add backwards compatibility tests for manual field",
+  "type": "task",
+  "updated_at": "2026-01-14T18:16:38.369345Z"
+}

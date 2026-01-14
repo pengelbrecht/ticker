@@ -1,0 +1,93 @@
+{
+  "blocked_by": [
+    "ztr"
+  ],
+  "closed_at": "2026-01-14T17:00:05.836571Z",
+  "closed_reason": "Added ListAwaitingTasks(epicID string, awaitingTypes ...string) method to Client in internal/ticks/client.go. Implemented locally since tk list may not support --awaiting flag. Method filters tasks using IsAwaitingHuman() and GetAwaitingType() with optional type filtering (supports comma-separated types like approval,review). Added 6 tests covering no filter, single type, multiple types, no awaiting tasks, manual backwards compat, and all awaiting types.",
+  "created_at": "2026-01-14T16:12:22.092386Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Add filtering support for listing tasks awaiting human attention:\n\n```bash\n# All ticks awaiting human action\ntk list --awaiting\n\n# Only ticks awaiting approval\ntk list --awaiting approval\n\n# Ticks awaiting approval or review\ntk list --awaiting approval,review\n```\n\nMay need to implement locally in ticks client if tk CLI doesn't support:\n```go\nfunc (c *Client) ListAwaitingTasks(epicID string, awaitingTypes ...string) ([]Task, error) {\n    tasks, err := c.ListTasks(epicID)\n    if err \\!= nil {\n        return nil, err\n    }\n    \n    var result []Task\n    for _, t := range tasks {\n        if t.IsAwaitingHuman() {\n            if len(awaitingTypes) == 0 || contains(awaitingTypes, t.GetAwaitingType()) {\n                result = append(result, t)\n            }\n        }\n    }\n    return result, nil\n}\n```\n\nAcceptance criteria:\n- [ ] --awaiting filter works on tk list\n- [ ] Can filter by specific types (comma-separated)\n- [ ] ListAwaitingTasks method added to client",
+  "id": "7fx",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "d8o",
+  "priority": 2,
+  "run": {
+    "session_id": "4fe5f415-8314-4860-b7c6-2a1b9eb043b3",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T17:58:23.870914+01:00",
+    "ended_at": "2026-01-14T18:00:30.794647+01:00",
+    "output": "I'll start by reviewing the current task and understanding what needs to be implemented. The task is to add `--awaiting` filter support to `tk list` command, with the ability to filter by specific awaiting types.\n\nLet me first explore the existing codebase to understand the current implementation.\n\nNow I understand the codebase. Based on the task description and epic notes, the `tk` CLI may not support `--awaiting` filter yet, so I need to implement `ListAwaitingTasks` locally in the client. Let me also check the existing tests to understand the testing patterns.\n\nNow I have a good understanding of the codebase. The task requires implementing `ListAwaitingTasks` method to filter tasks awaiting human attention, as the `tk` CLI may not support `--awaiting` filter on `tk list` yet. Let me implement this.\n\nNow let me implement the `ListAwaitingTasks` method. Based on the task description and epic notes, I'll implement it locally since the `tk` CLI may not support the `--awaiting` flag on `tk list` yet.\n\nNow let me update the todo and add tests for the new method.\n\nNow let me add tests for the `ListAwaitingTasks` method.\n\nNow let me update the todos and run the tests.\n\nAll tests pass. Let me also run the full test suite to make sure nothing is broken.\n\nAll tests pass. Now let me update the todos and close the task.\n\nI've completed the task. Here's a summary of what was done:\n\n**Task 7fx: Add --awaiting filter to tk list**\n\n**Implementation:**\n- Added `ListAwaitingTasks(epicID string, awaitingTypes ...string) ([]Task, error)` method to the `Client` in `internal/ticks/client.go:65-96`\n- Implemented locally (not via `tk` CLI) since `tk list` may not support `--awaiting` flag yet\n- Method filters tasks using existing `IsAwaitingHuman()` and `GetAwaitingType()` helper methods\n- Supports optional type filtering:\n  - No types provided → returns all awaiting tasks\n  - Single type like `\"approval\"` → filters to only approval tasks\n  - Multiple types like `\"approval\", \"review\"` → filters to specified types\n- Maintains backwards compatibility with `manual=true` tasks (maps to `awaiting=work`)\n\n**Tests Added:**\n6 new test cases in `internal/ticks/client_test.go`:\n1. `TestListAwaitingTasksNoFilter` - returns all awaiting tasks when no filter\n2. `TestListAwaitingTasksSingleTypeFilter` - filters by single awaiting type\n3. `TestListAwaitingTasksMultipleTypeFilter` - filters by multiple types (comma-separated)\n4. `TestListAwaitingTasksNoAwaitingTasks` - returns empty when no awaiting tasks\n5. `TestListAwaitingTasksManualBackwardsCompat` - manual=true maps to work type\n6. `TestListAwaitingTasksAllAwaitingTypes` - tests all valid awaiting types",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 491
+      },
+      {
+        "name": "Read",
+        "duration_ms": 392
+      },
+      {
+        "name": "Read",
+        "duration_ms": 655
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1585
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6859
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1730
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 19483
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1765
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1003
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 619
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 987
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3216
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3870
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3217
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5346,
+      "cache_read_tokens": 1009967,
+      "cache_creation_tokens": 50119,
+      "cost_usd": 0.9682632500000001,
+      "duration_ms": 126443
+    },
+    "success": true,
+    "num_turns": 15
+  },
+  "status": "closed",
+  "title": "Add --awaiting filter to tk list",
+  "type": "task",
+  "updated_at": "2026-01-14T17:00:05.836571Z"
+}

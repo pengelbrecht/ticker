@@ -1,0 +1,105 @@
+{
+  "blocked_by": [
+    "ztr"
+  ],
+  "closed_at": "2026-01-14T16:53:03.399049Z",
+  "closed_reason": "Updated NextTask to filter out awaiting tasks. Modified client.go: NextTask now checks IsAwaitingHuman() on the task returned by tk next. If the task is awaiting human action, it falls back to findNextReadyTask() which gets all tasks via ListTasks and filters locally for: open status, not blocked (by checking all blockers are closed), and not awaiting human (checks both Awaiting field and Manual flag for backwards compat). Added 5 unit tests covering: awaiting filtering, blocked filtering, closed filtering, all-awaiting returns nil, and integration test combining all criteria.",
+  "created_at": "2026-01-14T16:12:02.383621Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Modify the NextTask method in internal/ticks/client.go to exclude tasks where awaiting is set:\n\nCurrent behavior:\n- Returns next open, unblocked, non-manual task\n\nNew behavior:\n- Returns next open, unblocked task where awaiting=null\n\nThis may require:\n1. Parsing JSON output from tk next --json\n2. Filtering locally if tk CLI doesn't support the filter yet\n3. Or updating the tk next command itself\n\nNote: Manual field check should be backwards-compatible (check both manual and awaiting).\n\nAcceptance criteria:\n- [ ] tk next skips tasks with awaiting set\n- [ ] tk next skips tasks with manual=true (backwards compat)\n- [ ] Agent only receives tasks ready for agent work\n- [ ] Tests verify filtering behavior",
+  "id": "rfx",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "d8o",
+  "priority": 1,
+  "run": {
+    "session_id": "6d7b31e0-267b-415c-9b37-9413db254aa5",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T17:51:08.360562+01:00",
+    "ended_at": "2026-01-14T17:53:39.380135+01:00",
+    "output": "I'll start by reviewing the current implementation of `NextTask` in the ticks client to understand what needs to be modified.\n\nNow I understand the current implementation. The `NextTask` method at line 29-53 calls `tk next` and returns the task. However, we can't rely on the `tk` CLI filtering out awaiting tasks because the epic notes indicate the tk CLI may not yet support the `--awaiting` flag.\n\nThe solution is to:\n1. First try `tk next` to get a candidate task\n2. If the task has `Awaiting` set or `Manual=true` (both checked via `IsAwaitingHuman()`), skip it and find the next one\n3. Use `tk list` to get all tasks and filter locally\n\nLet me check the existing tests to understand the test patterns.\n\nNow I have a good understanding of the codebase. Let me write the todo list and implement the solution.\n\nNow I need to modify the `NextTask` method. The strategy is:\n\n1. The `tk next` command may return a task that has `awaiting` set or `manual=true`\n2. We need to filter these out locally since the tk CLI may not support filtering by awaiting yet\n3. If the first candidate is awaiting human action, we need to get all tasks and find the next one that's ready\n\nThe cleanest approach is to:\n1. Call `tk next` to get the candidate\n2. If the candidate is awaiting human action (using `IsAwaitingHuman()`), we need to iterate through tasks to find a ready one\n3. Use `ListTasks` to get all tasks and filter for ready tasks (open, unblocked, not awaiting)\n\nLet me implement this:\n\nNow let me update the todo and add tests for this functionality:\n\nNow let me add tests for the `findNextReadyTask` function. Since this function reads from files via `ListTasks`, I'll create unit tests that verify the filtering logic:\n\nNow let me run the tests:\n\nAll tests pass. Let me also run the full test suite to make sure nothing else broke:\n\nAll tests pass. Now let me update the todos and close the task:\n\nNow let me commit the changes:\n\nTask completed. Here's a summary of what was done:\n\n## Summary\n\n**Task [rfx] Update tk next to exclude awaiting tasks** - Completed\n\n### Changes Made\n\n1. **Modified `NextTask` in `internal/ticks/client.go`** (lines 26-62):\n   - Updated to check `IsAwaitingHuman()` on the task returned by `tk next`\n   - If the task is awaiting human action, falls back to local filtering via new `findNextReadyTask()` helper\n\n2. **Added `findNextReadyTask` helper function** (lines 65-107):\n   - Gets all tasks via `ListTasks(epicID)`\n   - Builds a map of blocked task IDs (where blocker is not closed)\n   - Filters for tasks that are: open, not blocked, and not awaiting human\n   - Uses `IsAwaitingHuman()` which checks both `Awaiting` field and `Manual` flag (backwards compatibility)\n\n3. **Added 5 test cases in `internal/ticks/client_test.go`**:\n   - `TestFindNextReadyTaskFiltersAwaiting` - verifies awaiting and manual tasks are filtered\n   - `TestFindNextReadyTaskFiltersBlocked` - verifies blocked detection logic\n   - `TestFindNextReadyTaskFiltersClosed` - verifies closed tasks are skipped\n   - `TestFindNextReadyTaskAllAwaiting` - verifies nil returned when all tasks awaiting\n   - `TestNextTaskFilteringIntegration` - integration test with all filtering criteria\n\n### Acceptance Criteria Met\n- ✅ tk next skips tasks with awaiting set\n- ✅ tk next skips tasks with manual=true (backwards compat)\n- ✅ Agent only receives tasks ready for agent work\n- ✅ Tests verify filtering behavior",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 568
+      },
+      {
+        "name": "Read",
+        "duration_ms": 334
+      },
+      {
+        "name": "Read",
+        "duration_ms": 747
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2706
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 13316
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1356
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 26484
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1757
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 725
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 693
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1488
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4304
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3194
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 268
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 520
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3698
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1305
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 7057,
+      "cache_read_tokens": 1135209,
+      "cache_creation_tokens": 42021,
+      "cost_usd": 1.02243975,
+      "duration_ms": 150134
+    },
+    "success": true,
+    "num_turns": 18
+  },
+  "status": "closed",
+  "title": "Update tk next to exclude awaiting tasks",
+  "type": "task",
+  "updated_at": "2026-01-14T16:53:03.399049Z"
+}

@@ -1,0 +1,169 @@
+{
+  "blocked_by": [
+    "rfx"
+  ],
+  "closed_at": "2026-01-14T20:54:43.986515Z",
+  "closed_reason": "Implemented NextTaskWithOptions in ticks client with functional options pattern: WithEpic(epicID) and StandaloneOnly(). Added ListAllTasks(), nextAnyTask(), nextStandaloneTask(), and findReadyTaskFromList() methods. Priority ordering is respected via sort.Slice. Awaiting, manual, blocked, and closed tasks are properly excluded. Comprehensive tests added covering all acceptance criteria.",
+  "created_at": "2026-01-14T16:17:09.735443Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Allow tk next to find tasks without a parent epic:\n\n```bash\n# Get next task across all epics and standalone\ntk next                    # Next task (any epic or standalone)\ntk next --epic epic-123    # Next task in specific epic (current behavior)\ntk next --standalone       # Next standalone task only\n```\n\nImplementation in ticks client:\n```go\nfunc (c *Client) NextTask(opts ...NextOption) (*Task, error) {\n    // If no epic specified, search all tasks\n    if opts.Epic == \"\" \u0026\u0026 opts.Standalone {\n        return c.nextStandaloneTask()\n    }\n    if opts.Epic == \"\" {\n        return c.nextAnyTask()\n    }\n    return c.nextTaskInEpic(opts.Epic)\n}\n\nfunc (c *Client) nextStandaloneTask() (*Task, error) {\n    tasks, _ := c.ListTasks(\"\")  // All tasks\n    for _, t := range tasks {\n        if t.Parent == \"\" \u0026\u0026 !t.IsAwaitingHuman() \u0026\u0026 !t.isBlocked() {\n            return \u0026t, nil\n        }\n    }\n    return nil, nil\n}\n```\n\nAcceptance criteria:\n- [ ] tk next without epic finds any ready task\n- [ ] --standalone filters to parentless tasks\n- [ ] Priority ordering respected\n- [ ] Awaiting and blocked tasks excluded",
+  "id": "h5t",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "8x8",
+  "priority": 3,
+  "run": {
+    "session_id": "911f2e15-dba2-49e3-840c-bf77aad93142",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T21:51:15.132903+01:00",
+    "ended_at": "2026-01-14T21:55:18.600715+01:00",
+    "output": "I'll start by reviewing the current task and understanding what needs to be implemented. The task is to support standalone tasks in `tk next` command.\n\nLet me first explore the current implementation of the ticks client to understand the existing code structure.\n\nNow let me look at the types to understand the Task structure better.\n\nNow let me look at the existing tests to understand the testing patterns used.\n\nNow I understand the structure. The task requires implementing support for standalone tasks in `tk next`. Looking at the current implementation:\n\n1. `NextTask(epicID string)` currently requires an epicID\n2. The task spec asks for:\n   - `tk next` without epic finds any ready task\n   - `--standalone` filters to parentless tasks\n   - Priority ordering respected\n   - Awaiting and blocked tasks excluded\n\nLet me also check how the engine uses `NextTask` to understand the integration requirements.\n\nNow I understand the requirements. I need to:\n\n1. Add a `NextTaskOptions` struct to configure the behavior\n2. Modify `NextTask` to accept options via a functional options pattern\n3. Implement logic to find any ready task across all tasks (not just within an epic)\n4. Implement `--standalone` filter for parentless tasks\n5. Ensure priority ordering is respected\n6. Update the engine interface if needed\n\nLet me first look at how `ListTasks` works to understand how to get all tasks without an epic.\n\nI see. `ListTasks` uses `tk list --parent \u003cepicID\u003e`. To get all tasks regardless of epic, I'll need to list all tasks. Let me implement the solution.\n\nThe implementation approach:\n1. Add `NextTaskOptions` struct with `EpicID` and `StandaloneOnly` fields\n2. Add `NextTaskOption` functional option type\n3. Modify `NextTask` to use options pattern (with backwards compatibility)\n4. Add `ListAllTasks()` method to get all tasks without filtering by parent\n5. Implement `nextAnyTask()` and `nextStandaloneTask()` helper methods\n6. Update the interface in engine.go\n\nNow let me implement the changes. I'll start by modifying the ticks client to support the new `NextTask` functionality.\n\nNow let me add a `ListAllTasks` method and update the `NextTask` method to support options. First let me add the `ListAllTasks` method after `ListTasks`:\n\nNow let me add `ListAllTasks` after `ListTasks`:\n\nNow I need to add the `NextTaskWithOptions` method and the helper methods for finding any task and standalone tasks. Let me find a good spot to add this after `NextTask`:\n\nNow I'll add the new `NextTaskWithOptions` method and the helper methods right after `NextTask`:\n\nNow I need to make sure the tasks are sorted by priority. The `tk list` command should return them sorted, but let me ensure that by adding a sort to `ListAllTasks` or verifying that task lists are sorted properly. Let me check what the tk CLI returns. Let me also add sorting to ensure tasks are sorted by priority since the acceptance criteria requires \"Priority ordering respected\".\n\nI need to add `sort` to the imports and add sorting to ensure tasks are sorted by priority:\n\nNow let me update `findReadyTaskFromList` to sort by priority:\n\nNow let me update the todo and write comprehensive tests. First let me check what tests already exist and then add new ones.\n\nNow let me add comprehensive tests for the new standalone task support functionality:\n\nNow let me run the tests to verify everything works:\n\nAll tests pass. Now let me run all tests to make sure nothing is broken:\n\nAll tests pass. Now let me update the todo and close the task:\n\nNow let me add a note to the epic for the next iteration:\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2612
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 360
+      },
+      {
+        "name": "Read",
+        "duration_ms": 664
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1003
+      },
+      {
+        "name": "Read",
+        "duration_ms": 757
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 801
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1607
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2510
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 765
+      },
+      {
+        "name": "Read",
+        "duration_ms": 503
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4849
+      },
+      {
+        "name": "Read",
+        "duration_ms": 694
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5615
+      },
+      {
+        "name": "Read",
+        "duration_ms": 659
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 19275
+      },
+      {
+        "name": "Read",
+        "duration_ms": 792
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2108
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 8106
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1788
+      },
+      {
+        "name": "Read",
+        "duration_ms": 626
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 36992
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2765
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1385
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 706
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 671
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2845
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2909
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 453
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 688
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 788
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4781
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2789
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1011
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 13139,
+      "cache_read_tokens": 3110578,
+      "cache_creation_tokens": 82842,
+      "cost_usd": 2.4215565000000003,
+      "duration_ms": 243031
+    },
+    "success": true,
+    "num_turns": 34
+  },
+  "status": "closed",
+  "title": "Support standalone tasks in tk next",
+  "type": "task",
+  "updated_at": "2026-01-14T20:54:43.986515Z"
+}

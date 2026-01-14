@@ -1,0 +1,105 @@
+{
+  "blocked_by": [
+    "rfx"
+  ],
+  "closed_at": "2026-01-14T16:57:52.65621Z",
+  "closed_reason": "Added NextAwaitingTask(epicID, awaitingTypes...) method to ticks Client. Calls tk next with --awaiting flag, optional epic ID, and optional comma-separated awaiting types filter. Returns nil for no awaiting tasks. Added 5 tests covering arg construction for all parameter combinations, response parsing, and type filtering.",
+  "created_at": "2026-01-14T16:12:20.541712Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Add support for humans to query tasks awaiting their attention:\n\n```bash\n# Human's next task (any type)\ntk next epic-123 --awaiting\n\n# Human's next approval to review  \ntk next epic-123 --awaiting approval\n\n# Human's next content or review task\ntk next epic-123 --awaiting content,review\n\n# Human's next task across all epics\ntk next --awaiting\n```\n\nImplementation in ticks client:\n```go\nfunc (c *Client) NextAwaitingTask(epicID string, awaitingTypes ...string) (*Task, error) {\n    args := []string{\"next\"}\n    if epicID != \"\" {\n        args = append(args, epicID)\n    }\n    args = append(args, \"--awaiting\")\n    if len(awaitingTypes) \u003e 0 {\n        args = append(args, strings.Join(awaitingTypes, \",\"))\n    }\n    // ... parse result\n}\n```\n\nAcceptance criteria:\n- [ ] --awaiting flag returns tasks awaiting human\n- [ ] Can filter by specific awaiting types\n- [ ] Works with or without epic-id\n- [ ] Returns null if no tasks awaiting",
+  "id": "92v",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "d8o",
+  "priority": 2,
+  "run": {
+    "session_id": "b403c772-2f31-461d-88c6-1f186e95aa25",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T17:56:10.167941+01:00",
+    "ended_at": "2026-01-14T17:58:21.092861+01:00",
+    "output": "I'll start by reviewing the current task and understanding the codebase structure for implementing the `NextAwaitingTask` method in the ticks client.\n\nLet me first look at the existing client implementation and understand how similar methods are structured.\n\nNow I understand the structure. I need to implement `NextAwaitingTask` method that:\n1. Takes an epicID (optional) and awaitingTypes (optional variadic)\n2. Calls `tk next` with `--awaiting` flag\n3. Returns a task awaiting human attention\n\nLet me also look at the existing tests to understand the testing patterns.\n\nNow I have a good understanding of the codebase. Let me implement the `NextAwaitingTask` method. Based on the task description:\n\n1. The method should call `tk next` with `--awaiting` flag\n2. It should optionally filter by awaiting types\n3. It should work with or without epic-id\n4. It should return null if no tasks awaiting\n\nNow let me implement the `NextAwaitingTask` method. I'll add it after the existing `NextTask` method.\n\nNow let me add tests for the `NextAwaitingTask` method.\n\nI need to add the `strings` import to the test file since I'm using `strings.Join`.\n\nNow let me update the todo and run the tests.\n\nAll tests pass. Let me also run all tests to make sure nothing is broken.\n\nAll tests pass. Now let me update the todos and close the task.\n\nTask completed. I implemented the `NextAwaitingTask` method in the ticks client that allows humans to query tasks awaiting their attention. The method:\n\n1. **Supports all acceptance criteria:**\n   - `--awaiting` flag returns tasks awaiting human (via `tk next --awaiting`)\n   - Can filter by specific awaiting types (e.g., `approval`, `review`, `content`)\n   - Works with or without epic-id \n   - Returns nil if no tasks awaiting\n\n2. **Implementation details:**\n   - Added `NextAwaitingTask(epicID string, awaitingTypes ...string) (*Task, error)` at line 67 of `internal/ticks/client.go`\n   - Constructs CLI args: `[\"next\", epicID?, \"--awaiting\", types?, \"--json\"]`\n   - Joins multiple awaiting types with comma (e.g., `\"content,review\"`)\n   - Handles error messages for \"no awaiting\"/\"no tasks\" scenarios\n\n3. **Tests added:**\n   - `TestNextAwaitingTaskArgsConstruction` - 6 test cases covering all parameter combinations\n   - `TestNextAwaitingTaskReturnsAwaitingTask` - verifies parsing of awaiting task JSON\n   - `TestNextAwaitingTaskReturnsNilForEmptyResponse` - verifies empty response handling\n   - `TestNextAwaitingTaskTypesJoin` - verifies comma-joining of types\n   - `TestNextAwaitingTaskAllAwaitingTypes` - verifies all 7 awaiting types work",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 492
+      },
+      {
+        "name": "Read",
+        "duration_ms": 373
+      },
+      {
+        "name": "Read",
+        "duration_ms": 689
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1830
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7985
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2320
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 18477
+      },
+      {
+        "name": "Read",
+        "duration_ms": 510
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2143
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1806
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 661
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 270
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1354
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3095
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3694
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3265
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1078
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5661,
+      "cache_read_tokens": 1170313,
+      "cache_creation_tokens": 43073,
+      "cost_usd": 1.0114267499999998,
+      "duration_ms": 130413
+    },
+    "success": true,
+    "num_turns": 18
+  },
+  "status": "closed",
+  "title": "Add tk next --awaiting for human mode",
+  "type": "task",
+  "updated_at": "2026-01-14T16:57:52.65621Z"
+}

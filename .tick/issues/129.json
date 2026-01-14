@@ -1,0 +1,17 @@
+{
+  "id": "129",
+  "title": "Deprecate --manual flag with warning",
+  "description": "When user uses --manual flag, show deprecation warning and map to --awaiting work:\n\nIn ticks client wrapper or CLI handling:\n```go\nfunc handleManualFlag(cmd *cobra.Command) {\n    if cmd.Flags().Changed(\"manual\") {\n        fmt.Fprintln(os.Stderr, \"Warning: --manual is deprecated, use --awaiting work instead\")\n        // Map to new field\n        awaiting = \"work\"\n    }\n}\n```\n\nThis is a soft deprecation - the flag still works but warns users to migrate.\n\nAcceptance criteria:\n- [ ] --manual flag shows deprecation warning to stderr\n- [ ] --manual maps internally to --awaiting work\n- [ ] Existing scripts continue to work\n- [ ] Warning message includes migration guidance",
+  "status": "closed",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "agk"
+  ],
+  "parent": "d8o",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:12:52.926014Z",
+  "updated_at": "2026-01-14T21:18:02.658373Z",
+  "closed_at": "2026-01-14T21:18:02.658373Z"
+}

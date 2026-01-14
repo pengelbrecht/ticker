@@ -1,0 +1,73 @@
+{
+  "blocked_by": [
+    "v8u"
+  ],
+  "closed_at": "2026-01-14T17:01:24.40843Z",
+  "closed_reason": "Added Approve and Reject convenience methods to Client at lines 404-414 of internal/ticks/client.go. Both wrap SetVerdict: Approve calls SetVerdict(taskID, 'approved', '') and Reject calls SetVerdict(taskID, 'rejected', feedback). Feedback note uses --from human via SetVerdict's AddNote call.",
+  "created_at": "2026-01-14T16:12:23.002072Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Add convenience methods to ticks client for common human actions:\n\n```go\n// Approve sets verdict=approved, triggering verdict processing\nfunc (c *Client) Approve(taskID string) error {\n    return c.SetVerdict(taskID, \"approved\", \"\")\n}\n\n// Reject sets verdict=rejected with optional feedback\nfunc (c *Client) Reject(taskID string, feedback string) error {\n    return c.SetVerdict(taskID, \"rejected\", feedback)\n}\n```\n\nThese wrap the SetVerdict method but provide cleaner API for common operations.\n\nAcceptance criteria:\n- [ ] Approve method implemented\n- [ ] Reject method implemented with feedback support\n- [ ] Both call SetVerdict internally\n- [ ] Feedback note uses --from human",
+  "id": "189",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "d8o",
+  "priority": 2,
+  "run": {
+    "session_id": "34b468e0-d032-46b5-b11a-ab51df9c70c8",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T18:00:33.342654+01:00",
+    "ended_at": "2026-01-14T18:01:43.083057+01:00",
+    "output": "I'll implement the Approve and Reject helper methods for the ticks client. Let me start by reading the current client.go file to understand the existing SetVerdict implementation.\n\nNow I understand the existing code. The `SetVerdict` method is at line 388-402. I need to add `Approve` and `Reject` convenience methods that wrap `SetVerdict`. Let me add these methods after `SetVerdict`.\n\nThe methods are implemented. Now let me run the tests to ensure everything passes.\n\nAll tests pass. Now let me also run the full test suite to make sure nothing is broken.\n\nAll tests pass. Now let me close the task.\n\nTask complete. I implemented the Approve and Reject convenience methods in `internal/ticks/client.go` at lines 404-414:\n\n- **Approve(taskID string)** - Calls `SetVerdict(taskID, \"approved\", \"\")` with no feedback\n- **Reject(taskID string, feedback string)** - Calls `SetVerdict(taskID, \"rejected\", feedback)` with the provided feedback\n\nBoth methods wrap SetVerdict internally. The feedback note in Reject automatically uses `--from human` via the existing AddNote mechanism in SetVerdict. All tests pass.",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 809
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7062
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 757
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 643
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 482
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2330
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 935
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2635
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2183
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 2019,
+      "cache_read_tokens": 507752,
+      "cache_creation_tokens": 20299,
+      "cost_usd": 0.44815974999999986,
+      "duration_ms": 69022
+    },
+    "success": true,
+    "num_turns": 10
+  },
+  "status": "closed",
+  "title": "Implement Approve and Reject helper methods",
+  "type": "task",
+  "updated_at": "2026-01-14T17:01:24.40843Z"
+}
