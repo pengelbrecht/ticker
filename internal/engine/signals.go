@@ -18,7 +18,26 @@ const (
 	SignalEject
 
 	// SignalBlocked indicates the agent is blocked (missing credentials, unclear requirements, etc).
+	// Legacy signal - maps to InputNeeded for backwards compatibility.
 	SignalBlocked
+
+	// SignalApprovalNeeded indicates the agent needs human approval before proceeding.
+	SignalApprovalNeeded
+
+	// SignalInputNeeded indicates the agent needs human input/information to continue.
+	SignalInputNeeded
+
+	// SignalReviewRequested indicates the agent wants a human to review work before continuing.
+	SignalReviewRequested
+
+	// SignalContentReview indicates the agent needs human review of generated content.
+	SignalContentReview
+
+	// SignalEscalate indicates the agent is escalating to a human due to complexity or risk.
+	SignalEscalate
+
+	// SignalCheckpoint indicates the agent has reached a checkpoint and is saving state.
+	SignalCheckpoint
 )
 
 // String returns the string representation of the signal.
@@ -30,6 +49,18 @@ func (s Signal) String() string {
 		return "EJECT"
 	case SignalBlocked:
 		return "BLOCKED"
+	case SignalApprovalNeeded:
+		return "APPROVAL_NEEDED"
+	case SignalInputNeeded:
+		return "INPUT_NEEDED"
+	case SignalReviewRequested:
+		return "REVIEW_REQUESTED"
+	case SignalContentReview:
+		return "CONTENT_REVIEW"
+	case SignalEscalate:
+		return "ESCALATE"
+	case SignalCheckpoint:
+		return "CHECKPOINT"
 	default:
 		return "NONE"
 	}

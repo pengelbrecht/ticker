@@ -13,6 +13,12 @@ func TestSignal_String(t *testing.T) {
 		{SignalComplete, "COMPLETE"},
 		{SignalEject, "EJECT"},
 		{SignalBlocked, "BLOCKED"},
+		{SignalApprovalNeeded, "APPROVAL_NEEDED"},
+		{SignalInputNeeded, "INPUT_NEEDED"},
+		{SignalReviewRequested, "REVIEW_REQUESTED"},
+		{SignalContentReview, "CONTENT_REVIEW"},
+		{SignalEscalate, "ESCALATE"},
+		{SignalCheckpoint, "CHECKPOINT"},
 	}
 
 	for _, tt := range tests {
