@@ -1259,6 +1259,220 @@ EXAMPLES:
 
 ---
 
+# Watch Mode and Idle Behavior
+
+## Problem
+
+When ticker runs in `--auto` mode and exhausts all available tasks (all awaiting human or done), it currently exits. With the agent-human workflow, ticker should **wait** for tasks to become available again.
+
+## Watch Mode Design
+
+```
+ticker run --auto --watch
+```
+
+Behavior:
+1. Process all available tasks
+2. When no tasks available, enter idle/watch state
+3. Poll for changes (or use file system watcher on `.tick/`)
+4. When task becomes available, resume processing
+5. Exit only on explicit quit, budget exhaustion, or `--timeout`
+
+```mermaid
+flowchart TD
+    Start([Start]) --> GetNext[Get next task]
+    GetNext --> HasTask{Task found?}
+
+    HasTask -->|Yes| RunAgent[Run agent]
+    RunAgent --> GetNext
+
+    HasTask -->|No| WatchMode{Watch mode?}
+
+    WatchMode -->|No| Exit([Exit])
+    WatchMode -->|Yes| Idle[Enter idle state]
+
+    Idle --> Poll[Poll for changes]
+    Poll --> Changed{Tasks available?}
+
+    Changed -->|No| CheckTimeout{Timeout?}
+    CheckTimeout -->|No| Poll
+    CheckTimeout -->|Yes| Exit
+
+    Changed -->|Yes| GetNext
+```
+
+### CLI Flags
+
+```bash
+ticker run --auto --watch              # Watch indefinitely
+ticker run --auto --watch --timeout 1h # Watch with timeout
+ticker run --auto --watch --poll 5s    # Custom poll interval (default 10s)
+```
+
+---
+
+# Race Condition Prevention
+
+## Problem
+
+When a human responds to a tick, they might make multiple edits:
+
+```bash
+tk reject abc123                          # Clear awaiting
+tk note abc123 "feedback" --from human    # Add feedback
+```
+
+If ticker picks up the task between these commands, the agent won't see the feedback note.
+
+## Solutions
+
+### Option A: Atomic Commands (Recommended)
+
+Make `tk reject` and `tk approve` include note in single operation:
+
+```bash
+tk reject abc123 "feedback"   # Sets verdict + adds note atomically
+```
+
+This is already in the design. The note is added **before** the verdict is processed.
+
+### Option B: Debounce
+
+Ticker waits a short period after a task becomes available before picking it up:
+
+```go
+func (e *Engine) getNextTask() *Tick {
+    tick := e.ticks.Next(epicID)
+    if tick == nil {
+        return nil
+    }
+
+    // Wait for potential follow-up edits
+    time.Sleep(2 * time.Second)
+
+    // Re-fetch to get any updates
+    return e.ticks.Get(tick.ID)
+}
+```
+
+Downside: Adds latency to all task pickups.
+
+### Option C: Explicit Release
+
+Human must explicitly release task back to agent:
+
+```bash
+tk reject abc123 "feedback"   # Sets verdict, but awaiting stays set
+tk release abc123             # Now clears awaiting
+```
+
+Downside: Extra step for humans, easy to forget.
+
+### Recommendation
+
+Use **Option A** (atomic commands) as primary mechanism:
+- `tk reject <id> "feedback"` is a single atomic operation
+- Note is added first, then verdict processed
+- No race window
+
+Add **Option B** (debounce) as defense-in-depth:
+- Short debounce (1-2 seconds) on task pickup
+- Configurable: `ticker run --debounce 2s`
+- Catches edge cases like slow file system sync
+
+---
+
+# Orphaned Ticks and Auto Mode
+
+## Problem
+
+Currently, `tk next <epic-id>` only returns tasks within a specific epic. But what about:
+- Standalone ticks (no parent epic)
+- Ticks orphaned from their epic (epic closed but tasks remain)
+
+## Auto Mode Scope
+
+### Current Behavior
+
+```bash
+ticker run --auto  # Picks next ready epic, runs tasks within it
+```
+
+### Proposed Enhancement
+
+Auto mode should also consider:
+1. **Epics with ready tasks** (current behavior)
+2. **Standalone tasks** (no parent epic, not awaiting)
+3. **Orphaned tasks** (parent epic closed, task still open)
+
+### Priority Order
+
+```
+1. Active epics with in-progress work (continue momentum)
+2. Epics with ready tasks (start new epic work)
+3. Standalone tasks (housekeeping)
+4. Orphaned tasks (cleanup)
+```
+
+### Implementation
+
+```go
+func (e *Engine) getNextWork() (*Epic, *Tick) {
+    // 1. Check current epic (if any) for more tasks
+    if e.currentEpic != nil {
+        if tick := e.ticks.Next(e.currentEpic.ID); tick != nil {
+            return e.currentEpic, tick
+        }
+    }
+
+    // 2. Find epics with ready tasks
+    epics := e.ticks.ListEpics(WithReadyTasks())
+    if len(epics) > 0 {
+        epic := epics[0] // Could sort by priority
+        tick := e.ticks.Next(epic.ID)
+        return epic, tick
+    }
+
+    // 3. Find standalone tasks (no parent)
+    standalones := e.ticks.List(NoParent(), Ready())
+    if len(standalones) > 0 {
+        return nil, standalones[0]
+    }
+
+    // 4. Find orphaned tasks (parent closed)
+    orphans := e.ticks.List(ParentClosed(), Ready())
+    if len(orphans) > 0 {
+        return nil, orphans[0]
+    }
+
+    return nil, nil
+}
+```
+
+### CLI Support
+
+```bash
+# Current: only epics
+ticker run --auto
+
+# With standalone/orphan support
+ticker run --auto --include-standalone   # Include tasks without parent
+ticker run --auto --include-orphans      # Include tasks with closed parent
+ticker run --auto --all                  # Include everything
+```
+
+### tk next Enhancement
+
+```bash
+# Get next task across all epics and standalone
+tk next                    # Next task (any epic or standalone)
+tk next --epic epic-123    # Next task in specific epic
+tk next --standalone       # Next standalone task only
+tk next --orphan           # Next orphaned task only
+```
+
+---
+
 # Implementation Checklist
 
 ## ticks (tk CLI)
@@ -1280,6 +1494,14 @@ EXAMPLES:
 - [ ] Deprecate `--manual` flag (alias to `--awaiting work`)
 - [ ] Update help text with workflow examples
 
+## ticks (tk CLI) - Orphaned/Standalone Support
+
+- [ ] Add `tk next` without epic-id (search all)
+- [ ] Add `--epic` flag to `tk next` for specific epic
+- [ ] Add `--standalone` flag to filter tasks without parent
+- [ ] Add `--orphan` flag to filter tasks with closed parent
+- [ ] Add parent status tracking (is parent closed?)
+
 ## ticker (Engine)
 
 - [ ] Add new signal parsing (APPROVAL_NEEDED, INPUT_NEEDED, etc.)
@@ -1289,3 +1511,26 @@ EXAMPLES:
 - [ ] Build context with human feedback notes
 - [ ] Update agent system prompt with signal documentation
 - [ ] Update CLI help text with workflow documentation
+
+## ticker (Watch Mode)
+
+- [ ] Add `--watch` flag to enable watch mode
+- [ ] Implement idle state when no tasks available
+- [ ] Add polling/file watching for `.tick/` changes
+- [ ] Add `--timeout` flag for watch duration limit
+- [ ] Add `--poll` flag for custom poll interval
+- [ ] Resume processing when tasks become available
+
+## ticker (Race Condition Prevention)
+
+- [ ] Ensure `tk reject` adds note before processing verdict
+- [ ] Add optional debounce on task pickup (`--debounce`)
+- [ ] Re-fetch task after debounce to get latest state
+
+## ticker (Orphaned/Standalone Support)
+
+- [ ] Add `--include-standalone` flag to auto mode
+- [ ] Add `--include-orphans` flag to auto mode
+- [ ] Add `--all` flag (alias for both)
+- [ ] Implement priority order (epics > standalone > orphans)
+- [ ] Track current epic for momentum continuation
