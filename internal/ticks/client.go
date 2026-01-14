@@ -349,6 +349,18 @@ func (c *Client) AddNote(issueID, message string, extraArgs ...string) error {
 	return nil
 }
 
+// AddAgentNote adds a note from the agent (default author).
+// This is the standard way for agents to leave progress notes.
+func (c *Client) AddAgentNote(issueID, message string) error {
+	return c.AddNote(issueID, message)
+}
+
+// AddHumanNote adds a note from a human.
+// Use this for feedback, answers, and other human-provided content.
+func (c *Client) AddHumanNote(issueID, message string) error {
+	return c.AddNote(issueID, message, "--from", "human")
+}
+
 // SetStatus updates the status of an issue (open, in_progress, closed).
 func (c *Client) SetStatus(issueID, status string) error {
 	_, err := c.run("update", issueID, "--status", status)
@@ -494,6 +506,89 @@ func (c *Client) GetNotes(epicID string) ([]string, error) {
 		}
 	}
 	return notes, nil
+}
+
+// GetStructuredNotes returns notes as structured Note objects with author metadata.
+// Reads from the "structured_notes" field if present, otherwise parses legacy "notes" string.
+// Each legacy note line is treated as an agent note (default author).
+func (c *Client) GetStructuredNotes(issueID string) ([]Note, error) {
+	// Find the .tick/issues directory
+	tickDir, err := findTickDir()
+	if err != nil {
+		return nil, fmt.Errorf("finding .tick directory: %w", err)
+	}
+
+	filePath := filepath.Join(tickDir, "issues", issueID+".json")
+
+	// Read the tick file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading tick file %s: %w", issueID, err)
+	}
+
+	// Parse into a struct that can hold both formats
+	var tickData struct {
+		Notes           string `json:"notes,omitempty"`
+		StructuredNotes []Note `json:"structured_notes,omitempty"`
+	}
+	if err := json.Unmarshal(data, &tickData); err != nil {
+		return nil, fmt.Errorf("parsing tick file %s: %w", issueID, err)
+	}
+
+	// If structured_notes exists, use it
+	if len(tickData.StructuredNotes) > 0 {
+		return tickData.StructuredNotes, nil
+	}
+
+	// Fall back to parsing legacy notes string
+	if tickData.Notes == "" {
+		return nil, nil
+	}
+
+	lines := strings.Split(tickData.Notes, "\n")
+	var notes []Note
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			// Legacy notes are treated as agent notes
+			notes = append(notes, Note{Content: line, Author: "agent"})
+		}
+	}
+	return notes, nil
+}
+
+// GetNotesByAuthor returns notes filtered by author.
+// Pass "human" to get only human notes, "agent" (or empty) for agent notes.
+func (c *Client) GetNotesByAuthor(issueID string, author string) ([]Note, error) {
+	notes, err := c.GetStructuredNotes(issueID)
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []Note
+	for _, note := range notes {
+		if author == "human" && note.IsFromHuman() {
+			filtered = append(filtered, note)
+		} else if (author == "agent" || author == "") && note.IsFromAgent() {
+			filtered = append(filtered, note)
+		}
+	}
+	return filtered, nil
+}
+
+// GetHumanNotes returns only notes from humans.
+// Use this to read feedback and answers from human reviewers.
+func (c *Client) GetHumanNotes(issueID string) ([]Note, error) {
+	return c.GetNotesByAuthor(issueID, "human")
+}
+
+// GetAgentNotes returns only notes from agents.
+// Use this to read progress notes from previous agent iterations.
+func (c *Client) GetAgentNotes(issueID string) ([]Note, error) {
+	return c.GetNotesByAuthor(issueID, "agent")
 }
 
 // SetRunRecord stores a RunRecord on a task by updating the tick file directly.

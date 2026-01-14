@@ -60,6 +60,25 @@ type Epic struct {
 	ClosedAt    time.Time `json:"closed_at,omitempty"`
 }
 
+// Note represents a single note with author metadata.
+// Notes can be from agents (default) or humans.
+type Note struct {
+	Content   string    `json:"content"`
+	Author    string    `json:"author,omitempty"` // "agent" (default/empty) or "human"
+	CreatedAt time.Time `json:"created_at,omitempty"`
+}
+
+// IsFromHuman returns true if the note was created by a human.
+func (n *Note) IsFromHuman() bool {
+	return n.Author == "human"
+}
+
+// IsFromAgent returns true if the note was created by an agent.
+// Notes with empty author are considered agent notes (default).
+func (n *Note) IsFromAgent() bool {
+	return n.Author == "" || n.Author == "agent"
+}
+
 // IsOpen returns true if the task status is "open".
 func (t *Task) IsOpen() bool {
 	return t.Status == "open"

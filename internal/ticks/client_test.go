@@ -1708,3 +1708,362 @@ func TestNextTaskFilteringIntegration(t *testing.T) {
 		t.Errorf("expected 'blocker' (first ready task), got %s", foundTask.ID)
 	}
 }
+
+// TestNoteIsFromHuman tests Note.IsFromHuman method
+func TestNoteIsFromHuman(t *testing.T) {
+	tests := []struct {
+		author   string
+		expected bool
+	}{
+		{"human", true},
+		{"agent", false},
+		{"", false},
+		{"other", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.author, func(t *testing.T) {
+			note := Note{Content: "test", Author: tc.author}
+			if got := note.IsFromHuman(); got != tc.expected {
+				t.Errorf("IsFromHuman() = %v, want %v for author %q", got, tc.expected, tc.author)
+			}
+		})
+	}
+}
+
+// TestNoteIsFromAgent tests Note.IsFromAgent method
+func TestNoteIsFromAgent(t *testing.T) {
+	tests := []struct {
+		author   string
+		expected bool
+	}{
+		{"agent", true},
+		{"", true},       // Empty author defaults to agent
+		{"human", false},
+		{"other", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.author, func(t *testing.T) {
+			note := Note{Content: "test", Author: tc.author}
+			if got := note.IsFromAgent(); got != tc.expected {
+				t.Errorf("IsFromAgent() = %v, want %v for author %q", got, tc.expected, tc.author)
+			}
+		})
+	}
+}
+
+// TestGetStructuredNotesLegacyFormat tests reading legacy notes string format
+func TestGetStructuredNotesLegacyFormat(t *testing.T) {
+	// Create temp directory structure
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	// Change to temp directory so findTickDir works
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	// Create a tick file with legacy notes string
+	taskData := map[string]interface{}{
+		"id":     "legacy-notes",
+		"title":  "Task with Legacy Notes",
+		"status": "open",
+		"notes":  "First note\nSecond note\nThird note",
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "legacy-notes.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	// Test GetStructuredNotes
+	client := NewClient()
+	notes, err := client.GetStructuredNotes("legacy-notes")
+	if err != nil {
+		t.Fatalf("GetStructuredNotes failed: %v", err)
+	}
+
+	if len(notes) != 3 {
+		t.Errorf("expected 3 notes, got %d", len(notes))
+	}
+
+	// All legacy notes should be marked as agent notes
+	for i, note := range notes {
+		if !note.IsFromAgent() {
+			t.Errorf("note[%d] should be from agent, got author %q", i, note.Author)
+		}
+	}
+
+	// Verify content
+	expectedContent := []string{"First note", "Second note", "Third note"}
+	for i, note := range notes {
+		if note.Content != expectedContent[i] {
+			t.Errorf("note[%d].Content = %q, want %q", i, note.Content, expectedContent[i])
+		}
+	}
+}
+
+// TestGetStructuredNotesNewFormat tests reading structured_notes array
+func TestGetStructuredNotesNewFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	// Create a tick file with structured notes
+	taskData := map[string]interface{}{
+		"id":     "structured-notes",
+		"title":  "Task with Structured Notes",
+		"status": "open",
+		"structured_notes": []map[string]interface{}{
+			{"content": "Agent progress note", "author": "agent"},
+			{"content": "Human feedback", "author": "human"},
+			{"content": "Another agent note", "author": ""},
+		},
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "structured-notes.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	client := NewClient()
+	notes, err := client.GetStructuredNotes("structured-notes")
+	if err != nil {
+		t.Fatalf("GetStructuredNotes failed: %v", err)
+	}
+
+	if len(notes) != 3 {
+		t.Errorf("expected 3 notes, got %d", len(notes))
+	}
+
+	// Verify authors
+	if !notes[0].IsFromAgent() {
+		t.Error("notes[0] should be from agent")
+	}
+	if !notes[1].IsFromHuman() {
+		t.Error("notes[1] should be from human")
+	}
+	if !notes[2].IsFromAgent() {
+		t.Error("notes[2] should be from agent (empty author defaults to agent)")
+	}
+}
+
+// TestGetNotesByAuthor tests filtering notes by author
+func TestGetNotesByAuthor(t *testing.T) {
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	// Create a tick file with mixed notes
+	taskData := map[string]interface{}{
+		"id":     "mixed-notes",
+		"title":  "Task with Mixed Notes",
+		"status": "open",
+		"structured_notes": []map[string]interface{}{
+			{"content": "Agent note 1", "author": "agent"},
+			{"content": "Human note 1", "author": "human"},
+			{"content": "Agent note 2", "author": ""},
+			{"content": "Human note 2", "author": "human"},
+		},
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "mixed-notes.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	client := NewClient()
+
+	// Test filtering by human author
+	humanNotes, err := client.GetNotesByAuthor("mixed-notes", "human")
+	if err != nil {
+		t.Fatalf("GetNotesByAuthor(human) failed: %v", err)
+	}
+	if len(humanNotes) != 2 {
+		t.Errorf("expected 2 human notes, got %d", len(humanNotes))
+	}
+	for _, note := range humanNotes {
+		if !note.IsFromHuman() {
+			t.Errorf("expected human note, got author %q", note.Author)
+		}
+	}
+
+	// Test filtering by agent author
+	agentNotes, err := client.GetNotesByAuthor("mixed-notes", "agent")
+	if err != nil {
+		t.Fatalf("GetNotesByAuthor(agent) failed: %v", err)
+	}
+	if len(agentNotes) != 2 {
+		t.Errorf("expected 2 agent notes, got %d", len(agentNotes))
+	}
+	for _, note := range agentNotes {
+		if !note.IsFromAgent() {
+			t.Errorf("expected agent note, got author %q", note.Author)
+		}
+	}
+}
+
+// TestGetHumanNotes tests the GetHumanNotes convenience method
+func TestGetHumanNotes(t *testing.T) {
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	taskData := map[string]interface{}{
+		"id":     "human-notes-test",
+		"title":  "Task for Human Notes Test",
+		"status": "open",
+		"structured_notes": []map[string]interface{}{
+			{"content": "Agent did something", "author": "agent"},
+			{"content": "Please use approach X", "author": "human"},
+		},
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "human-notes-test.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	client := NewClient()
+	humanNotes, err := client.GetHumanNotes("human-notes-test")
+	if err != nil {
+		t.Fatalf("GetHumanNotes failed: %v", err)
+	}
+
+	if len(humanNotes) != 1 {
+		t.Errorf("expected 1 human note, got %d", len(humanNotes))
+	}
+	if len(humanNotes) > 0 && humanNotes[0].Content != "Please use approach X" {
+		t.Errorf("unexpected content: %q", humanNotes[0].Content)
+	}
+}
+
+// TestGetAgentNotes tests the GetAgentNotes convenience method
+func TestGetAgentNotes(t *testing.T) {
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	taskData := map[string]interface{}{
+		"id":     "agent-notes-test",
+		"title":  "Task for Agent Notes Test",
+		"status": "open",
+		"structured_notes": []map[string]interface{}{
+			{"content": "Completed step 1", "author": "agent"},
+			{"content": "Use different approach", "author": "human"},
+			{"content": "Completed step 2", "author": ""}, // Empty author = agent
+		},
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "agent-notes-test.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	client := NewClient()
+	agentNotes, err := client.GetAgentNotes("agent-notes-test")
+	if err != nil {
+		t.Fatalf("GetAgentNotes failed: %v", err)
+	}
+
+	if len(agentNotes) != 2 {
+		t.Errorf("expected 2 agent notes, got %d", len(agentNotes))
+	}
+}
+
+// TestGetStructuredNotesNonexistent tests reading notes from nonexistent issue
+func TestGetStructuredNotesNonexistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	client := NewClient()
+	notes, err := client.GetStructuredNotes("nonexistent")
+	if err != nil {
+		t.Fatalf("GetStructuredNotes for nonexistent should not error, got: %v", err)
+	}
+	if notes != nil {
+		t.Errorf("expected nil notes for nonexistent issue, got %v", notes)
+	}
+}
+
+// TestGetStructuredNotesEmptyNotes tests reading issue with no notes
+func TestGetStructuredNotesEmptyNotes(t *testing.T) {
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	taskData := map[string]interface{}{
+		"id":     "no-notes",
+		"title":  "Task without Notes",
+		"status": "open",
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "no-notes.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	client := NewClient()
+	notes, err := client.GetStructuredNotes("no-notes")
+	if err != nil {
+		t.Fatalf("GetStructuredNotes failed: %v", err)
+	}
+	if notes != nil {
+		t.Errorf("expected nil notes for issue without notes, got %v", notes)
+	}
+}
