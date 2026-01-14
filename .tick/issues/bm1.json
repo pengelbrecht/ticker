@@ -2,7 +2,7 @@
   "id": "bm1",
   "title": "Add integration tests for full handoff flows",
   "description": "Test complete agent → human → agent workflows:\n\n```go\nfunc TestEngine_FullHandoffFlow_ApprovalNeeded(t *testing.T) {\n    // Setup: Epic with one task\n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Do security work\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Done! \u003cpromise\u003eAPPROVAL_NEEDED: security change\u003c/promise\u003e\")\n    \n    engine := NewEngine(mock, agent)\n    \n    // Act: Run engine\n    err := engine.Run(\"epic1\")\n    \n    // Assert: Task awaiting, not closed\n    assert.NoError(t, err)\n    assert.Equal(t, \"approval\", mock.awaitingState[\"task1\"])\n    assert.False(t, mock.closedTasks[\"task1\"])\n    \n    // Simulate human approval\n    mock.SetVerdict(\"task1\", \"approved\", \"\")\n    \n    // Assert: Now closed\n    assert.True(t, mock.closedTasks[\"task1\"])\n}\n\nfunc TestEngine_FullHandoffFlow_RejectionLoop(t *testing.T) {\n    // Test: Agent → Human rejects → Agent retries with feedback\n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Write error messages\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Done! \u003cpromise\u003eCONTENT_REVIEW: error messages\u003c/promise\u003e\")\n    agent.queueResponse(\"Fixed! \u003cpromise\u003eCOMPLETE\u003c/promise\u003e\")  // After feedback\n    \n    engine := NewEngine(mock, agent)\n    \n    // First run: hands off\n    engine.Run(\"epic1\")\n    assert.Equal(t, \"content\", mock.awaitingState[\"task1\"])\n    \n    // Human rejects\n    mock.SetVerdict(\"task1\", \"rejected\", \"Too harsh, soften tone\")\n    \n    // Second run: agent sees feedback, completes\n    engine.Run(\"epic1\")\n    assert.True(t, mock.closedTasks[\"task1\"])\n    assert.Contains(t, agent.lastContext, \"Too harsh\")\n}\n```\n\nAcceptance criteria:\n- [ ] Full approval flow tested\n- [ ] Full rejection/retry flow tested  \n- [ ] Human feedback passed to agent\n- [ ] Multiple handoffs in same task tested\n- [ ] Pre-declared requires field tested",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "9bd",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:15:46.925193Z",
-  "updated_at": "2026-01-14T16:15:46.925193Z"
+  "updated_at": "2026-01-14T18:13:47.154843Z",
+  "closed_at": "2026-01-14T18:13:47.154843Z",
+  "closed_reason": "Added comprehensive integration tests for full handoff flows in internal/engine/handoff_test.go. Tests cover: (1) Full approval flow - agent→human approves→task closes; (2) Full rejection/retry loop - agent→human rejects→agent sees feedback→retries; (3) Human feedback passed to agent via GetHumanNotes and included in prompts; (4) Multiple handoffs in same task - sequential INPUT_NEEDED→APPROVAL_NEEDED; (5) Pre-declared requires field - COMPLETE signal respects requires gate; (6) All signal types map to correct awaiting states; (7) Checkpoint never closes regardless of verdict; (8) Escalation/Input rejection closes task. Created new handoffMockAgent and handoffMockTicksClient with full workflow simulation including SimulateHumanApproval/Rejection and processVerdict. 12 test functions, all passing."
 }

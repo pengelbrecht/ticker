@@ -1,18 +1,201 @@
 {
-  "id": "x34",
-  "title": "Add unit tests for signal to awaiting mapping",
-  "description": "Test the handleSignal function in internal/engine/engine_test.go:\n\n```go\nfunc TestEngine_HandleSignal(t *testing.T) {\n    tests := []struct {\n        name            string\n        signal          Signal\n        taskRequires    string  // task.Requires value\n        wantAwaiting    string\n        wantClosed      bool\n    }{\n        {\"complete_no_requires\", SignalComplete, \"\", \"\", true},\n        {\"complete_with_approval\", SignalComplete, \"approval\", \"approval\", false},\n        {\"complete_with_review\", SignalComplete, \"review\", \"review\", false},\n        {\"eject\", SignalEject, \"\", \"work\", false},\n        {\"approval_needed\", SignalApprovalNeeded, \"\", \"approval\", false},\n        {\"input_needed\", SignalInputNeeded, \"\", \"input\", false},\n        {\"review_requested\", SignalReviewRequested, \"\", \"review\", false},\n        {\"content_review\", SignalContentReview, \"\", \"content\", false},\n        {\"escalate\", SignalEscalate, \"\", \"escalation\", false},\n        {\"checkpoint\", SignalCheckpoint, \"\", \"checkpoint\", false},\n    }\n    \n    for _, tt := range tests {\n        t.Run(tt.name, func(t *testing.T) {\n            mock := newMockTicksClient()\n            engine := NewEngine(mock, nil)\n            \n            task := \u0026ticks.Task{ID: \"test\", Requires: tt.taskRequires}\n            err := engine.handleSignal(task, tt.signal, \"test context\")\n            \n            assert.NoError(t, err)\n            assert.Equal(t, tt.wantAwaiting, mock.awaitingState[\"test\"])\n            assert.Equal(t, tt.wantClosed, mock.closedTasks[\"test\"])\n        })\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] All signal → awaiting mappings verified\n- [ ] requires field honored on COMPLETE\n- [ ] Context passed to SetAwaiting\n- [ ] Correct tasks closed vs awaiting",
-  "status": "closed",
-  "priority": 1,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
     "t9y"
   ],
-  "parent": "9bd",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-14T16:15:24.992311Z",
-  "updated_at": "2026-01-14T18:06:51.852197Z",
   "closed_at": "2026-01-14T18:06:51.852197Z",
-  "closed_reason": "Added comprehensive handleSignal unit tests: (1) Introduced TicksClient interface to enable mock injection; (2) TestEngine_HandleSignal - tests all 13 signal cases including COMPLETE with/without requires gates; (3) TestEngine_HandleSignal_ContextPassedToSetAwaiting - verifies context passed correctly; (4) TestEngine_HandleSignal_CompleteWithRequiresUsesCorrectNote - verifies note format for gates; (5) TestEngine_HandleSignal_AllSignalToAwaitingMappings - validates all signalToAwaiting map entries; (6) TestEngine_HandleSignal_UnknownSignalIsNoOp - verifies graceful handling. Updated mockTicksClient with closedTasks map. Files: internal/engine/engine.go, internal/engine/engine_test.go"
+  "closed_reason": "Added comprehensive handleSignal unit tests: (1) Introduced TicksClient interface to enable mock injection; (2) TestEngine_HandleSignal - tests all 13 signal cases including COMPLETE with/without requires gates; (3) TestEngine_HandleSignal_ContextPassedToSetAwaiting - verifies context passed correctly; (4) TestEngine_HandleSignal_CompleteWithRequiresUsesCorrectNote - verifies note format for gates; (5) TestEngine_HandleSignal_AllSignalToAwaitingMappings - validates all signalToAwaiting map entries; (6) TestEngine_HandleSignal_UnknownSignalIsNoOp - verifies graceful handling. Updated mockTicksClient with closedTasks map. Files: internal/engine/engine.go, internal/engine/engine_test.go",
+  "created_at": "2026-01-14T16:15:24.992311Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Test the handleSignal function in internal/engine/engine_test.go:\n\n```go\nfunc TestEngine_HandleSignal(t *testing.T) {\n    tests := []struct {\n        name            string\n        signal          Signal\n        taskRequires    string  // task.Requires value\n        wantAwaiting    string\n        wantClosed      bool\n    }{\n        {\"complete_no_requires\", SignalComplete, \"\", \"\", true},\n        {\"complete_with_approval\", SignalComplete, \"approval\", \"approval\", false},\n        {\"complete_with_review\", SignalComplete, \"review\", \"review\", false},\n        {\"eject\", SignalEject, \"\", \"work\", false},\n        {\"approval_needed\", SignalApprovalNeeded, \"\", \"approval\", false},\n        {\"input_needed\", SignalInputNeeded, \"\", \"input\", false},\n        {\"review_requested\", SignalReviewRequested, \"\", \"review\", false},\n        {\"content_review\", SignalContentReview, \"\", \"content\", false},\n        {\"escalate\", SignalEscalate, \"\", \"escalation\", false},\n        {\"checkpoint\", SignalCheckpoint, \"\", \"checkpoint\", false},\n    }\n    \n    for _, tt := range tests {\n        t.Run(tt.name, func(t *testing.T) {\n            mock := newMockTicksClient()\n            engine := NewEngine(mock, nil)\n            \n            task := \u0026ticks.Task{ID: \"test\", Requires: tt.taskRequires}\n            err := engine.handleSignal(task, tt.signal, \"test context\")\n            \n            assert.NoError(t, err)\n            assert.Equal(t, tt.wantAwaiting, mock.awaitingState[\"test\"])\n            assert.Equal(t, tt.wantClosed, mock.closedTasks[\"test\"])\n        })\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] All signal → awaiting mappings verified\n- [ ] requires field honored on COMPLETE\n- [ ] Context passed to SetAwaiting\n- [ ] Correct tasks closed vs awaiting",
+  "id": "x34",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "9bd",
+  "priority": 1,
+  "run": {
+    "session_id": "833d77e6-a77b-44bb-a49f-d3e386568a23",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T19:02:50.923218+01:00",
+    "ended_at": "2026-01-14T19:07:25.003922+01:00",
+    "output": "I'll start by reviewing the current state of the codebase to understand the handleSignal function and the mockTicksClient implementation.\n\nNow I understand the codebase. I can see:\n1. The `handleSignal` function in `engine.go` (lines 788-810)\n2. The `mockTicksClient` in `engine_test.go` already has `SetAwaiting`, `SetVerdict`, and state tracking\n3. There are some existing tests for `signalToAwaiting` but no tests for the actual `handleSignal` function itself\n\nLet me also check the `ticks.Task` structure to understand the `Requires` field better:\n\nNow I have a clear understanding. The `Requires` field is a `*string`. Let me add the comprehensive tests for `handleSignal`. Looking at the current mock, I need to make sure it implements the interface that the Engine expects. Let me check what methods Engine's `ticks` field needs:\n\nI see the issue - the Engine uses a `*ticks.Client` directly, not an interface. Looking back at the engine code and how the tests are structured, I need to create a proper testable version of the Engine that can work with a mock. But looking at the existing test pattern, they use a direct assignment to the `ticks` field which is a `*ticks.Client`.\n\nLet me look more carefully at how to test `handleSignal`:\n\nLooking at the Engine struct, I see that `e.ticks` is a `*ticks.Client`. To test `handleSignal` in isolation, I need to create an interface that allows injecting a mock. However, looking at the existing test setup and the task spec, I see the pattern uses a direct approach with a mock that matches the `ticks.Client` interface.\n\nThe challenge is that `Engine.ticks` is `*ticks.Client` and not an interface. Let me check if there's already an interface or if I need to create a testable version:\n\nThere's no interface. The current Engine design tightly couples with `*ticks.Client`. Looking at the task spec more carefully, I see the suggested test uses:\n\n```go\nmock := newMockTicksClient()\nengine := NewEngine(mock, nil)\n```\n\nBut `NewEngine` expects `*ticks.Client`, not a mock. To make `handleSignal` testable, I need to either:\n1. Create an interface and refactor the Engine\n2. Export handleSignal logic as a standalone function for testing\n3. Create a test-specific version of the engine with the mock\n\nLooking at the existing approach in the tests, they directly assign to `e.ticks` but it won't work with a mock since the types don't match. Let me create an interface-based solution that allows proper testing while minimizing changes to production code.\n\nI need to introduce a `TicksClient` interface that both `*ticks.Client` and the mock can satisfy. This is a minimal and clean refactoring that enables proper testing. Let me create this:\n\nNow I understand the scope. The `handleSignal` function only uses `SetAwaiting` and `CloseTask` methods. I'll create a minimal interface for just what handleSignal needs, and refactor the engine slightly. Let me do this in a way that's backwards-compatible.\n\nNow I need to update the `NewEngine` function signature to accept the interface:\n\nNow let me update the mockTicksClient to implement the full TicksClient interface. First let me check what methods are missing:\n\nThe mock needs:\n- `GetTask(taskID string) (*ticks.Task, error)` \n- `CloseEpic(epicID, reason string) error`\n- `ReopenTask(taskID string) error`\n- `SetRunRecord(taskID string, record *agent.RunRecord) error`\n- Update `AddNote` to accept `extraArgs ...string`\n\nLet me add these missing methods and then add the comprehensive tests for `handleSignal`:\n\nNow let me add the missing methods to the mock and the comprehensive tests for handleSignal:\n\nNow I need to update the `AddNote` method signature to accept variadic args:\n\nNow let me also update the mock's closedTasks field to be a map so we can track it properly like the spec suggests:\n\nThe mock has `closedTasks []string`. The task spec suggests using a map for easier checking. Let me update the struct and related methods to use a map:\n\nNow update the CloseTask method to use the map:\n\nNow update the SimulateVerdictProcessing method:\n\nNow update the ReopenTask method:\n\nNow I need to update the tests that check closedTasks. Let me find and fix those:\n\nNow let me add the comprehensive `TestEngine_HandleSignal` tests at the end of the file:\n\nNow let me add the comprehensive handleSignal tests at the end:\n\nNow let's run the tests to make sure everything compiles and passes:\n\nAll the new tests pass. Now let's run all engine tests to make sure we didn't break anything:\n\nAll tests pass. Now let's run the full test suite to make sure nothing is broken project-wide:\n\nAll tests pass. Now let's update the todo and close the task:\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 906
+      },
+      {
+        "name": "Read",
+        "duration_ms": 597
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1838
+      },
+      {
+        "name": "Read",
+        "duration_ms": 785
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 2259
+      },
+      {
+        "name": "Read",
+        "duration_ms": 928
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2227
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1000
+      },
+      {
+        "name": "Read",
+        "duration_ms": 979
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1253
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6369
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1032
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 1880
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1371
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1047
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5408
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2508
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1004
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5458
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3837
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2511
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1027
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2416
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3240
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1370
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1030
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2145
+      },
+      {
+        "name": "Read",
+        "duration_ms": 880
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 47903
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2150
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1992
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1269
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1089
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2182
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 6383
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 749
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 888
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 882
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 5849
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3832
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2164
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 11603,
+      "cache_read_tokens": 3508056,
+      "cache_creation_tokens": 68864,
+      "cost_usd": 2.496372,
+      "duration_ms": 273581
+    },
+    "success": true,
+    "num_turns": 42
+  },
+  "status": "closed",
+  "title": "Add unit tests for signal to awaiting mapping",
+  "type": "task",
+  "updated_at": "2026-01-14T18:06:51.852197Z"
 }
