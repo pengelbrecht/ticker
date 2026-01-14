@@ -21,6 +21,10 @@ type IterationContext struct {
 
 	// EpicNotes are notes from previous iterations stored in the epic.
 	EpicNotes []string
+
+	// HumanFeedback contains notes from humans on this task.
+	// These are feedback/responses from human reviewers after handoff.
+	HumanFeedback []ticks.Note
 }
 
 // PromptBuilder constructs prompts for autonomous agent iterations.
@@ -48,6 +52,7 @@ func (pb *PromptBuilder) Build(ctx IterationContext) string {
 		TaskDescription:    "",
 		AcceptanceCriteria: "",
 		EpicNotes:          ctx.EpicNotes,
+		HumanFeedback:      ctx.HumanFeedback,
 	}
 
 	if ctx.Epic != nil {
@@ -82,6 +87,7 @@ type templateData struct {
 	TaskDescription    string
 	AcceptanceCriteria string
 	EpicNotes          []string
+	HumanFeedback      []ticks.Note
 }
 
 // extractAcceptanceCriteria parses acceptance criteria from a task description.
@@ -130,6 +136,16 @@ These notes were left by previous iterations. Read them carefully before startin
 
 ### Acceptance Criteria
 {{.AcceptanceCriteria}}
+{{end}}
+{{if .HumanFeedback}}
+
+## Human Feedback
+
+This task was previously handed to a human. Their response:
+
+{{range .HumanFeedback}}- {{.Content}}
+{{end}}
+Address this feedback before proceeding.
 {{end}}
 
 ## Instructions

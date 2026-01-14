@@ -292,3 +292,96 @@ func TestPromptBuilder_Build_TaskIDInCloseCommand(t *testing.T) {
 		t.Error("prompt should contain tk close command with task ID")
 	}
 }
+
+func TestPromptBuilder_Build_WithHumanFeedback(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 2,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Fix login bug",
+			Description: "The login form has a bug.",
+		},
+		HumanFeedback: []ticks.Note{
+			{Content: "The fix didn't work, login still fails for users with special characters in password", Author: "human"},
+			{Content: "Also please add input validation", Author: "human"},
+		},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Check for human feedback section
+	if !strings.Contains(prompt, "## Human Feedback") {
+		t.Error("prompt missing human feedback section")
+	}
+	if !strings.Contains(prompt, "This task was previously handed to a human") {
+		t.Error("prompt missing human feedback intro text")
+	}
+	if !strings.Contains(prompt, "The fix didn't work, login still fails for users with special characters in password") {
+		t.Error("prompt missing first human feedback note")
+	}
+	if !strings.Contains(prompt, "Also please add input validation") {
+		t.Error("prompt missing second human feedback note")
+	}
+	if !strings.Contains(prompt, "Address this feedback before proceeding") {
+		t.Error("prompt missing feedback instruction")
+	}
+}
+
+func TestPromptBuilder_Build_NoHumanFeedback(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Simple task",
+			Description: "Do something.",
+		},
+		HumanFeedback: nil,
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should not have human feedback section when none provided
+	if strings.Contains(prompt, "## Human Feedback") {
+		t.Error("prompt should not have human feedback section when none provided")
+	}
+	if strings.Contains(prompt, "This task was previously handed to a human") {
+		t.Error("prompt should not have human feedback intro when none provided")
+	}
+}
+
+func TestPromptBuilder_Build_EmptyHumanFeedback(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Simple task",
+			Description: "Do something.",
+		},
+		HumanFeedback: []ticks.Note{},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should not have human feedback section when slice is empty
+	if strings.Contains(prompt, "## Human Feedback") {
+		t.Error("prompt should not have human feedback section when slice is empty")
+	}
+}

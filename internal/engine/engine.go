@@ -537,12 +537,20 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 		notes = nil
 	}
 
+	// Get human feedback notes for this task
+	humanNotes, err := e.ticks.GetHumanNotes(task.ID)
+	if err != nil {
+		// Continue without human notes
+		humanNotes = nil
+	}
+
 	// Build prompt
 	iterCtx := IterationContext{
-		Iteration: state.iteration,
-		Epic:      epic,
-		Task:      task,
-		EpicNotes: notes,
+		Iteration:     state.iteration,
+		Epic:          epic,
+		Task:          task,
+		EpicNotes:     notes,
+		HumanFeedback: humanNotes,
 	}
 
 	if e.OnIterationStart != nil {
