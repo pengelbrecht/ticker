@@ -605,6 +605,180 @@ func TestManager_IsDirty(t *testing.T) {
 	})
 }
 
+func TestManager_IsOnlyTickFilesDirty(t *testing.T) {
+	t.Run("returns false for empty list", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		onlyTick, tickFiles := m.IsOnlyTickFilesDirty([]string{})
+		if onlyTick {
+			t.Error("IsOnlyTickFilesDirty() = true, want false for empty list")
+		}
+		if len(tickFiles) != 0 {
+			t.Errorf("IsOnlyTickFilesDirty() tickFiles = %v, want empty", tickFiles)
+		}
+	})
+
+	t.Run("returns true when only tick files dirty", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		dirtyFiles := []string{".tick/issues/abc.json", ".tick/issues/def.json"}
+		onlyTick, tickFiles := m.IsOnlyTickFilesDirty(dirtyFiles)
+		if !onlyTick {
+			t.Error("IsOnlyTickFilesDirty() = false, want true")
+		}
+		if len(tickFiles) != 2 {
+			t.Errorf("IsOnlyTickFilesDirty() tickFiles = %v, want 2 items", tickFiles)
+		}
+	})
+
+	t.Run("returns false when mixed dirty files", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		dirtyFiles := []string{".tick/issues/abc.json", "src/main.go"}
+		onlyTick, tickFiles := m.IsOnlyTickFilesDirty(dirtyFiles)
+		if onlyTick {
+			t.Error("IsOnlyTickFilesDirty() = true, want false for mixed files")
+		}
+		if tickFiles != nil {
+			t.Errorf("IsOnlyTickFilesDirty() tickFiles = %v, want nil", tickFiles)
+		}
+	})
+
+	t.Run("returns false when only non-tick files dirty", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		dirtyFiles := []string{"src/main.go", "README.md"}
+		onlyTick, tickFiles := m.IsOnlyTickFilesDirty(dirtyFiles)
+		if onlyTick {
+			t.Error("IsOnlyTickFilesDirty() = true, want false for non-tick files")
+		}
+		if tickFiles != nil {
+			t.Errorf("IsOnlyTickFilesDirty() tickFiles = %v, want nil", tickFiles)
+		}
+	})
+}
+
+func TestManager_AutoCommitTickFiles(t *testing.T) {
+	t.Run("commits tick files successfully", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		// Create .tick directory with files
+		tickDir := filepath.Join(dir, ".tick", "issues")
+		if err := os.MkdirAll(tickDir, 0755); err != nil {
+			t.Fatalf("failed to create .tick/issues: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tickDir, "abc.json"), []byte(`{"id":"abc"}`), 0644); err != nil {
+			t.Fatalf("failed to create tick file: %v", err)
+		}
+
+		// Commit tick files
+		if err := m.AutoCommitTickFiles(); err != nil {
+			t.Fatalf("AutoCommitTickFiles() error = %v", err)
+		}
+
+		// Verify repo is now clean
+		isDirty, files, err := m.IsDirty()
+		if err != nil {
+			t.Fatalf("IsDirty() error = %v", err)
+		}
+		if isDirty {
+			t.Errorf("Repo should be clean after AutoCommitTickFiles(), dirty files: %v", files)
+		}
+
+		// Verify commit message
+		cmd := exec.Command("git", "log", "-1", "--format=%s")
+		cmd.Dir = dir
+		output, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("git log error = %v", err)
+		}
+		expectedMsg := "chore: auto-commit tick status updates"
+		if strings.TrimSpace(string(output)) != expectedMsg {
+			t.Errorf("Commit message = %q, want %q", strings.TrimSpace(string(output)), expectedMsg)
+		}
+	})
+
+	t.Run("commits modified tick files", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		m, err := NewManager(dir)
+		if err != nil {
+			t.Fatalf("NewManager() error = %v", err)
+		}
+
+		// Create and commit .tick directory first
+		tickDir := filepath.Join(dir, ".tick", "issues")
+		if err := os.MkdirAll(tickDir, 0755); err != nil {
+			t.Fatalf("failed to create .tick/issues: %v", err)
+		}
+		tickFile := filepath.Join(tickDir, "abc.json")
+		if err := os.WriteFile(tickFile, []byte(`{"id":"abc","status":"open"}`), 0644); err != nil {
+			t.Fatalf("failed to create tick file: %v", err)
+		}
+		cmd := exec.Command("git", "add", ".tick/")
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git add error = %v", err)
+		}
+		cmd = exec.Command("git", "commit", "-m", "Add tick file")
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git commit error = %v", err)
+		}
+
+		// Now modify the tick file
+		if err := os.WriteFile(tickFile, []byte(`{"id":"abc","status":"closed"}`), 0644); err != nil {
+			t.Fatalf("failed to modify tick file: %v", err)
+		}
+
+		// Verify it shows as dirty (note: .tick/ is filtered by IsDirty, so we check git status directly)
+		cmd = exec.Command("git", "status", "--porcelain")
+		cmd.Dir = dir
+		output, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("git status error = %v", err)
+		}
+		if !strings.Contains(string(output), ".tick/issues/abc.json") {
+			t.Fatal("Tick file should appear as modified")
+		}
+
+		// Commit tick files
+		if err := m.AutoCommitTickFiles(); err != nil {
+			t.Fatalf("AutoCommitTickFiles() error = %v", err)
+		}
+
+		// Verify repo is now clean
+		cmd = exec.Command("git", "status", "--porcelain")
+		cmd.Dir = dir
+		output, err = cmd.Output()
+		if err != nil {
+			t.Fatalf("git status error = %v", err)
+		}
+		if len(output) != 0 {
+			t.Errorf("Repo should be clean after AutoCommitTickFiles(), output: %s", output)
+		}
+	})
+}
+
 // createTempGitRepo creates a temporary directory with an initialized git repo.
 // Returns the directory path. The repo has one initial commit.
 func createTempGitRepo(t *testing.T) string {

@@ -420,13 +420,26 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		os.Exit(ExitError)
 	}
 	if isDirty {
-		fmt.Fprintf(os.Stderr, "Error: Cannot start parallel run - main branch has uncommitted changes\n\n")
-		fmt.Fprintf(os.Stderr, "Dirty files:\n")
-		for _, f := range dirtyFiles {
-			fmt.Fprintf(os.Stderr, "  %s\n", f)
+		// Check if only tick files are dirty - auto-commit if so
+		if onlyTick, tickFiles := wtManager.IsOnlyTickFilesDirty(dirtyFiles); onlyTick {
+			fmt.Fprintf(os.Stderr, "Auto-committing tick status updates:\n")
+			for _, f := range tickFiles {
+				fmt.Fprintf(os.Stderr, "  %s\n", f)
+			}
+			if err := wtManager.AutoCommitTickFiles(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error auto-committing tick files: %v\n", err)
+				os.Exit(ExitError)
+			}
+			fmt.Fprintf(os.Stderr, "Done.\n\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: Cannot start parallel run - main branch has uncommitted changes\n\n")
+			fmt.Fprintf(os.Stderr, "Dirty files:\n")
+			for _, f := range dirtyFiles {
+				fmt.Fprintf(os.Stderr, "  %s\n", f)
+			}
+			fmt.Fprintf(os.Stderr, "\nPlease commit, stash, or discard these changes before running.\n")
+			os.Exit(ExitError)
 		}
-		fmt.Fprintf(os.Stderr, "\nPlease commit, stash, or discard these changes before running.\n")
-		os.Exit(ExitError)
 	}
 
 	// Initialize merge manager
@@ -710,13 +723,26 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 		os.Exit(ExitError)
 	}
 	if isDirty {
-		fmt.Fprintf(os.Stderr, "[ERROR] Cannot start parallel run: main branch has uncommitted changes\n")
-		fmt.Fprintf(os.Stderr, "\nDirty files:\n")
-		for _, f := range dirtyFiles {
-			fmt.Fprintf(os.Stderr, "  %s\n", f)
+		// Check if only tick files are dirty - auto-commit if so
+		if onlyTick, tickFiles := wtManager.IsOnlyTickFilesDirty(dirtyFiles); onlyTick {
+			fmt.Fprintf(os.Stderr, "[INFO] Auto-committing tick status updates:\n")
+			for _, f := range tickFiles {
+				fmt.Fprintf(os.Stderr, "  %s\n", f)
+			}
+			if err := wtManager.AutoCommitTickFiles(); err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] Error auto-committing tick files: %v\n", err)
+				os.Exit(ExitError)
+			}
+			fmt.Fprintf(os.Stderr, "[INFO] Done.\n\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "[ERROR] Cannot start parallel run: main branch has uncommitted changes\n")
+			fmt.Fprintf(os.Stderr, "\nDirty files:\n")
+			for _, f := range dirtyFiles {
+				fmt.Fprintf(os.Stderr, "  %s\n", f)
+			}
+			fmt.Fprintf(os.Stderr, "\nPlease commit, stash, or discard these changes before running.\n")
+			os.Exit(ExitError)
 		}
-		fmt.Fprintf(os.Stderr, "\nPlease commit, stash, or discard these changes before running.\n")
-		os.Exit(ExitError)
 	}
 
 	// Initialize merge manager

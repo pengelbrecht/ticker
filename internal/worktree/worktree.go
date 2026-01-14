@@ -324,3 +324,46 @@ func (m *Manager) IsDirty() (bool, []string, error) {
 
 	return len(dirtyFiles) > 0, dirtyFiles, nil
 }
+
+// IsOnlyTickFilesDirty checks if only .tick/ files are dirty.
+// Returns true if all dirty files are in .tick/ directory, false if there are other dirty files.
+// Also returns the list of dirty tick files.
+func (m *Manager) IsOnlyTickFilesDirty(dirtyFiles []string) (bool, []string) {
+	if len(dirtyFiles) == 0 {
+		return false, nil
+	}
+
+	var tickFiles []string
+	for _, f := range dirtyFiles {
+		if strings.HasPrefix(f, ".tick/") {
+			tickFiles = append(tickFiles, f)
+		} else {
+			// Non-tick file found, not only tick files dirty
+			return false, nil
+		}
+	}
+
+	return len(tickFiles) > 0, tickFiles
+}
+
+// AutoCommitTickFiles commits only .tick/ files with a standard commit message.
+// Returns nil if successful, error otherwise.
+func (m *Manager) AutoCommitTickFiles() error {
+	// Stage all .tick/ files
+	cmd := exec.Command("git", "add", ".tick/")
+	cmd.Dir = m.repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to stage tick files: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+
+	// Commit with standard message
+	cmd = exec.Command("git", "commit", "-m", "chore: auto-commit tick status updates")
+	cmd.Dir = m.repoRoot
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to commit tick files: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+
+	return nil
+}
