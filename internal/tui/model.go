@@ -60,27 +60,33 @@ func (t TaskInfo) IsBlocked() bool {
 	return len(t.BlockedBy) > 0
 }
 
-// StatusIcon returns a styled icon representing the task status.
-// Icon mapping:
-//   - Open: ○ (gray)
-//   - InProgress: ● (blue)
-//   - Closed: ✓ (green)
-//   - Blocked: ⊘ (red) - overrides open status
+// StatusIcon returns a styled emoji icon representing the task status.
+// Priority order (first match wins):
+//  1. Awaiting human → 👤 (yellow/peach)
+//  2. Blocked → 🔴 (red)
+//  3. InProgress → 🔵 (blue)
+//  4. Closed → ✅ (green)
+//  5. Open → ⚪ (gray)
 func (t TaskInfo) StatusIcon() string {
+	// Awaiting human takes priority - task is open but waiting for human
+	if t.Awaiting != "" {
+		return lipgloss.NewStyle().Foreground(colorPeach).Render("👤")
+	}
+
 	// Blocked status overrides open
 	if t.Status == TaskStatusOpen && t.IsBlocked() {
-		return lipgloss.NewStyle().Foreground(colorRed).Render("⊘")
+		return lipgloss.NewStyle().Foreground(colorRed).Render("🔴")
 	}
 
 	switch t.Status {
-	case TaskStatusOpen:
-		return lipgloss.NewStyle().Foreground(colorGray).Render("○")
 	case TaskStatusInProgress:
-		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("●")
+		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("🔵")
 	case TaskStatusClosed:
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("✓")
+		return lipgloss.NewStyle().Foreground(colorGreen).Render("✅")
+	case TaskStatusOpen:
+		return lipgloss.NewStyle().Foreground(colorGray).Render("⚪")
 	default:
-		return lipgloss.NewStyle().Foreground(colorGray).Render("○")
+		return lipgloss.NewStyle().Foreground(colorGray).Render("⚪")
 	}
 }
 

@@ -2,11 +2,12 @@
   "id": "zyv",
   "title": "TUI: Agent-Human Workflow Status Indicators",
   "description": "Add visual status indicators for agent-human workflow states in the TUI. Includes:\n1. File watching to refresh TUI when ticks change externally\n2. New status icons using cohesive emoji style\n3. Display awaiting states (approval, input, review, etc.)\n\nEmoji style guide:\n- ⚪ Open (ready for agent)\n- 🔵 In Progress (agent working)\n- ✅ Closed/Done\n- 🔴 Blocked (by another task)\n- 👤 Awaiting Human (any awaiting state)\n\nRefs: docs/AGENT_HUMAN_WORKFLOW.md",
+  "notes": "2026-01-14 23:39 - Task 2d6 complete: Added Awaiting field to TaskInfo struct. The field is ready to be populated from tick data and used in StatusIcon() method. Next tasks will need to: 1) Parse awaiting field from tk output when refreshing tasks, 2) Update StatusIcon() to show 👤 icon when Awaiting is non-empty.",
   "status": "open",
   "priority": 1,
   "type": "epic",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T22:36:12.059215Z",
-  "updated_at": "2026-01-14T22:36:12.059215Z"
+  "updated_at": "2026-01-14T22:39:55.4741Z"
 }

@@ -1,15 +1,82 @@
 {
-  "id": "2d6",
-  "title": "Add Awaiting field to TaskInfo struct",
+  "closed_at": "2026-01-14T22:39:36.184262Z",
+  "closed_reason": "Added Awaiting string field to TaskInfo struct in internal/tui/model.go. Field supports awaiting types: work, approval, input, review, content, escalation, checkpoint, or empty string.",
+  "created_at": "2026-01-14T22:36:22.256002Z",
+  "created_by": "peter@engelbrecht.dk",
   "description": "Add Awaiting field to tui.TaskInfo struct to track human-waiting states.\n\nFile: internal/tui/model.go\n\nChanges:\n1. Add `Awaiting string` field to TaskInfo struct (around line 47-55)\n2. The field should hold the awaiting type: work, approval, input, review, content, escalation, checkpoint, or empty string\n\nExample:\n```go\ntype TaskInfo struct {\n    ID        string\n    Title     string\n    Status    TaskStatus\n    BlockedBy []string\n    IsCurrent bool\n    Awaiting  string  // NEW: awaiting type or empty\n}\n```",
-  "status": "closed",
-  "priority": 1,
-  "type": "task",
+  "id": "2d6",
   "owner": "peter@engelbrecht.dk",
   "parent": "zyv",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-14T22:36:22.256002Z",
-  "updated_at": "2026-01-14T22:39:36.184262Z",
-  "closed_at": "2026-01-14T22:39:36.184262Z",
-  "closed_reason": "Added Awaiting string field to TaskInfo struct in internal/tui/model.go. Field supports awaiting types: work, approval, input, review, content, escalation, checkpoint, or empty string."
+  "priority": 1,
+  "run": {
+    "session_id": "1d1b6ba1-583a-4e8f-a765-ec2fddf82f6b",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T23:38:32.919224+01:00",
+    "ended_at": "2026-01-14T23:40:06.139937+01:00",
+    "output": "I'll start by reading the current model.go file to understand the TaskInfo struct and make the required changes.\n\nLet me search for the TaskInfo struct specifically.\n\nI found the TaskInfo struct at lines 49-55. Now I need to add the `Awaiting string` field. Let me make the edit.\n\nLet me read a portion of the file first.\n\nNow I can make the edit to add the `Awaiting` field to the TaskInfo struct.\n\nThe change has been made. Now let me run the tests to ensure everything still compiles and works correctly.\n\nAll tests pass. Let me also run the full test suite to be safe.\n\nAll tests pass. Now let me close the task and commit the changes.\n\nNow let me add a note to the epic for future iterations.\n\nTask complete. I've:\n\n1. Added the `Awaiting string` field to the `TaskInfo` struct in `internal/tui/model.go:55`\n2. Verified all tests pass (build + test suite)\n3. Closed task 2d6 with a solution summary\n4. Committed the changes with the task ID in the message\n5. Added a note to the epic for future iterations\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 796
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1536
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2423
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1019
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4143
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1063
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1031
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 984
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2975
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 888
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2825
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3051
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 1836,
+      "cache_read_tokens": 548115,
+      "cache_creation_tokens": 33604,
+      "cost_usd": 0.5470795,
+      "duration_ms": 92382
+    },
+    "success": true,
+    "num_turns": 13
+  },
+  "status": "closed",
+  "title": "Add Awaiting field to TaskInfo struct",
+  "type": "task",
+  "updated_at": "2026-01-14T22:39:36.184262Z"
 }

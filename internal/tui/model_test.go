@@ -1115,20 +1115,25 @@ func TestShortModelName(t *testing.T) {
 
 func TestTaskStatusIcon(t *testing.T) {
 	testCases := []struct {
+		name       string
 		task       TaskInfo
 		expectIcon string
 	}{
-		{TaskInfo{Status: TaskStatusOpen}, "○"},
-		{TaskInfo{Status: TaskStatusInProgress}, "●"},
-		{TaskInfo{Status: TaskStatusClosed}, "✓"},
-		{TaskInfo{Status: TaskStatusOpen, BlockedBy: []string{"abc"}}, "⊘"},
+		{"open", TaskInfo{Status: TaskStatusOpen}, "⚪"},
+		{"in progress", TaskInfo{Status: TaskStatusInProgress}, "🔵"},
+		{"closed", TaskInfo{Status: TaskStatusClosed}, "✅"},
+		{"blocked", TaskInfo{Status: TaskStatusOpen, BlockedBy: []string{"abc"}}, "🔴"},
+		{"awaiting human", TaskInfo{Status: TaskStatusOpen, Awaiting: "approval"}, "👤"},
+		{"awaiting takes priority over blocked", TaskInfo{Status: TaskStatusOpen, Awaiting: "input", BlockedBy: []string{"xyz"}}, "👤"},
 	}
 
 	for _, tc := range testCases {
-		icon := tc.task.StatusIcon()
-		if !strings.Contains(icon, tc.expectIcon) {
-			t.Errorf("StatusIcon for %+v: expected icon containing '%s', got '%s'", tc.task, tc.expectIcon, icon)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			icon := tc.task.StatusIcon()
+			if !strings.Contains(icon, tc.expectIcon) {
+				t.Errorf("StatusIcon for %+v: expected icon containing '%s', got '%s'", tc.task, tc.expectIcon, icon)
+			}
+		})
 	}
 }
 
@@ -1197,7 +1202,7 @@ func TestTaskInfo_RenderTask(t *testing.T) {
 	if !strings.Contains(output, "Test Task") {
 		t.Error("expected rendered task to contain title")
 	}
-	if !strings.Contains(output, "○") {
+	if !strings.Contains(output, "⚪") {
 		t.Error("expected rendered task to contain open icon")
 	}
 

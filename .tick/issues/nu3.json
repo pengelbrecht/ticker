@@ -2,7 +2,7 @@
   "id": "nu3",
   "title": "Update StatusIcon() to use emoji style with awaiting support",
   "description": "Refactor TaskInfo.StatusIcon() to use cohesive emoji style and handle awaiting states.\n\nFile: internal/tui/model.go (around lines 62-84)\n\nNew icon mapping:\n- ⚪ Open (ready for agent) - colorGray or no color needed\n- 🔵 In Progress (agent working) - colorBlue  \n- ✅ Closed/Done - colorGreen\n- 🔴 Blocked (by another task) - colorRed\n- 👤 Awaiting Human (any awaiting type) - colorYellow/colorPeach\n\nLogic order (first match wins):\n1. If Awaiting is set → 👤 (yellow)\n2. If Blocked → 🔴 (red)\n3. If InProgress → 🔵 (blue)\n4. If Closed → ✅ (green)\n5. Default Open → ⚪ (gray)\n\nNote: Awaiting takes priority over Open status since task is open but waiting for human.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "zyv",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T22:36:31.948273Z",
-  "updated_at": "2026-01-14T22:36:31.948273Z"
+  "updated_at": "2026-01-14T22:42:08.721519Z",
+  "closed_at": "2026-01-14T22:42:08.721519Z",
+  "closed_reason": "Refactored StatusIcon() to use cohesive emoji style (⚪🔵✅🔴👤) with priority-based logic: awaiting→blocked→in_progress→closed→open. Updated tests to verify new icons and added test cases for awaiting states including priority over blocked."
 }
