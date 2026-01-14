@@ -2,12 +2,12 @@
   "id": "agk",
   "title": "Implement backwards compatibility for manual field",
   "description": "The manual field is being replaced by awaiting=work. Implement backwards compatibility:\n\nReading ticks:\n```go\nfunc (t *Task) IsAwaitingHuman() bool {\n    if t.Awaiting != \"\" {\n        return true\n    }\n    return t.Manual  // backwards compat\n}\n\nfunc (t *Task) GetAwaitingType() string {\n    if t.Awaiting != \"\" {\n        return t.Awaiting\n    }\n    if t.Manual {\n        return \"work\"\n    }\n    return \"\"\n}\n```\n\nWriting ticks:\n- When setting awaiting, clear manual field\n- When reading manual=true with no awaiting, treat as awaiting=work\n\nQuery filters:\n- Check both awaiting and manual fields when filtering\n\nAcceptance criteria:\n- [ ] Old ticks with manual=true work correctly\n- [ ] New ticks use awaiting field only\n- [ ] Queries filter on both fields for backwards compat\n- [ ] No data migration required (reads both, writes new)",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "d8o",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:11:38.237243Z",
-  "updated_at": "2026-01-14T16:11:38.237243Z"
+  "updated_at": "2026-01-14T16:41:28.27424Z"
 }

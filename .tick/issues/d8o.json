@@ -2,6 +2,7 @@
   "id": "d8o",
   "title": "Ticks Schema \u0026 CLI Changes",
   "description": "Add requires, awaiting, and verdict fields to tick schema. Implement CLI commands (tk approve, tk reject) and flags (--requires, --awaiting, --verdict). Handle backwards compatibility with manual field.",
+  "notes": "2026-01-14 17:41 - Completed ztr: Added Requires (*string), Awaiting (*string), and Verdict (*string) pointer fields to Task struct in internal/ticks/types.go. Used pointer types so nil represents 'not set' and omitempty works correctly for JSON. Added IsAwaitingHuman() and GetAwaitingType() helper methods. All tests pass.",
   "status": "open",
   "priority": 2,
   "type": "epic",
@@ -9,5 +10,5 @@
   "parent": "zt5",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:11:02.312478Z",
-  "updated_at": "2026-01-14T16:11:02.312478Z"
+  "updated_at": "2026-01-14T16:41:22.302597Z"
 }
