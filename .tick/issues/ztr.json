@@ -2,12 +2,14 @@
   "id": "ztr",
   "title": "Add requires, awaiting, verdict fields to Task type",
   "description": "Update internal/ticks/types.go to add three new fields to Task struct:\n\n```go\n// Requires declares a gate that must be passed before closing\n// Set at creation time, persists through the tick lifecycle\nRequires *string `json:\"requires,omitempty\"` // approval|review|content\n\n// Awaiting indicates the tick is waiting for human action\n// null means agent's turn, any other value means human's turn  \nAwaiting *string `json:\"awaiting,omitempty\"` // work|approval|input|review|content|escalation|checkpoint\n\n// Verdict is the human's response to an awaiting state\n// Processed immediately when set, then cleared\nVerdict *string `json:\"verdict,omitempty\"` // approved|rejected\n```\n\nAlso add helper methods:\n- IsAwaitingHuman() bool\n- GetAwaitingType() string\n\nAcceptance criteria:\n- [ ] Fields added to Task struct with proper JSON tags\n- [ ] Helper methods implemented\n- [ ] JSON serialization/deserialization works correctly",
-  "status": "open",
+  "status": "closed",
   "priority": 0,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "d8o",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:11:37.313407Z",
-  "updated_at": "2026-01-14T16:11:37.313407Z"
+  "updated_at": "2026-01-14T16:40:53.199078Z",
+  "closed_at": "2026-01-14T16:40:53.199078Z",
+  "closed_reason": "Added Requires, Awaiting, and Verdict pointer fields to Task struct in types.go with proper JSON tags (omitempty). Implemented IsAwaitingHuman() and GetAwaitingType() helper methods. Added comprehensive tests for JSON serialization/deserialization and helper methods."
 }

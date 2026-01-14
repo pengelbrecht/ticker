@@ -57,6 +57,126 @@ func TestEpicIsClosed(t *testing.T) {
 	}
 }
 
+func TestTaskIsAwaitingHuman(t *testing.T) {
+	// Test nil Awaiting - agent's turn
+	task := &Task{Status: "open"}
+	if task.IsAwaitingHuman() {
+		t.Error("expected IsAwaitingHuman() to return false when Awaiting is nil")
+	}
+
+	// Test non-nil Awaiting - human's turn
+	awaitingApproval := "approval"
+	task.Awaiting = &awaitingApproval
+	if !task.IsAwaitingHuman() {
+		t.Error("expected IsAwaitingHuman() to return true when Awaiting is set")
+	}
+}
+
+func TestTaskGetAwaitingType(t *testing.T) {
+	// Test nil Awaiting
+	task := &Task{Status: "open"}
+	if got := task.GetAwaitingType(); got != "" {
+		t.Errorf("expected GetAwaitingType() to return empty string when Awaiting is nil, got %q", got)
+	}
+
+	// Test with various awaiting types
+	testCases := []string{"work", "approval", "input", "review", "content", "escalation", "checkpoint"}
+	for _, tc := range testCases {
+		awaitingType := tc
+		task.Awaiting = &awaitingType
+		if got := task.GetAwaitingType(); got != tc {
+			t.Errorf("expected GetAwaitingType() to return %q, got %q", tc, got)
+		}
+	}
+}
+
+func TestTaskNewFieldsJSONSerialization(t *testing.T) {
+	requires := "approval"
+	awaiting := "review"
+	verdict := "approved"
+
+	task := &Task{
+		ID:       "test-json",
+		Title:    "Test JSON Serialization",
+		Status:   "open",
+		Requires: &requires,
+		Awaiting: &awaiting,
+		Verdict:  &verdict,
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatalf("failed to marshal task: %v", err)
+	}
+
+	// Check that fields are in JSON
+	jsonStr := string(data)
+	if !contains(jsonStr, `"requires":"approval"`) {
+		t.Errorf("expected JSON to contain requires field, got: %s", jsonStr)
+	}
+	if !contains(jsonStr, `"awaiting":"review"`) {
+		t.Errorf("expected JSON to contain awaiting field, got: %s", jsonStr)
+	}
+	if !contains(jsonStr, `"verdict":"approved"`) {
+		t.Errorf("expected JSON to contain verdict field, got: %s", jsonStr)
+	}
+
+	// Unmarshal back
+	var decoded Task
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal task: %v", err)
+	}
+
+	if decoded.Requires == nil || *decoded.Requires != "approval" {
+		t.Errorf("expected Requires to be 'approval', got %v", decoded.Requires)
+	}
+	if decoded.Awaiting == nil || *decoded.Awaiting != "review" {
+		t.Errorf("expected Awaiting to be 'review', got %v", decoded.Awaiting)
+	}
+	if decoded.Verdict == nil || *decoded.Verdict != "approved" {
+		t.Errorf("expected Verdict to be 'approved', got %v", decoded.Verdict)
+	}
+}
+
+func TestTaskNewFieldsOmitEmpty(t *testing.T) {
+	// Task without the new fields should not include them in JSON
+	task := &Task{
+		ID:     "test-omit",
+		Title:  "Test Omit Empty",
+		Status: "open",
+	}
+
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatalf("failed to marshal task: %v", err)
+	}
+
+	jsonStr := string(data)
+	if contains(jsonStr, `"requires"`) {
+		t.Errorf("expected JSON to omit requires when nil, got: %s", jsonStr)
+	}
+	if contains(jsonStr, `"awaiting"`) {
+		t.Errorf("expected JSON to omit awaiting when nil, got: %s", jsonStr)
+	}
+	if contains(jsonStr, `"verdict"`) {
+		t.Errorf("expected JSON to omit verdict when nil, got: %s", jsonStr)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestSetRunRecord(t *testing.T) {
 	// Create temp directory structure
 	tmpDir := t.TempDir()

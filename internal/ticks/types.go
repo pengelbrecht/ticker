@@ -18,6 +18,22 @@ type Task struct {
 	BlockedBy   []string  `json:"blocked_by,omitempty"`
 	Parent      string    `json:"parent,omitempty"`
 	Manual      bool      `json:"manual,omitempty"`
+
+	// Requires declares a gate that must be passed before closing.
+	// Set at creation time, persists through the tick lifecycle.
+	// Valid values: approval, review, content
+	Requires *string `json:"requires,omitempty"`
+
+	// Awaiting indicates the tick is waiting for human action.
+	// null means agent's turn, any other value means human's turn.
+	// Valid values: work, approval, input, review, content, escalation, checkpoint
+	Awaiting *string `json:"awaiting,omitempty"`
+
+	// Verdict is the human's response to an awaiting state.
+	// Processed immediately when set, then cleared.
+	// Valid values: approved, rejected
+	Verdict *string `json:"verdict,omitempty"`
+
 	CreatedBy   string    `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -52,6 +68,21 @@ func (t *Task) IsOpen() bool {
 // IsClosed returns true if the task status is "closed".
 func (t *Task) IsClosed() bool {
 	return t.Status == "closed"
+}
+
+// IsAwaitingHuman returns true if the task is waiting for human action.
+// A task is awaiting human action when the Awaiting field is non-nil.
+func (t *Task) IsAwaitingHuman() bool {
+	return t.Awaiting != nil
+}
+
+// GetAwaitingType returns the type of human action the task is waiting for.
+// Returns an empty string if the task is not awaiting human action.
+func (t *Task) GetAwaitingType() string {
+	if t.Awaiting == nil {
+		return ""
+	}
+	return *t.Awaiting
 }
 
 // IsOpen returns true if the epic status is "open".
