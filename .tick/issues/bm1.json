@@ -1,18 +1,101 @@
 {
-  "id": "bm1",
-  "title": "Add integration tests for full handoff flows",
-  "description": "Test complete agent → human → agent workflows:\n\n```go\nfunc TestEngine_FullHandoffFlow_ApprovalNeeded(t *testing.T) {\n    // Setup: Epic with one task\n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Do security work\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Done! \u003cpromise\u003eAPPROVAL_NEEDED: security change\u003c/promise\u003e\")\n    \n    engine := NewEngine(mock, agent)\n    \n    // Act: Run engine\n    err := engine.Run(\"epic1\")\n    \n    // Assert: Task awaiting, not closed\n    assert.NoError(t, err)\n    assert.Equal(t, \"approval\", mock.awaitingState[\"task1\"])\n    assert.False(t, mock.closedTasks[\"task1\"])\n    \n    // Simulate human approval\n    mock.SetVerdict(\"task1\", \"approved\", \"\")\n    \n    // Assert: Now closed\n    assert.True(t, mock.closedTasks[\"task1\"])\n}\n\nfunc TestEngine_FullHandoffFlow_RejectionLoop(t *testing.T) {\n    // Test: Agent → Human rejects → Agent retries with feedback\n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Write error messages\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Done! \u003cpromise\u003eCONTENT_REVIEW: error messages\u003c/promise\u003e\")\n    agent.queueResponse(\"Fixed! \u003cpromise\u003eCOMPLETE\u003c/promise\u003e\")  // After feedback\n    \n    engine := NewEngine(mock, agent)\n    \n    // First run: hands off\n    engine.Run(\"epic1\")\n    assert.Equal(t, \"content\", mock.awaitingState[\"task1\"])\n    \n    // Human rejects\n    mock.SetVerdict(\"task1\", \"rejected\", \"Too harsh, soften tone\")\n    \n    // Second run: agent sees feedback, completes\n    engine.Run(\"epic1\")\n    assert.True(t, mock.closedTasks[\"task1\"])\n    assert.Contains(t, agent.lastContext, \"Too harsh\")\n}\n```\n\nAcceptance criteria:\n- [ ] Full approval flow tested\n- [ ] Full rejection/retry flow tested  \n- [ ] Human feedback passed to agent\n- [ ] Multiple handoffs in same task tested\n- [ ] Pre-declared requires field tested",
-  "status": "closed",
-  "priority": 1,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
     "vyb"
   ],
-  "parent": "9bd",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-14T16:15:46.925193Z",
-  "updated_at": "2026-01-14T18:13:47.154843Z",
   "closed_at": "2026-01-14T18:13:47.154843Z",
-  "closed_reason": "Added comprehensive integration tests for full handoff flows in internal/engine/handoff_test.go. Tests cover: (1) Full approval flow - agent→human approves→task closes; (2) Full rejection/retry loop - agent→human rejects→agent sees feedback→retries; (3) Human feedback passed to agent via GetHumanNotes and included in prompts; (4) Multiple handoffs in same task - sequential INPUT_NEEDED→APPROVAL_NEEDED; (5) Pre-declared requires field - COMPLETE signal respects requires gate; (6) All signal types map to correct awaiting states; (7) Checkpoint never closes regardless of verdict; (8) Escalation/Input rejection closes task. Created new handoffMockAgent and handoffMockTicksClient with full workflow simulation including SimulateHumanApproval/Rejection and processVerdict. 12 test functions, all passing."
+  "closed_reason": "Added comprehensive integration tests for full handoff flows in internal/engine/handoff_test.go. Tests cover: (1) Full approval flow - agent→human approves→task closes; (2) Full rejection/retry loop - agent→human rejects→agent sees feedback→retries; (3) Human feedback passed to agent via GetHumanNotes and included in prompts; (4) Multiple handoffs in same task - sequential INPUT_NEEDED→APPROVAL_NEEDED; (5) Pre-declared requires field - COMPLETE signal respects requires gate; (6) All signal types map to correct awaiting states; (7) Checkpoint never closes regardless of verdict; (8) Escalation/Input rejection closes task. Created new handoffMockAgent and handoffMockTicksClient with full workflow simulation including SimulateHumanApproval/Rejection and processVerdict. 12 test functions, all passing.",
+  "created_at": "2026-01-14T16:15:46.925193Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Test complete agent → human → agent workflows:\n\n```go\nfunc TestEngine_FullHandoffFlow_ApprovalNeeded(t *testing.T) {\n    // Setup: Epic with one task\n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Do security work\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Done! \u003cpromise\u003eAPPROVAL_NEEDED: security change\u003c/promise\u003e\")\n    \n    engine := NewEngine(mock, agent)\n    \n    // Act: Run engine\n    err := engine.Run(\"epic1\")\n    \n    // Assert: Task awaiting, not closed\n    assert.NoError(t, err)\n    assert.Equal(t, \"approval\", mock.awaitingState[\"task1\"])\n    assert.False(t, mock.closedTasks[\"task1\"])\n    \n    // Simulate human approval\n    mock.SetVerdict(\"task1\", \"approved\", \"\")\n    \n    // Assert: Now closed\n    assert.True(t, mock.closedTasks[\"task1\"])\n}\n\nfunc TestEngine_FullHandoffFlow_RejectionLoop(t *testing.T) {\n    // Test: Agent → Human rejects → Agent retries with feedback\n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Write error messages\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Done! \u003cpromise\u003eCONTENT_REVIEW: error messages\u003c/promise\u003e\")\n    agent.queueResponse(\"Fixed! \u003cpromise\u003eCOMPLETE\u003c/promise\u003e\")  // After feedback\n    \n    engine := NewEngine(mock, agent)\n    \n    // First run: hands off\n    engine.Run(\"epic1\")\n    assert.Equal(t, \"content\", mock.awaitingState[\"task1\"])\n    \n    // Human rejects\n    mock.SetVerdict(\"task1\", \"rejected\", \"Too harsh, soften tone\")\n    \n    // Second run: agent sees feedback, completes\n    engine.Run(\"epic1\")\n    assert.True(t, mock.closedTasks[\"task1\"])\n    assert.Contains(t, agent.lastContext, \"Too harsh\")\n}\n```\n\nAcceptance criteria:\n- [ ] Full approval flow tested\n- [ ] Full rejection/retry flow tested  \n- [ ] Human feedback passed to agent\n- [ ] Multiple handoffs in same task tested\n- [ ] Pre-declared requires field tested",
+  "id": "bm1",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "9bd",
+  "priority": 1,
+  "run": {
+    "session_id": "9dc33446-4892-49b6-904e-cf6681270f5c",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T19:10:20.130575+01:00",
+    "ended_at": "2026-01-14T19:14:21.426864+01:00",
+    "output": "I'll start by reviewing the epic notes and understanding the current state of the codebase, then implement the integration tests for full handoff flows.\n\nLet me first explore the existing engine tests and mock implementation to understand the patterns used.\n\nNow let me look at the engine.go to understand the actual engine structure and the Run method.\n\nNow I have a good understanding of the codebase. Let me create a todo list and start implementing the integration tests for full handoff flows.\n\nNow I'll create the integration tests. Looking at the existing test structure, I need to extend the mockTicksClient and mockAgent to support full workflow testing. Let me create a new file `handoff_test.go` for these integration tests.\n\nNow let me update the todo list and run the tests to verify they pass.\n\nAll the new tests pass. Now let me run all the engine tests to make sure I haven't broken anything:\n\nAll engine tests pass. Let me also run the full test suite to ensure everything is working:\n\nAll tests pass. Now let me update the todo list, close the task, and commit the changes:\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e\n\nI've completed the task [bm1]. Here's a summary of what was done:\n\n## Summary\n\nCreated **`internal/engine/handoff_test.go`** with 12 comprehensive integration tests covering full agent→human→agent handoff workflows.\n\n### Tests Added\n\n1. **`TestEngine_FullHandoffFlow_ApprovalNeeded`** - Full approval flow where agent requests approval and human approves\n2. **`TestEngine_FullHandoffFlow_RejectionLoop`** - Agent → human rejects → agent sees feedback → retries\n3. **`TestEngine_FullHandoffFlow_HumanFeedbackPassedToAgent`** - Verifies human feedback is included in agent prompts\n4. **`TestEngine_FullHandoffFlow_MultipleHandoffs`** - Sequential INPUT_NEEDED → APPROVAL_NEEDED in same task\n5. **`TestEngine_FullHandoffFlow_RequiresField`** - Pre-declared requires field triggers approval gate on COMPLETE\n6. **`TestEngine_FullHandoffFlow_RequiresFieldRejectionCycle`** - Full rejection cycle: reject → retry → approve → close\n7. **`TestEngine_FullHandoffFlow_EjectSignal`** - EJECT maps to work awaiting with context\n8. **`TestEngine_FullHandoffFlow_CheckpointNeverCloses`** - Checkpoint signals never close regardless of verdict\n9. **`TestEngine_FullHandoffFlow_EscalationApproved`** - Approved = agent continues\n10. **`TestEngine_FullHandoffFlow_EscalationRejected`** - Rejected = task closes\n11. **`TestEngine_FullHandoffFlow_InputRejected`** - Input rejected = task closes\n12. **`TestEngine_FullHandoffFlow_AllSignalTypes`** - All 8 handoff signals map to correct awaiting states\n\n### Key Components\n\n- **`handoffMockAgent`**: Extended mock with multi-response queueing and `lastPrompts` tracking for verifying feedback passing\n- **`handoffMockTicksClient`**: Full workflow simulation with `SimulateHumanApproval()`, `SimulateHumanRejection()`, and `processVerdict()` methods\n\nAll 12 tests pass along with all existing engine tests.",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 787
+      },
+      {
+        "name": "Read",
+        "duration_ms": 694
+      },
+      {
+        "name": "Read",
+        "duration_ms": 587
+      },
+      {
+        "name": "Read",
+        "duration_ms": 927
+      },
+      {
+        "name": "Read",
+        "duration_ms": 647
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4989
+      },
+      {
+        "name": "Write",
+        "duration_ms": 137926
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 5324
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1489
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1004
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1023
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 5456
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 6222
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 863
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 6449
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4041
+      }
+    ],
+    "metrics": {
+      "input_tokens": 15256,
+      "output_tokens": 12845,
+      "cache_read_tokens": 1284948,
+      "cache_creation_tokens": 73116,
+      "cost_usd": 1.51662,
+      "duration_ms": 240679
+    },
+    "success": true,
+    "num_turns": 17
+  },
+  "status": "closed",
+  "title": "Add integration tests for full handoff flows",
+  "type": "task",
+  "updated_at": "2026-01-14T18:13:47.154843Z"
 }

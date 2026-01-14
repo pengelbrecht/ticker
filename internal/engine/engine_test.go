@@ -1837,3 +1837,330 @@ func TestEngine_HandleSignal_UnknownSignalIsNoOp(t *testing.T) {
 		t.Error("unknown signal should not close task")
 	}
 }
+
+// =============================================================================
+// Watch Mode Tests
+// =============================================================================
+
+func TestDefaultWatchPollInterval(t *testing.T) {
+	// Verify the default poll interval is 10 seconds
+	if DefaultWatchPollInterval != 10*time.Second {
+		t.Errorf("DefaultWatchPollInterval = %v, want 10s", DefaultWatchPollInterval)
+	}
+}
+
+func TestExitReasonWatchTimeout(t *testing.T) {
+	// Verify the watch timeout exit reason constant
+	if ExitReasonWatchTimeout != "watch timeout" {
+		t.Errorf("ExitReasonWatchTimeout = %q, want %q", ExitReasonWatchTimeout, "watch timeout")
+	}
+}
+
+func TestRunConfig_WatchFields(t *testing.T) {
+	// Test that watch fields exist and can be set
+	config := RunConfig{
+		EpicID:            "test-epic",
+		Watch:             true,
+		WatchTimeout:      time.Hour,
+		WatchPollInterval: 5 * time.Second,
+	}
+
+	if !config.Watch {
+		t.Error("Watch should be true")
+	}
+	if config.WatchTimeout != time.Hour {
+		t.Errorf("WatchTimeout = %v, want 1h", config.WatchTimeout)
+	}
+	if config.WatchPollInterval != 5*time.Second {
+		t.Errorf("WatchPollInterval = %v, want 5s", config.WatchPollInterval)
+	}
+}
+
+func TestRunConfig_WatchDefaults(t *testing.T) {
+	// Test that watch fields default to zero values
+	config := RunConfig{
+		EpicID: "test-epic",
+	}
+
+	if config.Watch {
+		t.Error("Watch should default to false")
+	}
+	if config.WatchTimeout != 0 {
+		t.Errorf("WatchTimeout should default to 0, got %v", config.WatchTimeout)
+	}
+	if config.WatchPollInterval != 0 {
+		t.Errorf("WatchPollInterval should default to 0, got %v", config.WatchPollInterval)
+	}
+}
+
+func TestEngine_OnIdleCallback(t *testing.T) {
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+	mockAg := &mockAgent{name: "test", available: true}
+
+	idleCalled := false
+	idleCallCount := 0
+
+	e := &Engine{
+		agent:      mockAg,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+		OnIdle: func() {
+			idleCalled = true
+			idleCallCount++
+		},
+	}
+
+	// Verify callback is set
+	if e.OnIdle == nil {
+		t.Error("OnIdle not set")
+	}
+
+	// Call the callback directly to verify it works
+	e.OnIdle()
+
+	if !idleCalled {
+		t.Error("OnIdle was not called")
+	}
+	if idleCallCount != 1 {
+		t.Errorf("OnIdle call count = %d, want 1", idleCallCount)
+	}
+
+	// Call again to verify counter increments
+	e.OnIdle()
+	if idleCallCount != 2 {
+		t.Errorf("OnIdle call count = %d, want 2", idleCallCount)
+	}
+}
+
+func TestShouldCleanupWorktree_WatchTimeout(t *testing.T) {
+	// Watch timeout should NOT trigger cleanup (preserve worktree for resume)
+	if ShouldCleanupWorktree(ExitReasonWatchTimeout) {
+		t.Error("ShouldCleanupWorktree(ExitReasonWatchTimeout) should return false")
+	}
+}
+
+// mockTicksClientForWatch extends mockTicksClient to support watch mode testing.
+// It can be configured to return tasks dynamically based on call count.
+type mockTicksClientForWatch struct {
+	*mockTicksClient
+	nextTaskCalls   int
+	tasksAvailable  []bool // true at index i means task available on i-th NextTask call
+	hasOpenReturns  []bool // return values for HasOpenTasks calls
+	hasOpenCalls    int
+}
+
+func newMockTicksClientForWatch() *mockTicksClientForWatch {
+	return &mockTicksClientForWatch{
+		mockTicksClient: newMockTicksClient(),
+		tasksAvailable:  []bool{},
+		hasOpenReturns:  []bool{},
+	}
+}
+
+func (m *mockTicksClientForWatch) NextTask(epicID string) (*ticks.Task, error) {
+	idx := m.nextTaskCalls
+	m.nextTaskCalls++
+
+	// If we have a configured return for this call, use it
+	if idx < len(m.tasksAvailable) && m.tasksAvailable[idx] {
+		return &ticks.Task{ID: "task-" + string(rune('a'+idx)), Title: "Test Task"}, nil
+	}
+	return nil, nil
+}
+
+func (m *mockTicksClientForWatch) HasOpenTasks(epicID string) (bool, error) {
+	idx := m.hasOpenCalls
+	m.hasOpenCalls++
+
+	// If we have a configured return for this call, use it
+	if idx < len(m.hasOpenReturns) {
+		return m.hasOpenReturns[idx], nil
+	}
+	// Default: return true (tasks are open but blocked)
+	return true, nil
+}
+
+func TestHandleWatchIdle_CallsOnIdle(t *testing.T) {
+	mock := newMockTicksClientForWatch()
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+	// Configure: first poll returns no task, second poll returns a task
+	mock.tasksAvailable = []bool{false, true}
+	mock.hasOpenReturns = []bool{true, true}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	idleCallCount := 0
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+		OnIdle: func() {
+			idleCallCount++
+		},
+	}
+
+	state := &runState{
+		epicID:    "test-epic",
+		startTime: time.Now(),
+	}
+	config := RunConfig{
+		EpicID:            "test-epic",
+		Watch:             true,
+		WatchPollInterval: 10 * time.Millisecond, // Fast for testing
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	// handleWatchIdle should call OnIdle at least once and then return nil when tasks become available
+	result := engine.handleWatchIdle(ctx, config, state, time.Time{})
+
+	if result != nil {
+		t.Errorf("handleWatchIdle returned result %+v, want nil (tasks became available)", result)
+	}
+	if idleCallCount < 1 {
+		t.Errorf("OnIdle called %d times, want at least 1", idleCallCount)
+	}
+}
+
+func TestHandleWatchIdle_WatchTimeout(t *testing.T) {
+	mock := newMockTicksClientForWatch()
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+	// Never return a task
+	mock.tasksAvailable = []bool{false, false, false, false, false}
+	mock.hasOpenReturns = []bool{true, true, true, true, true}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+		OnIdle:     func() {},
+	}
+
+	state := &runState{
+		epicID:    "test-epic",
+		startTime: time.Now(),
+	}
+	config := RunConfig{
+		EpicID:            "test-epic",
+		Watch:             true,
+		WatchPollInterval: 10 * time.Millisecond, // Fast for testing
+	}
+
+	// Set a deadline that will expire quickly
+	watchDeadline := time.Now().Add(50 * time.Millisecond)
+
+	ctx := context.Background()
+	result := engine.handleWatchIdle(ctx, config, state, watchDeadline)
+
+	if result == nil {
+		t.Fatal("handleWatchIdle should return result on timeout")
+	}
+	if result.ExitReason != ExitReasonWatchTimeout {
+		t.Errorf("ExitReason = %q, want %q", result.ExitReason, ExitReasonWatchTimeout)
+	}
+}
+
+func TestHandleWatchIdle_ContextCancelled(t *testing.T) {
+	mock := newMockTicksClientForWatch()
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+	// Never return a task
+	mock.tasksAvailable = []bool{false, false, false, false, false}
+	mock.hasOpenReturns = []bool{true, true, true, true, true}
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+		OnIdle:     func() {},
+	}
+
+	state := &runState{
+		epicID:    "test-epic",
+		startTime: time.Now(),
+	}
+	config := RunConfig{
+		EpicID:            "test-epic",
+		Watch:             true,
+		WatchPollInterval: 100 * time.Millisecond,
+	}
+
+	// Create a context that will be cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel after a short delay
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		cancel()
+	}()
+
+	result := engine.handleWatchIdle(ctx, config, state, time.Time{})
+
+	if result == nil {
+		t.Fatal("handleWatchIdle should return result on context cancellation")
+	}
+	if !strings.Contains(result.ExitReason, "cancelled") {
+		t.Errorf("ExitReason = %q, want to contain 'cancelled'", result.ExitReason)
+	}
+}
+
+func TestHandleWatchIdle_EpicCompletes(t *testing.T) {
+	mock := newMockTicksClientForWatch()
+	mock.epic = &ticks.Epic{ID: "test-epic", Title: "Test Epic", Type: "epic"}
+	// Task not available, but epic completes (no open tasks)
+	mock.tasksAvailable = []bool{false, false}
+	mock.hasOpenReturns = []bool{true, false} // Second call: no open tasks
+
+	dir := t.TempDir()
+	b := budget.NewTracker(budget.Limits{MaxIterations: 10})
+	c := checkpoint.NewManagerWithDir(dir)
+
+	engine := &Engine{
+		ticks:      mock,
+		budget:     b,
+		checkpoint: c,
+		prompt:     NewPromptBuilder(),
+		OnIdle:     func() {},
+	}
+
+	state := &runState{
+		epicID:    "test-epic",
+		startTime: time.Now(),
+	}
+	config := RunConfig{
+		EpicID:            "test-epic",
+		Watch:             true,
+		WatchPollInterval: 10 * time.Millisecond,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	result := engine.handleWatchIdle(ctx, config, state, time.Time{})
+
+	if result == nil {
+		t.Fatal("handleWatchIdle should return result when epic completes")
+	}
+	if result.ExitReason != ExitReasonAllTasksCompleted {
+		t.Errorf("ExitReason = %q, want %q", result.ExitReason, ExitReasonAllTasksCompleted)
+	}
+	if result.Signal != SignalComplete {
+		t.Errorf("Signal = %v, want %v", result.Signal, SignalComplete)
+	}
+}

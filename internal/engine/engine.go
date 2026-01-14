@@ -55,6 +55,9 @@ type Engine struct {
 	OnVerificationStart func(taskID string)
 	OnVerificationEnd   func(taskID string, results *verify.Results)
 
+	// Watch mode callback - called when no tasks available and entering idle state.
+	OnIdle func()
+
 	// Rich streaming callback for real-time agent state updates.
 	// Called whenever agent state changes (text, thinking, tools, metrics).
 	// If set, this provides structured updates; OnOutput is still called for backward compat.
@@ -106,15 +109,27 @@ type RunConfig struct {
 	// If set, the agent runs in this directory instead of the current directory.
 	// Used by parallel runner to pass pre-created worktree paths.
 	WorkDir string
+
+	// Watch enables watch mode - engine idles when no tasks available instead of exiting.
+	Watch bool
+
+	// WatchTimeout is the maximum duration to watch for tasks (0 = unlimited).
+	// Only used when Watch is true.
+	WatchTimeout time.Duration
+
+	// WatchPollInterval is how often to poll for new tasks when idle (0 = 10s default).
+	// Only used when Watch is true.
+	WatchPollInterval time.Duration
 }
 
 // Defaults for RunConfig.
 const (
-	DefaultMaxIterations   = 50
-	DefaultMaxCost         = 0 // Disabled by default (most users have subscriptions)
-	DefaultCheckpointEvery = 5
-	DefaultAgentTimeout    = 30 * time.Minute
-	DefaultMaxTaskRetries  = 3
+	DefaultMaxIterations     = 50
+	DefaultMaxCost           = 0 // Disabled by default (most users have subscriptions)
+	DefaultCheckpointEvery   = 5
+	DefaultAgentTimeout      = 30 * time.Minute
+	DefaultMaxTaskRetries    = 3
+	DefaultWatchPollInterval = 10 * time.Second
 )
 
 // Exit reason constants for worktree cleanup decisions.
@@ -127,6 +142,9 @@ const (
 
 	// ExitReasonTasksAwaitingHuman indicates tasks are blocked/awaiting - preserve worktree.
 	ExitReasonTasksAwaitingHuman = "no ready tasks (remaining tasks are blocked or awaiting human)"
+
+	// ExitReasonWatchTimeout indicates watch mode timed out - preserve worktree.
+	ExitReasonWatchTimeout = "watch timeout"
 )
 
 // ShouldCleanupWorktree determines if a worktree should be removed based on exit reason.
@@ -251,6 +269,15 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 	}
 	if config.AgentTimeout == 0 {
 		config.AgentTimeout = DefaultAgentTimeout
+	}
+	if config.Watch && config.WatchPollInterval == 0 {
+		config.WatchPollInterval = DefaultWatchPollInterval
+	}
+
+	// Calculate watch deadline (0 = unlimited)
+	var watchDeadline time.Time
+	if config.Watch && config.WatchTimeout > 0 {
+		watchDeadline = time.Now().Add(config.WatchTimeout)
 	}
 
 	// Initialize state
@@ -396,15 +423,26 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			}
 
 			if hasOpen {
-				// There are tasks but they're all blocked or awaiting human - don't close epic
-				return state.toResult("no ready tasks (remaining tasks are blocked or awaiting human)", e.budget.Usage()), nil
+				// There are tasks but they're all blocked or awaiting human
+				if config.Watch {
+					// Watch mode: enter idle state and poll for changes
+					idleResult := e.handleWatchIdle(ctx, config, state, watchDeadline)
+					if idleResult != nil {
+						// Idle period ended (timeout or context cancelled)
+						return idleResult, nil
+					}
+					// Tasks became available, continue loop
+					continue
+				}
+				// Non-watch mode: exit
+				return state.toResult(ExitReasonTasksAwaitingHuman, e.budget.Usage()), nil
 			}
 
 			// All tasks are closed - epic complete
 			state.signal = SignalComplete
-			reason := "all tasks completed"
+			reason := ExitReasonAllTasksCompleted
 			if state.iteration == 0 {
-				reason = "no tasks found"
+				reason = ExitReasonNoTasksFound
 			}
 			if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
 				// Log but don't fail - epic may already be closed or race condition
@@ -852,4 +890,63 @@ func buildVerificationFailureNote(iteration int, taskID string, results *verify.
 
 	sb.WriteString(" Please fix and close the task again.")
 	return sb.String()
+}
+
+// handleWatchIdle enters idle state and polls for new tasks.
+// Returns nil if tasks become available (continue processing).
+// Returns a RunResult if watch should end (timeout or cancellation).
+func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *runState, watchDeadline time.Time) *RunResult {
+	// Notify caller that we're entering idle state
+	if e.OnIdle != nil {
+		e.OnIdle()
+	}
+
+	// Poll for new tasks until available, timeout, or cancellation
+	for {
+		// Check watch timeout
+		if !watchDeadline.IsZero() && time.Now().After(watchDeadline) {
+			return state.toResult(ExitReasonWatchTimeout, e.budget.Usage())
+		}
+
+		// Wait for poll interval or cancellation
+		select {
+		case <-ctx.Done():
+			e.writeInterruptionNotes(state, config.EpicID)
+			return state.toResult("context cancelled while idle", e.budget.Usage())
+
+		case <-time.After(config.WatchPollInterval):
+			// Check for new tasks
+			task, err := e.ticks.NextTask(config.EpicID)
+			if err != nil {
+				// Log but continue polling - transient errors shouldn't stop watch
+				continue
+			}
+
+			if task != nil {
+				// Tasks available - return nil to continue processing
+				return nil
+			}
+
+			// Still no tasks - check if epic is now complete
+			hasOpen, err := e.ticks.HasOpenTasks(config.EpicID)
+			if err != nil {
+				continue
+			}
+
+			if !hasOpen {
+				// All tasks closed while idle - epic complete
+				state.signal = SignalComplete
+				reason := ExitReasonAllTasksCompleted
+				if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to close epic %s: %v\n", config.EpicID, err)
+				}
+				return state.toResult(reason, e.budget.Usage())
+			}
+
+			// Still blocked/awaiting - re-trigger OnIdle callback
+			if e.OnIdle != nil {
+				e.OnIdle()
+			}
+		}
+	}
 }

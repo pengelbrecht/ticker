@@ -198,6 +198,9 @@ func init() {
 	runCmd.Flags().Bool("verify-only", false, "Run verification without the agent (for debugging)")
 	runCmd.Flags().Bool("worktree", false, "Run epic(s) in isolated git worktree")
 	runCmd.Flags().Int("parallel", 0, "Max parallel epics (default: number of epics)")
+	runCmd.Flags().Bool("watch", false, "Watch mode: idle when no tasks available instead of exiting")
+	runCmd.Flags().Duration("timeout", 0, "Watch timeout: stop watching after this duration (default: unlimited)")
+	runCmd.Flags().Duration("poll", 10*time.Second, "Poll interval for watch mode (default: 10s)")
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(resumeCmd)
@@ -225,6 +228,9 @@ func runRun(cmd *cobra.Command, args []string) {
 	verifyOnly, _ := cmd.Flags().GetBool("verify-only")
 	useWorktree, _ := cmd.Flags().GetBool("worktree")
 	maxParallel, _ := cmd.Flags().GetInt("parallel")
+	watch, _ := cmd.Flags().GetBool("watch")
+	watchTimeout, _ := cmd.Flags().GetDuration("timeout")
+	watchPollInterval, _ := cmd.Flags().GetDuration("poll")
 
 	// Check mutual exclusivity
 	if skipVerify && verifyOnly {
@@ -236,6 +242,14 @@ func runRun(cmd *cobra.Command, args []string) {
 	if jsonl && !headless {
 		fmt.Fprintln(os.Stderr, "Error: --jsonl requires --headless")
 		os.Exit(ExitError)
+	}
+
+	// Watch mode validation
+	if watchTimeout > 0 && !watch {
+		fmt.Fprintln(os.Stderr, "Warning: --timeout has no effect without --watch")
+	}
+	if watchPollInterval != 10*time.Second && !watch {
+		fmt.Fprintln(os.Stderr, "Warning: --poll has no effect without --watch")
 	}
 
 	// Handle --verify-only mode (no epic required, runs in current directory)
@@ -341,12 +355,12 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	// TUI mode (default)
 	if !headless {
-		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree)
+		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, watch, watchTimeout, watchPollInterval)
 		return
 	}
 
 	// Headless mode
-	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, jsonl)
+	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, jsonl, watch, watchTimeout, watchPollInterval)
 }
 
 // validateEpicIDs checks that all epic IDs exist, are open, and are unique.
@@ -948,7 +962,7 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 	os.Exit(ExitError)
 }
 
-func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree bool) {
+func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, watch bool, watchTimeout, watchPollInterval time.Duration) {
 	// Create pause channel for TUI <-> engine communication
 	pauseChan := make(chan bool, 1)
 
@@ -1155,16 +1169,24 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		go refreshTasks()
 	}
 
+	// Set up OnIdle callback for watch mode TUI updates
+	eng.OnIdle = func() {
+		p.Send(tui.IdleMsg{})
+	}
+
 	// Run engine in background
 	go func() {
 		config := engine.RunConfig{
-			EpicID:          epicID,
-			MaxIterations:   maxIterations,
-			MaxCost:         maxCost,
-			CheckpointEvery: checkpointInterval,
-			MaxTaskRetries:  maxTaskRetries,
-			PauseChan:       pauseChan,
-			UseWorktree:     useWorktree,
+			EpicID:            epicID,
+			MaxIterations:     maxIterations,
+			MaxCost:           maxCost,
+			CheckpointEvery:   checkpointInterval,
+			MaxTaskRetries:    maxTaskRetries,
+			PauseChan:         pauseChan,
+			UseWorktree:       useWorktree,
+			Watch:             watch,
+			WatchTimeout:      watchTimeout,
+			WatchPollInterval: watchPollInterval,
 		}
 
 		result, err := eng.Run(ctx, config)
@@ -1191,7 +1213,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	cancel()
 }
 
-func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, jsonl bool) {
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, jsonl, watch bool, watchTimeout, watchPollInterval time.Duration) {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1273,20 +1295,39 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		out.TaskComplete(taskID, verifyPassed)
 	}
 
+	// Set up OnIdle callback for watch mode headless output
+	eng.OnIdle = func() {
+		if jsonl {
+			fmt.Println(`{"type":"idle","message":"waiting for tasks"}`)
+		} else {
+			fmt.Println("[IDLE] No tasks available, waiting...")
+		}
+	}
+
 	// Output start
 	out.Start(epic, maxIterations, maxCost)
 	if useWorktree && !jsonl {
 		fmt.Println("[START] Running in isolated worktree")
 	}
+	if watch && !jsonl {
+		if watchTimeout > 0 {
+			fmt.Printf("[START] Watch mode enabled (timeout: %v, poll: %v)\n", watchTimeout, watchPollInterval)
+		} else {
+			fmt.Printf("[START] Watch mode enabled (poll: %v)\n", watchPollInterval)
+		}
+	}
 
 	// Run
 	config := engine.RunConfig{
-		EpicID:          epicID,
-		MaxIterations:   maxIterations,
-		MaxCost:         maxCost,
-		CheckpointEvery: checkpointInterval,
-		MaxTaskRetries:  maxTaskRetries,
-		UseWorktree:     useWorktree,
+		EpicID:            epicID,
+		MaxIterations:     maxIterations,
+		MaxCost:           maxCost,
+		CheckpointEvery:   checkpointInterval,
+		MaxTaskRetries:    maxTaskRetries,
+		UseWorktree:       useWorktree,
+		Watch:             watch,
+		WatchTimeout:      watchTimeout,
+		WatchPollInterval: watchPollInterval,
 	}
 
 	result, err := eng.Run(ctx, config)
