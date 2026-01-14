@@ -1213,6 +1213,76 @@ func TestTaskInfo_RenderTask(t *testing.T) {
 	}
 }
 
+func TestTaskInfo_RenderTask_WithAwaitingType(t *testing.T) {
+	tests := []struct {
+		name         string
+		awaiting     string
+		wantContains string
+	}{
+		{
+			name:         "approval awaiting type shown in brackets",
+			awaiting:     "approval",
+			wantContains: "[approval]",
+		},
+		{
+			name:         "input awaiting type shown in brackets",
+			awaiting:     "input",
+			wantContains: "[input]",
+		},
+		{
+			name:         "review awaiting type shown in brackets",
+			awaiting:     "review",
+			wantContains: "[review]",
+		},
+		{
+			name:         "content awaiting type shown in brackets",
+			awaiting:     "content",
+			wantContains: "[content]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := TaskInfo{
+				ID:       "xyz",
+				Title:    "Task with awaiting",
+				Status:   TaskStatusOpen,
+				Awaiting: tt.awaiting,
+			}
+
+			output := task.RenderTask(false)
+
+			// Should contain human icon
+			if !strings.Contains(output, "👤") {
+				t.Error("expected awaiting task to show human icon")
+			}
+
+			// Should contain the awaiting type in brackets
+			if !strings.Contains(output, tt.wantContains) {
+				t.Errorf("expected output to contain %q, got %q", tt.wantContains, output)
+			}
+		})
+	}
+}
+
+func TestTaskInfo_RenderTask_NoAwaitingType(t *testing.T) {
+	task := TaskInfo{
+		ID:       "abc",
+		Title:    "Normal task",
+		Status:   TaskStatusOpen,
+		Awaiting: "", // No awaiting
+	}
+
+	output := task.RenderTask(false)
+
+	// Should not contain brackets after title (other than the ID brackets)
+	// Count bracket occurrences - should only be [abc] for ID
+	bracketCount := strings.Count(output, "[")
+	if bracketCount != 1 {
+		t.Errorf("expected exactly 1 bracket pair for ID, got %d in output: %q", bracketCount, output)
+	}
+}
+
 func TestIsFocused(t *testing.T) {
 	m := New(Config{})
 	m.focusedPane = PaneTasks

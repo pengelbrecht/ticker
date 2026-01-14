@@ -91,6 +91,7 @@ func (t TaskInfo) StatusIcon() string {
 }
 
 // RenderTask formats a task line with icon, ID, and title.
+// If the task is awaiting human action, appends the awaiting type in brackets.
 func (t TaskInfo) RenderTask(selected bool) string {
 	icon := t.StatusIcon()
 	id := lipgloss.NewStyle().Foreground(colorLavender).Render("[" + t.ID + "]")
@@ -102,7 +103,15 @@ func (t TaskInfo) RenderTask(selected bool) string {
 		title = dimStyle.Render(title)
 	}
 
-	return icon + " " + id + " " + title
+	result := icon + " " + id + " " + title
+
+	// Append awaiting type if present, so users know what action is needed
+	if t.Awaiting != "" {
+		awaitingTag := lipgloss.NewStyle().Foreground(colorPeach).Render("[" + t.Awaiting + "]")
+		result += " " + awaitingTag
+	}
+
+	return result
 }
 
 // -----------------------------------------------------------------------------
