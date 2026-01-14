@@ -537,3 +537,389 @@ func TestGetRunRecordNonexistent(t *testing.T) {
 		t.Errorf("expected nil record for nonexistent task, got %+v", record)
 	}
 }
+
+// Test cases for ProcessVerdict method on Task struct
+func TestTaskProcessVerdict(t *testing.T) {
+	testCases := []struct {
+		name           string
+		awaiting       *string
+		verdict        *string
+		requires       *string
+		initialStatus  string
+		wantClose      bool
+		wantCleared    bool
+		wantStatus     string
+		wantRequires   bool // should requires still be set?
+	}{
+		// No verdict or awaiting - nothing to process
+		{
+			name:          "nil verdict",
+			awaiting:      strPtr("approval"),
+			verdict:       nil,
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   false,
+			wantStatus:    "open",
+		},
+		{
+			name:          "nil awaiting",
+			awaiting:      nil,
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   false,
+			wantStatus:    "open",
+		},
+		{
+			name:          "both nil",
+			awaiting:      nil,
+			verdict:       nil,
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   false,
+			wantStatus:    "open",
+		},
+
+		// Work type - approved closes (human completed it)
+		{
+			name:          "work approved closes",
+			awaiting:      strPtr("work"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     true,
+			wantCleared:   true,
+			wantStatus:    "closed",
+		},
+		{
+			name:          "work rejected continues",
+			awaiting:      strPtr("work"),
+			verdict:       strPtr("rejected"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+
+		// Approval type - terminal, approved closes
+		{
+			name:          "approval approved closes",
+			awaiting:      strPtr("approval"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     true,
+			wantCleared:   true,
+			wantStatus:    "closed",
+		},
+		{
+			name:          "approval rejected continues",
+			awaiting:      strPtr("approval"),
+			verdict:       strPtr("rejected"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+
+		// Review type - terminal, approved closes
+		{
+			name:          "review approved closes",
+			awaiting:      strPtr("review"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     true,
+			wantCleared:   true,
+			wantStatus:    "closed",
+		},
+		{
+			name:          "review rejected continues",
+			awaiting:      strPtr("review"),
+			verdict:       strPtr("rejected"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+
+		// Content type - terminal, approved closes
+		{
+			name:          "content approved closes",
+			awaiting:      strPtr("content"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     true,
+			wantCleared:   true,
+			wantStatus:    "closed",
+		},
+		{
+			name:          "content rejected continues",
+			awaiting:      strPtr("content"),
+			verdict:       strPtr("rejected"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+
+		// Input type - rejected closes (can't proceed), approved continues
+		{
+			name:          "input approved continues",
+			awaiting:      strPtr("input"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+		{
+			name:          "input rejected closes",
+			awaiting:      strPtr("input"),
+			verdict:       strPtr("rejected"),
+			initialStatus: "open",
+			wantClose:     true,
+			wantCleared:   true,
+			wantStatus:    "closed",
+		},
+
+		// Escalation type - rejected closes (won't do), approved continues
+		{
+			name:          "escalation approved continues",
+			awaiting:      strPtr("escalation"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+		{
+			name:          "escalation rejected closes",
+			awaiting:      strPtr("escalation"),
+			verdict:       strPtr("rejected"),
+			initialStatus: "open",
+			wantClose:     true,
+			wantCleared:   true,
+			wantStatus:    "closed",
+		},
+
+		// Checkpoint type - never closes
+		{
+			name:          "checkpoint approved continues",
+			awaiting:      strPtr("checkpoint"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+		{
+			name:          "checkpoint rejected continues",
+			awaiting:      strPtr("checkpoint"),
+			verdict:       strPtr("rejected"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+
+		// Unknown awaiting type - don't close
+		{
+			name:          "unknown type continues",
+			awaiting:      strPtr("unknown"),
+			verdict:       strPtr("approved"),
+			initialStatus: "open",
+			wantClose:     false,
+			wantCleared:   true,
+			wantStatus:    "open",
+		},
+
+		// Requires field should persist
+		{
+			name:           "requires persists after approval",
+			awaiting:       strPtr("approval"),
+			verdict:        strPtr("approved"),
+			requires:       strPtr("approval"),
+			initialStatus:  "open",
+			wantClose:      true,
+			wantCleared:    true,
+			wantStatus:     "closed",
+			wantRequires:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			task := &Task{
+				ID:       "test-task",
+				Status:   tc.initialStatus,
+				Awaiting: tc.awaiting,
+				Verdict:  tc.verdict,
+				Requires: tc.requires,
+			}
+
+			result := task.ProcessVerdict()
+
+			if result.ShouldClose != tc.wantClose {
+				t.Errorf("ShouldClose: got %v, want %v", result.ShouldClose, tc.wantClose)
+			}
+			if result.TransientCleared != tc.wantCleared {
+				t.Errorf("TransientCleared: got %v, want %v", result.TransientCleared, tc.wantCleared)
+			}
+			if task.Status != tc.wantStatus {
+				t.Errorf("Status: got %q, want %q", task.Status, tc.wantStatus)
+			}
+
+			// Verify transient fields are cleared when processing happened
+			if tc.wantCleared {
+				if task.Awaiting != nil {
+					t.Errorf("Awaiting should be nil after processing, got %v", task.Awaiting)
+				}
+				if task.Verdict != nil {
+					t.Errorf("Verdict should be nil after processing, got %v", task.Verdict)
+				}
+				if task.Manual {
+					t.Error("Manual should be false after processing")
+				}
+			}
+
+			// Verify requires persists
+			if tc.wantRequires {
+				if task.Requires == nil || *task.Requires != *tc.requires {
+					t.Errorf("Requires should persist, got %v, want %v", task.Requires, tc.requires)
+				}
+			}
+		})
+	}
+}
+
+// Test Client.ProcessVerdict method
+func TestClientProcessVerdict(t *testing.T) {
+	// Create temp directory structure
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	// Change to temp directory so findTickDir works
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	// Create a test task file with verdict and awaiting set
+	taskData := map[string]interface{}{
+		"id":          "verdict-test",
+		"title":       "Test Verdict Processing",
+		"description": "A task to test verdict processing",
+		"status":      "open",
+		"priority":    2,
+		"type":        "task",
+		"awaiting":    "approval",
+		"verdict":     "approved",
+		"requires":    "approval",
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "verdict-test.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	// Process verdict
+	client := NewClient()
+	result, err := client.ProcessVerdict("verdict-test")
+	if err != nil {
+		t.Fatalf("ProcessVerdict failed: %v", err)
+	}
+
+	// Verify result
+	if !result.ShouldClose {
+		t.Error("expected ShouldClose to be true for approval+approved")
+	}
+	if !result.TransientCleared {
+		t.Error("expected TransientCleared to be true")
+	}
+
+	// Read back the file and verify changes
+	data, err := os.ReadFile(taskFile)
+	if err != nil {
+		t.Fatalf("reading updated file: %v", err)
+	}
+
+	var updated map[string]interface{}
+	if err := json.Unmarshal(data, &updated); err != nil {
+		t.Fatalf("parsing updated file: %v", err)
+	}
+
+	// Check status changed to closed
+	if updated["status"] != "closed" {
+		t.Errorf("expected status 'closed', got %v", updated["status"])
+	}
+
+	// Check transient fields cleared
+	if _, exists := updated["awaiting"]; exists {
+		t.Errorf("expected awaiting to be removed, but it exists: %v", updated["awaiting"])
+	}
+	if _, exists := updated["verdict"]; exists {
+		t.Errorf("expected verdict to be removed, but it exists: %v", updated["verdict"])
+	}
+
+	// Check requires persists
+	if updated["requires"] != "approval" {
+		t.Errorf("expected requires to persist as 'approval', got %v", updated["requires"])
+	}
+
+	// Check other fields preserved
+	if updated["id"] != "verdict-test" {
+		t.Errorf("expected id to be preserved, got %v", updated["id"])
+	}
+	if updated["title"] != "Test Verdict Processing" {
+		t.Errorf("expected title to be preserved, got %v", updated["title"])
+	}
+}
+
+// Test Client.ProcessVerdict with no verdict set
+func TestClientProcessVerdictNoVerdict(t *testing.T) {
+	tmpDir := t.TempDir()
+	tickDir := filepath.Join(tmpDir, ".tick", "issues")
+	if err := os.MkdirAll(tickDir, 0755); err != nil {
+		t.Fatalf("creating tick dir: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("changing to temp dir: %v", err)
+	}
+
+	// Create task without verdict
+	taskData := map[string]interface{}{
+		"id":       "no-verdict",
+		"title":    "No Verdict",
+		"status":   "open",
+		"awaiting": "approval",
+	}
+	taskJSON, _ := json.MarshalIndent(taskData, "", "  ")
+	taskFile := filepath.Join(tickDir, "no-verdict.json")
+	if err := os.WriteFile(taskFile, taskJSON, 0600); err != nil {
+		t.Fatalf("writing task file: %v", err)
+	}
+
+	client := NewClient()
+	result, err := client.ProcessVerdict("no-verdict")
+	if err != nil {
+		t.Fatalf("ProcessVerdict failed: %v", err)
+	}
+
+	// Should not process anything
+	if result.TransientCleared {
+		t.Error("expected TransientCleared to be false when no verdict")
+	}
+	if result.ShouldClose {
+		t.Error("expected ShouldClose to be false when no verdict")
+	}
+}
+
+// Helper function to create string pointers
+func strPtr(s string) *string {
+	return &s
+}

@@ -112,6 +112,76 @@ func (t *Task) ClearAwaiting() {
 	t.Manual = false
 }
 
+// VerdictResult represents the outcome of processing a verdict.
+type VerdictResult struct {
+	// ShouldClose indicates whether the task should be closed.
+	ShouldClose bool
+	// TransientCleared indicates whether transient fields were cleared.
+	TransientCleared bool
+}
+
+// ProcessVerdict processes the verdict on a task according to the awaiting type.
+// Returns a VerdictResult indicating what changes were made.
+//
+// Verdict processing matrix:
+//   - work: approved=close (human did it), rejected=agent continues
+//   - approval, review, content: approved=close (terminal), rejected=agent continues
+//   - input: approved=agent continues (answer provided), rejected=close (can't proceed)
+//   - escalation: approved=agent continues (direction given), rejected=close (won't do)
+//   - checkpoint: never closes, always back to agent
+//
+// After processing:
+//   - Awaiting and Verdict are cleared (transient fields)
+//   - Requires is NOT cleared (persists through cycles)
+//   - Status is set to "closed" if ShouldClose is true
+func (t *Task) ProcessVerdict() VerdictResult {
+	result := VerdictResult{}
+
+	// Nothing to process if verdict or awaiting is not set
+	if t.Verdict == nil || t.Awaiting == nil {
+		return result
+	}
+
+	// Determine if task should close based on awaiting type and verdict
+	awaiting := *t.Awaiting
+	verdict := *t.Verdict
+
+	switch awaiting {
+	case "work":
+		// Work completed by human - approved means done
+		result.ShouldClose = (verdict == "approved")
+	case "approval", "review", "content":
+		// Terminal states - approved means done
+		result.ShouldClose = (verdict == "approved")
+	case "input":
+		// Approved = answer provided, continue; Rejected = can't proceed
+		result.ShouldClose = (verdict == "rejected")
+	case "escalation":
+		// Approved = direction given, continue; Rejected = won't do
+		result.ShouldClose = (verdict == "rejected")
+	case "checkpoint":
+		// Never closes - always back to agent
+		result.ShouldClose = false
+	default:
+		// Unknown awaiting type - don't close, let agent handle
+		result.ShouldClose = false
+	}
+
+	// Clear transient fields (Awaiting and Verdict)
+	// Note: Requires is NOT cleared - it persists through cycles
+	t.Awaiting = nil
+	t.Verdict = nil
+	t.Manual = false // also clear Manual for consistency
+	result.TransientCleared = true
+
+	// Close the task if needed
+	if result.ShouldClose {
+		t.Status = "closed"
+	}
+
+	return result
+}
+
 // IsOpen returns true if the epic status is "open".
 func (e *Epic) IsOpen() bool {
 	return e.Status == "open"

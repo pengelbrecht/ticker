@@ -250,6 +250,64 @@ func (c *Client) SetVerdict(taskID string, verdict string, feedback string) erro
 	return nil
 }
 
+// ProcessVerdict reads a task, processes its verdict, and saves the result.
+// This is used when ticker needs to process verdicts set by humans.
+// Returns the VerdictResult indicating what changes were made.
+func (c *Client) ProcessVerdict(taskID string) (VerdictResult, error) {
+	// Find the .tick/issues directory
+	tickDir, err := findTickDir()
+	if err != nil {
+		return VerdictResult{}, fmt.Errorf("finding .tick directory: %w", err)
+	}
+
+	filePath := filepath.Join(tickDir, "issues", taskID+".json")
+
+	// Read the existing file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return VerdictResult{}, fmt.Errorf("reading tick file %s: %w", taskID, err)
+	}
+
+	// Parse into Task struct
+	var task Task
+	if err := json.Unmarshal(data, &task); err != nil {
+		return VerdictResult{}, fmt.Errorf("parsing tick file %s: %w", taskID, err)
+	}
+
+	// Process the verdict
+	result := task.ProcessVerdict()
+
+	// If nothing was processed, return early
+	if !result.TransientCleared {
+		return result, nil
+	}
+
+	// Save the updated task back to file
+	// Use a generic map to preserve any extra fields
+	var tickData map[string]interface{}
+	if err := json.Unmarshal(data, &tickData); err != nil {
+		return VerdictResult{}, fmt.Errorf("parsing tick file for save %s: %w", taskID, err)
+	}
+
+	// Update the fields that ProcessVerdict modified
+	delete(tickData, "awaiting") // cleared
+	delete(tickData, "verdict")  // cleared
+	delete(tickData, "manual")   // cleared
+	tickData["status"] = task.Status
+
+	// Write back with indentation
+	output, err := json.MarshalIndent(tickData, "", "  ")
+	if err != nil {
+		return VerdictResult{}, fmt.Errorf("marshaling tick file %s: %w", taskID, err)
+	}
+
+	if err := os.WriteFile(filePath, output, 0600); err != nil {
+		return VerdictResult{}, fmt.Errorf("writing tick file %s: %w", taskID, err)
+	}
+
+	return result, nil
+}
+
 // GetNotes returns the notes for an epic or task.
 // Notes are parsed from the tk show output.
 func (c *Client) GetNotes(epicID string) ([]string, error) {
