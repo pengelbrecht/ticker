@@ -71,18 +71,45 @@ func (t *Task) IsClosed() bool {
 }
 
 // IsAwaitingHuman returns true if the task is waiting for human action.
-// A task is awaiting human action when the Awaiting field is non-nil.
+// A task is awaiting human action when the Awaiting field is non-nil,
+// or when Manual is true (backwards compatibility - Manual is equivalent to awaiting=work).
 func (t *Task) IsAwaitingHuman() bool {
-	return t.Awaiting != nil
+	if t.Awaiting != nil {
+		return true
+	}
+	return t.Manual // backwards compat: Manual=true means awaiting=work
 }
 
 // GetAwaitingType returns the type of human action the task is waiting for.
 // Returns an empty string if the task is not awaiting human action.
+// For backwards compatibility, returns "work" if Manual is true and Awaiting is not set.
 func (t *Task) GetAwaitingType() string {
-	if t.Awaiting == nil {
-		return ""
+	if t.Awaiting != nil {
+		return *t.Awaiting
 	}
-	return *t.Awaiting
+	if t.Manual {
+		return "work" // backwards compat: Manual=true means awaiting=work
+	}
+	return ""
+}
+
+// SetAwaiting sets the Awaiting field and clears the Manual field.
+// This ensures new ticks use only the Awaiting field for human action state.
+// Pass an empty string to clear the awaiting state (agent's turn).
+func (t *Task) SetAwaiting(awaitingType string) {
+	if awaitingType == "" {
+		t.Awaiting = nil
+	} else {
+		t.Awaiting = &awaitingType
+	}
+	t.Manual = false // clear Manual for forwards compatibility
+}
+
+// ClearAwaiting clears both Awaiting and Manual fields.
+// Use this when the task is ready for agent work.
+func (t *Task) ClearAwaiting() {
+	t.Awaiting = nil
+	t.Manual = false
 }
 
 // IsOpen returns true if the epic status is "open".

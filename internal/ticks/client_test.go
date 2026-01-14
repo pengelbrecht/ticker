@@ -58,10 +58,10 @@ func TestEpicIsClosed(t *testing.T) {
 }
 
 func TestTaskIsAwaitingHuman(t *testing.T) {
-	// Test nil Awaiting - agent's turn
+	// Test nil Awaiting and Manual=false - agent's turn
 	task := &Task{Status: "open"}
 	if task.IsAwaitingHuman() {
-		t.Error("expected IsAwaitingHuman() to return false when Awaiting is nil")
+		t.Error("expected IsAwaitingHuman() to return false when Awaiting is nil and Manual is false")
 	}
 
 	// Test non-nil Awaiting - human's turn
@@ -70,13 +70,26 @@ func TestTaskIsAwaitingHuman(t *testing.T) {
 	if !task.IsAwaitingHuman() {
 		t.Error("expected IsAwaitingHuman() to return true when Awaiting is set")
 	}
+
+	// Test backwards compatibility: Manual=true should mean human's turn
+	task2 := &Task{Status: "open", Manual: true}
+	if !task2.IsAwaitingHuman() {
+		t.Error("expected IsAwaitingHuman() to return true when Manual is true (backwards compat)")
+	}
+
+	// Test Awaiting takes precedence over Manual
+	awaitingWork := "work"
+	task3 := &Task{Status: "open", Manual: true, Awaiting: &awaitingWork}
+	if !task3.IsAwaitingHuman() {
+		t.Error("expected IsAwaitingHuman() to return true when both Awaiting and Manual are set")
+	}
 }
 
 func TestTaskGetAwaitingType(t *testing.T) {
-	// Test nil Awaiting
+	// Test nil Awaiting and Manual=false
 	task := &Task{Status: "open"}
 	if got := task.GetAwaitingType(); got != "" {
-		t.Errorf("expected GetAwaitingType() to return empty string when Awaiting is nil, got %q", got)
+		t.Errorf("expected GetAwaitingType() to return empty string when Awaiting is nil and Manual is false, got %q", got)
 	}
 
 	// Test with various awaiting types
@@ -87,6 +100,103 @@ func TestTaskGetAwaitingType(t *testing.T) {
 		if got := task.GetAwaitingType(); got != tc {
 			t.Errorf("expected GetAwaitingType() to return %q, got %q", tc, got)
 		}
+	}
+
+	// Test backwards compatibility: Manual=true should return "work"
+	task2 := &Task{Status: "open", Manual: true}
+	if got := task2.GetAwaitingType(); got != "work" {
+		t.Errorf("expected GetAwaitingType() to return 'work' when Manual is true, got %q", got)
+	}
+
+	// Test Awaiting takes precedence over Manual
+	awaitingApproval := "approval"
+	task3 := &Task{Status: "open", Manual: true, Awaiting: &awaitingApproval}
+	if got := task3.GetAwaitingType(); got != "approval" {
+		t.Errorf("expected GetAwaitingType() to return 'approval' when Awaiting is set (not Manual fallback), got %q", got)
+	}
+}
+
+func TestTaskSetAwaiting(t *testing.T) {
+	// Test setting awaiting clears Manual
+	task := &Task{Status: "open", Manual: true}
+	task.SetAwaiting("approval")
+
+	if task.Awaiting == nil || *task.Awaiting != "approval" {
+		t.Errorf("expected Awaiting to be 'approval', got %v", task.Awaiting)
+	}
+	if task.Manual {
+		t.Error("expected Manual to be false after SetAwaiting")
+	}
+
+	// Test clearing awaiting with empty string
+	task.SetAwaiting("")
+	if task.Awaiting != nil {
+		t.Errorf("expected Awaiting to be nil after SetAwaiting(''), got %v", task.Awaiting)
+	}
+	if task.Manual {
+		t.Error("expected Manual to remain false after clearing Awaiting")
+	}
+}
+
+func TestTaskClearAwaiting(t *testing.T) {
+	// Test ClearAwaiting clears both fields
+	awaiting := "work"
+	task := &Task{Status: "open", Manual: true, Awaiting: &awaiting}
+	task.ClearAwaiting()
+
+	if task.Awaiting != nil {
+		t.Errorf("expected Awaiting to be nil after ClearAwaiting, got %v", task.Awaiting)
+	}
+	if task.Manual {
+		t.Error("expected Manual to be false after ClearAwaiting")
+	}
+}
+
+func TestBackwardsCompatibilityManualField(t *testing.T) {
+	// Simulate reading an old tick with only Manual=true
+	oldTickJSON := `{
+		"id": "old-tick",
+		"title": "Old Manual Task",
+		"status": "open",
+		"manual": true
+	}`
+
+	var task Task
+	if err := json.Unmarshal([]byte(oldTickJSON), &task); err != nil {
+		t.Fatalf("failed to unmarshal old tick JSON: %v", err)
+	}
+
+	// Verify backwards compat methods work
+	if !task.IsAwaitingHuman() {
+		t.Error("expected IsAwaitingHuman() to return true for old tick with manual=true")
+	}
+	if got := task.GetAwaitingType(); got != "work" {
+		t.Errorf("expected GetAwaitingType() to return 'work' for old tick with manual=true, got %q", got)
+	}
+
+	// Simulate updating the tick with new awaiting field
+	task.SetAwaiting("approval")
+
+	// Verify the tick now uses new field
+	if task.Awaiting == nil || *task.Awaiting != "approval" {
+		t.Errorf("expected Awaiting to be 'approval' after SetAwaiting, got %v", task.Awaiting)
+	}
+	if task.Manual {
+		t.Error("expected Manual to be cleared after SetAwaiting")
+	}
+
+	// Marshal and verify JSON output uses new field
+	data, err := json.Marshal(&task)
+	if err != nil {
+		t.Fatalf("failed to marshal task: %v", err)
+	}
+	jsonStr := string(data)
+	if !contains(jsonStr, `"awaiting":"approval"`) {
+		t.Errorf("expected JSON to contain awaiting field, got: %s", jsonStr)
+	}
+	// Manual should be omitted (false with omitempty)
+	if contains(jsonStr, `"manual"`) {
+		t.Errorf("expected JSON to omit manual field when false, got: %s", jsonStr)
 	}
 }
 
