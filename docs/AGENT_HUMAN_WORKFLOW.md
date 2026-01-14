@@ -795,26 +795,136 @@ If this task was previously handed off, check the "Human Feedback" section above
 
 # Migration Path
 
-## Phase 1: Add Fields to Ticks
+## Phase 1: Add Fields to Ticks (v2.0)
 
-1. Add `awaiting` and `verdict` fields to schema
-2. Add CLI flags (`--awaiting`, `--verdict`)
+1. Add `requires`, `awaiting`, and `verdict` fields to schema
+2. Add CLI flags (`--requires`, `--awaiting`, `--verdict`)
 3. Add `tk approve` and `tk reject` commands
 4. Update `tk next` and `tk ready` to exclude awaiting
 5. Keep `manual` field working (deprecated but functional)
 
-## Phase 2: Update Ticker Engine
+## Phase 2: Update Ticker Engine (v2.0)
 
 1. Add new signal detection
 2. Add signal → awaiting mapping
 3. Change loop to continue after handoff signals
 4. Add context building with human feedback
 
-## Phase 3: Deprecate Manual
+## Phase 3: Deprecate Manual (v2.x)
 
-1. Migrate existing `manual: true` ticks to `awaiting: work`
-2. Remove `--manual` flag (or alias to `--awaiting work`)
-3. Update documentation
+1. Show deprecation warning when `--manual` is used
+2. `--manual` becomes alias for `--awaiting work`
+
+## Phase 4: Remove Manual (v3.0 - Breaking)
+
+1. Remove `manual` field from schema
+2. Remove `--manual` flag from CLI
+3. Migration script to convert old data
+
+---
+
+# Backwards Compatibility
+
+## The Problem
+
+Existing ticks may have `manual: true` set. Existing scripts and user habits use `--manual` flag. We need to support both old and new without breaking existing workflows.
+
+## Compatibility Matrix
+
+| Version | `manual` field | `--manual` flag | `awaiting` field | Behavior |
+|---------|----------------|-----------------|------------------|----------|
+| v1.x (current) | read/write | supported | n/a | Current behavior |
+| v2.0 (new) | read-only | deprecated | read/write | Reads both, writes `awaiting` |
+| v3.0 (future) | removed | removed | read/write | Breaking change |
+
+## Implementation Details
+
+### Reading Ticks (v2.0)
+
+```go
+func (t *Tick) IsAwaitingHuman() bool {
+    // New field takes precedence
+    if t.Awaiting != "" {
+        return true
+    }
+    // Backwards compat: check old field
+    return t.Manual
+}
+
+func (t *Tick) GetAwaitingType() string {
+    if t.Awaiting != "" {
+        return t.Awaiting
+    }
+    // Backwards compat: manual maps to "work"
+    if t.Manual {
+        return "work"
+    }
+    return ""
+}
+```
+
+### Writing Ticks (v2.0)
+
+```go
+func (t *Tick) SetAwaiting(value string) {
+    t.Awaiting = value
+    // Clear old field to avoid confusion
+    t.Manual = false
+}
+```
+
+### CLI Flag Handling (v2.0)
+
+```go
+func handleManualFlag(cmd *cobra.Command) {
+    if cmd.Flags().Changed("manual") {
+        fmt.Fprintln(os.Stderr, "Warning: --manual is deprecated, use --awaiting work instead")
+        // Map to new field
+        awaiting = "work"
+    }
+}
+```
+
+### Query Filters (v2.0)
+
+```go
+func filterReady(ticks []Tick) []Tick {
+    var ready []Tick
+    for _, t := range ticks {
+        // Check both fields for backwards compat
+        if t.Awaiting == "" && !t.Manual && !t.isBlocked() {
+            ready = append(ready, t)
+        }
+    }
+    return ready
+}
+```
+
+## Data Migration (v3.0)
+
+Before removing `manual` field in v3.0, provide migration:
+
+```bash
+# Migrate all manual:true ticks to awaiting:work
+tk migrate --manual-to-awaiting
+
+# Or automatic on first run of v3.0
+tk version  # "Migrating 42 ticks from manual to awaiting..."
+```
+
+```go
+func migrateManualToAwaiting() error {
+    ticks := listAllTicks()
+    for _, t := range ticks {
+        if t.Manual && t.Awaiting == "" {
+            t.Awaiting = "work"
+            t.Manual = false
+            saveTick(t)
+        }
+    }
+    return nil
+}
+```
 
 ---
 
@@ -1493,6 +1603,15 @@ tk next --orphan           # Next orphaned task only
 - [ ] Implement verdict processing logic
 - [ ] Deprecate `--manual` flag (alias to `--awaiting work`)
 - [ ] Update help text with workflow examples
+
+## ticks (tk CLI) - Backwards Compatibility
+
+- [ ] Read: If `manual: true` and `awaiting` is null, treat as `awaiting: "work"`
+- [ ] Write: Always write to `awaiting`, clear `manual` field
+- [ ] CLI: `--manual` flag shows deprecation warning, maps to `--awaiting work`
+- [ ] Queries: Check both `awaiting` and `manual` fields when filtering
+- [ ] v2.0: Support both fields (read old, write new)
+- [ ] v3.0: Remove `manual` field entirely (breaking change)
 
 ## ticks (tk CLI) - Orphaned/Standalone Support
 
