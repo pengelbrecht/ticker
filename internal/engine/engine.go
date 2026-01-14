@@ -99,6 +99,38 @@ const (
 	DefaultMaxTaskRetries  = 3
 )
 
+// Exit reason constants for worktree cleanup decisions.
+const (
+	// ExitReasonAllTasksCompleted indicates epic is fully done - cleanup worktree.
+	ExitReasonAllTasksCompleted = "all tasks completed"
+
+	// ExitReasonNoTasksFound indicates no tasks to work on - cleanup worktree.
+	ExitReasonNoTasksFound = "no tasks found"
+
+	// ExitReasonTasksAwaitingHuman indicates tasks are blocked/awaiting - preserve worktree.
+	ExitReasonTasksAwaitingHuman = "no ready tasks (remaining tasks are blocked or awaiting human)"
+)
+
+// ShouldCleanupWorktree determines if a worktree should be removed based on exit reason.
+// Returns true only when the epic is fully complete (all tasks done or no tasks found).
+// Returns false for handoffs, budget limits, interruptions, and other cases where
+// the worktree should be preserved for resumption.
+func ShouldCleanupWorktree(exitReason string) bool {
+	// Only cleanup when epic is truly complete
+	switch exitReason {
+	case ExitReasonAllTasksCompleted, ExitReasonNoTasksFound:
+		return true
+	default:
+		// Preserve worktree for:
+		// - Tasks awaiting human intervention
+		// - Context cancellation (user interrupt)
+		// - Budget limits (may resume)
+		// - Stuck on task (needs debugging)
+		// - Any other unexpected exit
+		return false
+	}
+}
+
 // RunResult contains the outcome of an engine run.
 type RunResult struct {
 	// EpicID is the epic that was worked on.
@@ -187,7 +219,7 @@ func (e *Engine) EnableVerification() {
 }
 
 // Run executes the engine loop until completion, signal, or budget exceeded.
-func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) {
+func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, err error) {
 	// Apply defaults
 	if config.MaxIterations == 0 {
 		config.MaxIterations = DefaultMaxIterations
@@ -218,7 +250,6 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Determine repo root
 		repoRoot := config.RepoRoot
 		if repoRoot == "" {
-			var err error
 			repoRoot, err = os.Getwd()
 			if err != nil {
 				return nil, fmt.Errorf("getting working directory: %w", err)
@@ -226,7 +257,6 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		}
 
 		// Create worktree manager
-		var err error
 		wtManager, err = worktree.NewManager(repoRoot)
 		if err != nil {
 			return nil, fmt.Errorf("creating worktree manager: %w", err)
@@ -249,11 +279,14 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (*RunResult, error) 
 		// Set the work directory in state
 		state.workDir = wt.Path
 
-		// Ensure cleanup on exit (success, error, or panic)
+		// Cleanup worktree based on exit reason when function returns.
+		// Only cleanup when epic is truly complete (all tasks done or no tasks found).
+		// Preserve worktree for handoffs, interruptions, and budget limits.
 		defer func() {
-			if wtManager != nil && wt != nil {
-				// Always cleanup worktree on exit
-				_ = wtManager.Remove(config.EpicID)
+			if wtManager != nil && wt != nil && result != nil {
+				if ShouldCleanupWorktree(result.ExitReason) {
+					_ = wtManager.Remove(config.EpicID)
+				}
 			}
 		}()
 	}

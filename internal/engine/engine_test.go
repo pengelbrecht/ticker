@@ -860,6 +860,92 @@ func TestNonHandoffSignals_SpecialHandling(t *testing.T) {
 	}
 }
 
+func TestShouldCleanupWorktree(t *testing.T) {
+	// Test the logic for determining when to cleanup worktrees
+	tests := []struct {
+		name          string
+		exitReason    string
+		expectCleanup bool
+	}{
+		{
+			name:          "all tasks completed - cleanup",
+			exitReason:    "all tasks completed",
+			expectCleanup: true,
+		},
+		{
+			name:          "no tasks found - cleanup",
+			exitReason:    "no tasks found",
+			expectCleanup: true,
+		},
+		{
+			name:          "tasks blocked/awaiting - preserve",
+			exitReason:    "no ready tasks (remaining tasks are blocked or awaiting human)",
+			expectCleanup: false,
+		},
+		{
+			name:          "context cancelled - preserve",
+			exitReason:    "context cancelled",
+			expectCleanup: false,
+		},
+		{
+			name:          "context cancelled while paused - preserve",
+			exitReason:    "context cancelled while paused",
+			expectCleanup: false,
+		},
+		{
+			name:          "stuck on task - preserve for debugging",
+			exitReason:    "stuck on task xyz after 3 iterations - may need manual review",
+			expectCleanup: false,
+		},
+		{
+			name:          "iteration limit - preserve for resume",
+			exitReason:    "iteration limit reached (10/10)",
+			expectCleanup: false,
+		},
+		{
+			name:          "cost limit - preserve for resume",
+			exitReason:    "cost limit reached ($5.00/$5.00)",
+			expectCleanup: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ShouldCleanupWorktree(tt.exitReason)
+			if result != tt.expectCleanup {
+				t.Errorf("ShouldCleanupWorktree(%q) = %v, want %v", tt.exitReason, result, tt.expectCleanup)
+			}
+		})
+	}
+}
+
+func TestWorktreePreservationExitReasons(t *testing.T) {
+	// Verify the constants match expected patterns
+	reasons := []string{
+		ExitReasonAllTasksCompleted,
+		ExitReasonNoTasksFound,
+		ExitReasonTasksAwaitingHuman,
+	}
+
+	// Ensure reasons are not empty
+	for _, r := range reasons {
+		if r == "" {
+			t.Error("Exit reason constant should not be empty")
+		}
+	}
+
+	// Verify the specific values
+	if ExitReasonAllTasksCompleted != "all tasks completed" {
+		t.Errorf("ExitReasonAllTasksCompleted = %q, want %q", ExitReasonAllTasksCompleted, "all tasks completed")
+	}
+	if ExitReasonNoTasksFound != "no tasks found" {
+		t.Errorf("ExitReasonNoTasksFound = %q, want %q", ExitReasonNoTasksFound, "no tasks found")
+	}
+	if ExitReasonTasksAwaitingHuman != "no ready tasks (remaining tasks are blocked or awaiting human)" {
+		t.Errorf("ExitReasonTasksAwaitingHuman = %q, want %q", ExitReasonTasksAwaitingHuman, "no ready tasks (remaining tasks are blocked or awaiting human)")
+	}
+}
+
 func TestSignalHandlingLogic(t *testing.T) {
 	// Test the logic flow for signal handling in the main loop
 	// This verifies that:
