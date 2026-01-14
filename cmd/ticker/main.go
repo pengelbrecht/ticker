@@ -567,6 +567,7 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 				Title:     t.Title,
 				Status:    tui.TaskStatus(t.Status),
 				BlockedBy: openBlockers,
+				Awaiting:  t.GetAwaitingType(),
 			}
 		}
 		p.Send(tui.EpicTasksUpdateMsg{EpicID: epicID, Tasks: taskInfos})
@@ -1122,6 +1123,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 				Title:     t.Title,
 				Status:    tui.TaskStatus(t.Status),
 				BlockedBy: openBlockers,
+				Awaiting:  t.GetAwaitingType(),
 			}
 		}
 		p.Send(tui.TasksUpdateMsg{Tasks: taskInfos})
