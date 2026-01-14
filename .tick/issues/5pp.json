@@ -1,0 +1,12 @@
+{
+  "id": "5pp",
+  "title": "Auto-commit dirty tick files before worktree run",
+  "description": "When starting a worktree run, if only .tick/issues/*.json files are dirty, auto-commit them instead of failing.\n\n**Problem:**\nTicker modifies tick files during runs (status updates, notes). When user wants to run ticker again, it fails:\n```\nError: Cannot start parallel run - main branch has uncommitted changes\nDirty files:\n  .tick/issues/32y.json\n  ...\n```\n\n**Solution:**\nBefore starting worktree run:\n```go\nif onlyTickFilesDirty() {\n    git add .tick/issues/*.json\n    git commit -m \"chore: Auto-commit tick status updates\"\n    // Continue with worktree run\n}\n```\n\n**Why safe:**\n- Tick files are system-managed metadata, not user code\n- Machine-managed, not hand-edited\n- Committing preserves history (non-destructive)\n- User almost always wants them committed\n\n**Edge case:**\nIf other dirty files exist, require human intervention (current behavior).\n\nAcceptance criteria:\n- [ ] Detect when only .tick/ files are dirty\n- [ ] Auto-commit with standard message\n- [ ] Continue with worktree setup\n- [ ] If mixed dirty files, fail as before",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T21:01:04.426865Z",
+  "updated_at": "2026-01-14T21:01:04.426865Z"
+}
