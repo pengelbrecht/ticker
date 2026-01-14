@@ -1,0 +1,13 @@
+{
+  "id": "b2n",
+  "title": "Add file watcher to trigger TUI task refresh on external changes",
+  "description": "Connect TicksWatcher to TUI to refresh tasks when ticks change externally (e.g., user runs tk approve in another terminal).\n\nCurrent state:\n- TicksWatcher exists in internal/engine/watcher.go\n- Only used during engine idle state\n- TUI only refreshes after iterations/verification\n\nImplementation approach:\n1. Create a separate TicksWatcher in main.go TUI setup (not the engine's watcher)\n2. Start goroutine that listens on watcher.Changes() channel\n3. On change notification, call refreshTasks()\n4. Clean up watcher when TUI exits\n\nFile: cmd/ticker/main.go\n\nAdd after refreshTasks definition (around line 1140):\n```go\n// Start file watcher for external tick changes\nticksWatcher := engine.NewTicksWatcher(\"\")\ndefer ticksWatcher.Close()\nif changes := ticksWatcher.Changes(); changes != nil {\n    go func() {\n        for range changes {\n            refreshTasks()\n        }\n    }()\n}\n```\n\nNote: The watcher already debounces rapid changes (100ms default).",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zyv",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T22:36:54.784367Z",
+  "updated_at": "2026-01-14T22:36:54.784367Z"
+}

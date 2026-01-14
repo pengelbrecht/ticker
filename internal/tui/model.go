@@ -51,7 +51,8 @@ type TaskInfo struct {
 	Title     string
 	Status    TaskStatus
 	BlockedBy []string
-	IsCurrent bool // currently executing task
+	IsCurrent bool   // currently executing task
+	Awaiting  string // awaiting type: work, approval, input, review, content, escalation, checkpoint, or empty
 }
 
 // IsBlocked returns true if the task is blocked by other tasks.

@@ -1,0 +1,13 @@
+{
+  "id": "4ds",
+  "title": "Update epic tab status icons to match new emoji style",
+  "description": "Update getTabStatusIcon() in tabs.go to use matching emoji style for consistency.\n\nFile: internal/tui/tabs.go (around lines 92-110)\n\nCurrent:\n- Running: ● (blue)\n- Complete: ✓ (green)\n- Failed: ✗ (red)\n- Conflict: ⚠ (yellow)\n\nNew (matching task icons):\n- Running: 🔵 (blue)\n- Complete: ✅ (green)\n- Failed: 🔴 (red)\n- Conflict: ⚠ (keep as-is, distinct meaning)\n\nThis keeps visual consistency between task list and epic tabs.",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zyv",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T22:37:02.676055Z",
+  "updated_at": "2026-01-14T22:37:02.676055Z"
+}

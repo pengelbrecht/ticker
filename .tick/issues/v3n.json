@@ -1,0 +1,13 @@
+{
+  "id": "v3n",
+  "title": "Content review handoff should include actual content in notes",
+  "description": "When agent signals CONTENT_REVIEW for content/copy review, the actual content to review is in the ephemeral agent output but NOT in the tick notes.\n\nExample from fx9:\n- Notes say: 'need approval on which option (A: simple, B: with value, C: friendly)'\n- But the actual wording for A, B, C is only in the agent's stdout - not persisted\n\nProblem: Human reviewer can't see what they're supposed to review without access to agent output logs.\n\nSuggested fix options:\n1. Agent prompt should instruct: 'When signaling CONTENT_REVIEW, include the content in the note'\n2. Ticker could capture the context from the signal and add it to notes\n3. CONTENT_REVIEW signal format could require content: \u003cpromise\u003eCONTENT_REVIEW: [actual content here]\u003c/promise\u003e\n\nCurrent signal just has description, not the content itself.",
+  "notes": "2026-01-14 23:14 - [human] User feedback: This is likely a prompt issue. Ticker's agent system prompt should emphasize: 'When handing off to human for approval/review/content, include sufficient context in the note so human can make a decision without needing agent output logs.'",
+  "status": "open",
+  "priority": 2,
+  "type": "bug",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T22:14:35.620053Z",
+  "updated_at": "2026-01-14T22:14:43.568962Z"
+}

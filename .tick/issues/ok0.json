@@ -1,0 +1,16 @@
+{
+  "id": "ok0",
+  "title": "Wire awaiting state from ticks to TUI TaskInfo",
+  "description": "Update main.go refreshTasks() to pass awaiting state to TUI.\n\nFile: cmd/ticker/main.go (around lines 1100-1137)\n\nChanges to refreshTasks():\n1. In the TaskInfo creation loop, add Awaiting field from ticks.Task\n2. Use t.GetAwaitingType() which handles backwards compat with Manual field\n\nBefore:\n```go\ntaskInfos[i] = tui.TaskInfo{\n    ID:        t.ID,\n    Title:     t.Title,\n    Status:    tui.TaskStatus(t.Status),\n    BlockedBy: openBlockers,\n}\n```\n\nAfter:\n```go\ntaskInfos[i] = tui.TaskInfo{\n    ID:        t.ID,\n    Title:     t.Title,\n    Status:    tui.TaskStatus(t.Status),\n    BlockedBy: openBlockers,\n    Awaiting:  t.GetAwaitingType(),  // NEW\n}\n```\n\nAlso update loadTasksForEpic() for parallel mode (around line 572) with same change.",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "2d6"
+  ],
+  "parent": "zyv",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T22:36:42.506857Z",
+  "updated_at": "2026-01-14T22:36:42.506857Z"
+}
