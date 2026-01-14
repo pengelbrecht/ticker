@@ -62,6 +62,39 @@ func (c *Client) NextTask(epicID string) (*Task, error) {
 	return c.findNextReadyTask(epicID)
 }
 
+// ListAwaitingTasks returns all tasks awaiting human attention under the given epic.
+// If awaitingTypes are provided, filters to only those types (e.g., "approval", "review").
+// If no awaitingTypes are provided, returns all awaiting tasks.
+// This is implemented locally since tk list may not support --awaiting filter.
+func (c *Client) ListAwaitingTasks(epicID string, awaitingTypes ...string) ([]Task, error) {
+	tasks, err := c.ListTasks(epicID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build a set of awaiting types for efficient lookup
+	typeFilter := make(map[string]bool)
+	for _, t := range awaitingTypes {
+		typeFilter[t] = true
+	}
+
+	var result []Task
+	for _, t := range tasks {
+		if !t.IsAwaitingHuman() {
+			continue
+		}
+		// If types filter is provided, check if this task's awaiting type matches
+		if len(awaitingTypes) > 0 {
+			awaitingType := t.GetAwaitingType()
+			if !typeFilter[awaitingType] {
+				continue
+			}
+		}
+		result = append(result, t)
+	}
+	return result, nil
+}
+
 // NextAwaitingTask returns the next task awaiting human attention.
 // If epicID is empty, searches across all epics.
 // If awaitingTypes are provided, filters to only those types (e.g., "approval", "review").

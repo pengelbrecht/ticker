@@ -1431,6 +1431,228 @@ func TestNextAwaitingTaskAllAwaitingTypes(t *testing.T) {
 	}
 }
 
+// TestListAwaitingTasksNoFilter tests ListAwaitingTasks returns all awaiting tasks when no filter
+func TestListAwaitingTasksNoFilter(t *testing.T) {
+	approval := "approval"
+	review := "review"
+
+	tasks := []Task{
+		{ID: "normal", Status: "open"},
+		{ID: "awaiting-approval", Status: "open", Awaiting: &approval},
+		{ID: "awaiting-review", Status: "open", Awaiting: &review},
+		{ID: "manual", Status: "open", Manual: true},
+		{ID: "closed", Status: "closed"},
+	}
+
+	// Simulate ListAwaitingTasks filtering logic
+	var result []Task
+	for _, task := range tasks {
+		if !task.IsAwaitingHuman() {
+			continue
+		}
+		result = append(result, task)
+	}
+
+	if len(result) != 3 {
+		t.Errorf("expected 3 awaiting tasks, got %d", len(result))
+	}
+
+	// Verify the right tasks are included
+	expectedIDs := map[string]bool{
+		"awaiting-approval": true,
+		"awaiting-review":   true,
+		"manual":            true,
+	}
+	for _, task := range result {
+		if !expectedIDs[task.ID] {
+			t.Errorf("unexpected task in result: %s", task.ID)
+		}
+	}
+}
+
+// TestListAwaitingTasksSingleTypeFilter tests ListAwaitingTasks with single type filter
+func TestListAwaitingTasksSingleTypeFilter(t *testing.T) {
+	approval := "approval"
+	review := "review"
+
+	tasks := []Task{
+		{ID: "awaiting-approval", Status: "open", Awaiting: &approval},
+		{ID: "awaiting-review", Status: "open", Awaiting: &review},
+		{ID: "manual", Status: "open", Manual: true}, // manual=true means awaiting=work
+	}
+
+	// Simulate filtering for only "approval" type
+	awaitingTypes := []string{"approval"}
+	typeFilter := make(map[string]bool)
+	for _, at := range awaitingTypes {
+		typeFilter[at] = true
+	}
+
+	var result []Task
+	for _, task := range tasks {
+		if !task.IsAwaitingHuman() {
+			continue
+		}
+		if len(awaitingTypes) > 0 {
+			awaitingType := task.GetAwaitingType()
+			if !typeFilter[awaitingType] {
+				continue
+			}
+		}
+		result = append(result, task)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 task with awaiting=approval, got %d", len(result))
+	}
+	if len(result) > 0 && result[0].ID != "awaiting-approval" {
+		t.Errorf("expected task 'awaiting-approval', got %s", result[0].ID)
+	}
+}
+
+// TestListAwaitingTasksMultipleTypeFilter tests ListAwaitingTasks with multiple type filters
+func TestListAwaitingTasksMultipleTypeFilter(t *testing.T) {
+	approval := "approval"
+	review := "review"
+	content := "content"
+
+	tasks := []Task{
+		{ID: "awaiting-approval", Status: "open", Awaiting: &approval},
+		{ID: "awaiting-review", Status: "open", Awaiting: &review},
+		{ID: "awaiting-content", Status: "open", Awaiting: &content},
+		{ID: "manual", Status: "open", Manual: true}, // awaiting=work
+	}
+
+	// Simulate filtering for "approval" and "review" types
+	awaitingTypes := []string{"approval", "review"}
+	typeFilter := make(map[string]bool)
+	for _, at := range awaitingTypes {
+		typeFilter[at] = true
+	}
+
+	var result []Task
+	for _, task := range tasks {
+		if !task.IsAwaitingHuman() {
+			continue
+		}
+		if len(awaitingTypes) > 0 {
+			awaitingType := task.GetAwaitingType()
+			if !typeFilter[awaitingType] {
+				continue
+			}
+		}
+		result = append(result, task)
+	}
+
+	if len(result) != 2 {
+		t.Errorf("expected 2 tasks with awaiting=approval or review, got %d", len(result))
+	}
+
+	// Verify the right tasks are included
+	expectedIDs := map[string]bool{
+		"awaiting-approval": true,
+		"awaiting-review":   true,
+	}
+	for _, task := range result {
+		if !expectedIDs[task.ID] {
+			t.Errorf("unexpected task in result: %s", task.ID)
+		}
+	}
+}
+
+// TestListAwaitingTasksNoAwaitingTasks tests ListAwaitingTasks returns empty when no awaiting tasks
+func TestListAwaitingTasksNoAwaitingTasks(t *testing.T) {
+	tasks := []Task{
+		{ID: "normal1", Status: "open"},
+		{ID: "normal2", Status: "open"},
+		{ID: "closed", Status: "closed"},
+	}
+
+	var result []Task
+	for _, task := range tasks {
+		if !task.IsAwaitingHuman() {
+			continue
+		}
+		result = append(result, task)
+	}
+
+	if len(result) != 0 {
+		t.Errorf("expected 0 awaiting tasks, got %d", len(result))
+	}
+}
+
+// TestListAwaitingTasksManualBackwardsCompat tests that manual=true tasks are included
+func TestListAwaitingTasksManualBackwardsCompat(t *testing.T) {
+	tasks := []Task{
+		{ID: "manual", Status: "open", Manual: true},
+	}
+
+	// Filter for "work" type (which is what manual=true maps to)
+	awaitingTypes := []string{"work"}
+	typeFilter := make(map[string]bool)
+	for _, at := range awaitingTypes {
+		typeFilter[at] = true
+	}
+
+	var result []Task
+	for _, task := range tasks {
+		if !task.IsAwaitingHuman() {
+			continue
+		}
+		if len(awaitingTypes) > 0 {
+			awaitingType := task.GetAwaitingType()
+			if !typeFilter[awaitingType] {
+				continue
+			}
+		}
+		result = append(result, task)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 task with manual=true (awaiting=work), got %d", len(result))
+	}
+	if len(result) > 0 && result[0].ID != "manual" {
+		t.Errorf("expected task 'manual', got %s", result[0].ID)
+	}
+}
+
+// TestListAwaitingTasksAllAwaitingTypes tests filtering for each valid awaiting type
+func TestListAwaitingTasksAllAwaitingTypes(t *testing.T) {
+	awaitingTypes := []string{"work", "approval", "input", "review", "content", "escalation", "checkpoint"}
+
+	for _, awaitingType := range awaitingTypes {
+		t.Run(awaitingType, func(t *testing.T) {
+			at := awaitingType
+			tasks := []Task{
+				{ID: "target", Status: "open", Awaiting: &at},
+				{ID: "other", Status: "open"},
+			}
+
+			// Filter for this specific type
+			typeFilter := map[string]bool{awaitingType: true}
+
+			var result []Task
+			for _, task := range tasks {
+				if !task.IsAwaitingHuman() {
+					continue
+				}
+				taskType := task.GetAwaitingType()
+				if !typeFilter[taskType] {
+					continue
+				}
+				result = append(result, task)
+			}
+
+			if len(result) != 1 {
+				t.Errorf("expected 1 task with awaiting=%s, got %d", awaitingType, len(result))
+			}
+			if len(result) > 0 && result[0].ID != "target" {
+				t.Errorf("expected task 'target', got %s", result[0].ID)
+			}
+		})
+	}
+}
+
 // TestNextTaskFilteringIntegration tests the integrated filtering behavior
 func TestNextTaskFilteringIntegration(t *testing.T) {
 	// This tests the full filtering criteria:

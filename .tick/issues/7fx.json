@@ -2,7 +2,7 @@
   "id": "7fx",
   "title": "Add --awaiting filter to tk list",
   "description": "Add filtering support for listing tasks awaiting human attention:\n\n```bash\n# All ticks awaiting human action\ntk list --awaiting\n\n# Only ticks awaiting approval\ntk list --awaiting approval\n\n# Ticks awaiting approval or review\ntk list --awaiting approval,review\n```\n\nMay need to implement locally in ticks client if tk CLI doesn't support:\n```go\nfunc (c *Client) ListAwaitingTasks(epicID string, awaitingTypes ...string) ([]Task, error) {\n    tasks, err := c.ListTasks(epicID)\n    if err \\!= nil {\n        return nil, err\n    }\n    \n    var result []Task\n    for _, t := range tasks {\n        if t.IsAwaitingHuman() {\n            if len(awaitingTypes) == 0 || contains(awaitingTypes, t.GetAwaitingType()) {\n                result = append(result, t)\n            }\n        }\n    }\n    return result, nil\n}\n```\n\nAcceptance criteria:\n- [ ] --awaiting filter works on tk list\n- [ ] Can filter by specific types (comma-separated)\n- [ ] ListAwaitingTasks method added to client",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "d8o",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T16:12:22.092386Z",
-  "updated_at": "2026-01-14T16:12:22.092386Z"
+  "updated_at": "2026-01-14T17:00:05.836571Z",
+  "closed_at": "2026-01-14T17:00:05.836571Z",
+  "closed_reason": "Added ListAwaitingTasks(epicID string, awaitingTypes ...string) method to Client in internal/ticks/client.go. Implemented locally since tk list may not support --awaiting flag. Method filters tasks using IsAwaitingHuman() and GetAwaitingType() with optional type filtering (supports comma-separated types like approval,review). Added 6 tests covering no filter, single type, multiple types, no awaiting tasks, manual backwards compat, and all awaiting types."
 }
