@@ -1,0 +1,13 @@
+{
+  "id": "65x",
+  "title": "Git \u0026 Worktree Improvements",
+  "description": "Improvements to git and worktree handling in ticker.",
+  "status": "open",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zt5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T21:12:52.735063Z",
+  "updated_at": "2026-01-14T21:12:52.735063Z"
+}
