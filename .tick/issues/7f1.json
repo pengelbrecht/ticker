@@ -1,0 +1,13 @@
+{
+  "id": "7f1",
+  "title": "Add note author support (--from flag)",
+  "description": "Extend note functionality to track whether notes came from agent or human:\n\n```bash\n# Agent note (default)\ntk note abc123 \"PR ready: github.com/...\"\n\n# Human note (feedback, answers)\ntk note abc123 \"Use Stripe for payments\" --from human\n```\n\nIn ticks client, update AddNote to support author:\n```go\nfunc (c *Client) AddNote(taskID string, content string, opts ...string) error {\n    args := []string{\"note\", taskID, content}\n    args = append(args, opts...)  // e.g., \"--from\", \"human\"\n    return c.runCommand(args...)\n}\n\n// Convenience methods\nfunc (c *Client) AddAgentNote(taskID, content string) error {\n    return c.AddNote(taskID, content)\n}\n\nfunc (c *Client) AddHumanNote(taskID, content string) error {\n    return c.AddNote(taskID, content, \"--from\", \"human\")\n}\n```\n\nThis helps distinguish note sources for the agent when reading feedback.\n\nAcceptance criteria:\n- [ ] --from flag supported on tk note\n- [ ] AddHumanNote convenience method added\n- [ ] Notes stored with author metadata\n- [ ] Can filter notes by author when reading",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "d8o",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:12:39.666441Z",
+  "updated_at": "2026-01-14T16:12:39.666441Z"
+}

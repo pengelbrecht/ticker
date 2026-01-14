@@ -1,0 +1,13 @@
+{
+  "id": "eso",
+  "title": "Ticker Engine Signal Handling",
+  "description": "Extend signal detection to support all 8 handoff signal types. Implement signal → awaiting mapping. Update engine loop to continue after handoff signals. Build context with human feedback notes.",
+  "status": "open",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zt5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:11:03.150577Z",
+  "updated_at": "2026-01-14T16:11:03.150577Z"
+}

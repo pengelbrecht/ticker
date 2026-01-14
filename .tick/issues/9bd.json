@@ -1,0 +1,13 @@
+{
+  "id": "9bd",
+  "title": "Test Harness \u0026 Integration Tests",
+  "description": "Build comprehensive test suite for agent-human workflow. Test all signal types, verdict processing, handoff flows, and worktree integration. Ensure edge cases are covered.",
+  "status": "open",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zt5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:11:03.896977Z",
+  "updated_at": "2026-01-14T16:11:03.896977Z"
+}

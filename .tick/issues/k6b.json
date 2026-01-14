@@ -1,0 +1,16 @@
+{
+  "id": "k6b",
+  "title": "Add integration tests for worktree with handoffs",
+  "description": "Test that worktree isolation works correctly through handoff cycles:\n\n```go\nfunc TestWorktree_PreservedOnHandoff(t *testing.T) {\n    // Setup with real git worktree\n    tmpDir := t.TempDir()\n    setupGitRepo(t, tmpDir)\n    \n    mock := newMockTicksClient()\n    mock.addTask(\"task1\", \"Make changes\")\n    \n    agent := newMockAgent()\n    agent.queueResponse(\"Changed! \u003cpromise\u003eAPPROVAL_NEEDED: review changes\u003c/promise\u003e\")\n    \n    config := \u0026RunConfig{UseWorktree: true}\n    engine := NewEngine(mock, agent, config)\n    \n    // Run in worktree\n    err := engine.Run(\"epic1\")\n    assert.NoError(t, err)\n    \n    // Worktree should exist\n    worktreePath := filepath.Join(tmpDir, \".worktrees\", \"ticker\", \"epic1\")\n    assert.DirExists(t, worktreePath)\n    \n    // Simulate human approval\n    mock.SetVerdict(\"task1\", \"approved\", \"\")\n    \n    // Changes should be in worktree branch\n    // ...verify git state\n}\n\nfunc TestWorktree_SameWorktreeAfterRejection(t *testing.T) {\n    // Test that agent resumes in same worktree after rejection\n}\n\nfunc TestWorktree_CleanupOnEpicComplete(t *testing.T) {\n    // Test that worktree is cleaned up only when epic fully done\n}\n```\n\nAcceptance criteria:\n- [ ] Worktree preserved during handoff\n- [ ] Same worktree used after human response\n- [ ] Changes in worktree not lost\n- [ ] Cleanup only on epic completion\n- [ ] Parallel epics isolated",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "8zf"
+  ],
+  "parent": "9bd",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:15:47.850619Z",
+  "updated_at": "2026-01-14T16:15:47.850619Z"
+}

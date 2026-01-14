@@ -1,0 +1,13 @@
+{
+  "id": "2z9",
+  "title": "Add SetAwaiting method to ticks client",
+  "description": "Add method to internal/ticks/client.go to update the awaiting field:\n\n```go\nfunc (c *Client) SetAwaiting(taskID string, awaiting string, note string) error {\n    // Update tick awaiting status via tk update\n    args := []string{\"update\", taskID, \"--awaiting\", awaiting}\n    if err := c.runCommand(args...); err != nil {\n        return err\n    }\n    \n    // Add context as note if provided\n    if note != \"\" {\n        return c.AddNote(taskID, note)\n    }\n    return nil\n}\n\nfunc (c *Client) ClearAwaiting(taskID string) error {\n    return c.runCommand(\"update\", taskID, \"--awaiting=\")\n}\n```\n\nAcceptance criteria:\n- [ ] SetAwaiting method implemented\n- [ ] ClearAwaiting method implemented  \n- [ ] Note is added when provided\n- [ ] Method handles errors appropriately",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "d8o",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:11:40.391235Z",
+  "updated_at": "2026-01-14T16:11:40.391235Z"
+}

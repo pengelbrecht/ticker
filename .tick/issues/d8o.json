@@ -1,0 +1,13 @@
+{
+  "id": "d8o",
+  "title": "Ticks Schema \u0026 CLI Changes",
+  "description": "Add requires, awaiting, and verdict fields to tick schema. Implement CLI commands (tk approve, tk reject) and flags (--requires, --awaiting, --verdict). Handle backwards compatibility with manual field.",
+  "status": "open",
+  "priority": 2,
+  "type": "epic",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zt5",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:11:02.312478Z",
+  "updated_at": "2026-01-14T16:11:02.312478Z"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "crp",
+  "title": "Update mock ticks client for awaiting/verdict testing",
+  "description": "Update the mockTicksClient in internal/engine/engine_test.go to support new fields:\n\n```go\ntype mockTicksClient struct {\n    tasks          map[string]*ticks.Task\n    nextTaskQueue  []*ticks.Task\n    awaitingState  map[string]string  // taskID -\u003e awaiting value\n    verdictState   map[string]string  // taskID -\u003e verdict value\n    notes          map[string][]ticks.Note\n    // ... existing fields\n}\n\nfunc (m *mockTicksClient) SetAwaiting(taskID, awaiting, note string) error {\n    m.awaitingState[taskID] = awaiting\n    if note != \"\" {\n        m.AddNote(taskID, note)\n    }\n    return nil\n}\n\nfunc (m *mockTicksClient) SetVerdict(taskID, verdict, feedback string) error {\n    m.verdictState[taskID] = verdict\n    if feedback != \"\" {\n        m.AddHumanNote(taskID, feedback)\n    }\n    // Process verdict (could close or return to queue)\n    return nil\n}\n\nfunc (m *mockTicksClient) GetHumanNotes(taskID string) ([]ticks.Note, error) {\n    var humanNotes []ticks.Note\n    for _, n := range m.notes[taskID] {\n        if n.Author == \"human\" {\n            humanNotes = append(humanNotes, n)\n        }\n    }\n    return humanNotes, nil\n}\n```\n\nAcceptance criteria:\n- [ ] Mock supports SetAwaiting method\n- [ ] Mock supports SetVerdict method\n- [ ] Mock supports GetHumanNotes method\n- [ ] Mock tracks state changes for assertions\n- [ ] Can simulate verdict processing",
+  "status": "open",
+  "priority": 0,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "9bd",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:15:04.59921Z",
+  "updated_at": "2026-01-14T16:15:04.59921Z"
+}

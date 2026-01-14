@@ -1,0 +1,13 @@
+{
+  "id": "ms4",
+  "title": "Add test script for manual workflow verification",
+  "description": "Create a test script for manually verifying the agent-human workflow:\n\nscripts/test-handoff-workflow.sh:\n```bash\n#!/bin/bash\n# Test script for agent-human handoff workflow\n\nset -e\n\necho \"=== Creating test epic with mixed tasks ===\"\n\n# Create epic\nEPIC_ID=$(tk create \"Test Handoff Workflow\" -t epic)\necho \"Created epic: $EPIC_ID\"\n\n# Task 1: Normal task (should complete normally)\ntk create \"Normal task\" -t task --parent $EPIC_ID\n\n# Task 2: Pre-declared approval gate\ntk create \"Security change\" -t task --parent $EPIC_ID --requires approval\n\n# Task 3: Will be ejected by agent (manual)\ntk create \"Configure credentials\" -t task --parent $EPIC_ID\n\necho \"\"\necho \"=== Running ticker (will stop at handoffs) ===\"\necho \"Run: ticker run $EPIC_ID\"\necho \"\"\necho \"Expected flow:\"\necho \"1. Agent completes 'Normal task'\"\necho \"2. Agent completes 'Security change' → awaiting approval\"\necho \"3. Agent ejects 'Configure credentials' → awaiting work\"\necho \"\"\necho \"Then run these commands to test human workflow:\"\necho \"  tk list --awaiting                    # See waiting tasks\"\necho \"  tk next $EPIC_ID --awaiting          # Get next human task\"\necho \"  tk approve \u003ctask-id\u003e                  # Approve a task\"\necho \"  tk reject \u003ctask-id\u003e 'feedback'        # Reject with feedback\"\n```\n\nAcceptance criteria:\n- [ ] Script creates realistic test scenario\n- [ ] Instructions for manual testing included\n- [ ] Covers approval, rejection, and eject flows\n- [ ] Easy to run and verify",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "9bd",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:16:09.615345Z",
+  "updated_at": "2026-01-14T16:16:09.615345Z"
+}

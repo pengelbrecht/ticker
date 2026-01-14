@@ -1,0 +1,16 @@
+{
+  "id": "8zf",
+  "title": "Ensure worktree isolation works with handoff workflow",
+  "description": "Verify that worktree features work correctly with agent-human handoff:\n\nScenarios to verify:\n1. Agent hands off task → worktree should be preserved (not deleted)\n2. Human provides feedback → agent resumes in same worktree\n3. Multiple handoffs on same task → worktree state maintained\n4. Epic completion with handoffs → proper cleanup\n\nKey considerations:\n- Worktree is per-epic, not per-task\n- Handoffs within same epic should use same worktree\n- Only cleanup worktree when epic is fully done\n\nTest cases:\n```go\nfunc TestWorktreePreservedOnHandoff(t *testing.T) {\n    // 1. Start epic in worktree\n    // 2. Agent signals APPROVAL_NEEDED\n    // 3. Verify worktree still exists\n    // 4. Simulate human approval\n    // 5. Agent continues in same worktree\n}\n```\n\nAcceptance criteria:\n- [ ] Worktree not deleted on handoff signals\n- [ ] Same worktree used after human response\n- [ ] Worktree cleaned up only on epic completion\n- [ ] Parallel handoffs to different epics isolated",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "dqq"
+  ],
+  "parent": "eso",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:14:38.189479Z",
+  "updated_at": "2026-01-14T16:14:38.189479Z"
+}

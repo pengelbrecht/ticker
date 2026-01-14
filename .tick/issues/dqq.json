@@ -1,0 +1,16 @@
+{
+  "id": "dqq",
+  "title": "Update engine loop to continue after handoff signals",
+  "description": "Modify the main loop in internal/engine/engine.go to continue to next task after handoff signals:\n\nCurrent behavior (simplified):\n```go\nsignal, reason := ParseSignals(output)\nswitch signal {\ncase SignalComplete:\n    e.ticks.CloseTask(...)\ncase SignalEject:\n    e.ticks.SetManual(...)  // and stop or continue?\ncase SignalBlocked:\n    // ... handle blocked\n}\n```\n\nNew behavior:\n```go\nsignal, context := ParseSignals(output)\nif signal != SignalNone {\n    if err := e.handleSignal(task, signal, context); err != nil {\n        return err\n    }\n    // IMPORTANT: Continue to next task, don't block on human\n    // The task is now awaiting human, so tk next won't return it\n    continue  // back to top of loop\n}\n```\n\nKey change: After ANY handoff signal, immediately continue to next available task. Never block waiting for human response.\n\nAcceptance criteria:\n- [ ] Engine continues to next task after handoff signal\n- [ ] No blocking on human response\n- [ ] Loop terminates when no tasks available (all awaiting or done)\n- [ ] Budget tracking continues across handoffs",
+  "status": "open",
+  "priority": 0,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "t9y"
+  ],
+  "parent": "eso",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:14:15.179225Z",
+  "updated_at": "2026-01-14T16:14:15.179225Z"
+}

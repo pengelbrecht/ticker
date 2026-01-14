@@ -1,0 +1,16 @@
+{
+  "id": "dnk",
+  "title": "Implement watch mode for ticker engine",
+  "description": "Add --watch flag to ticker that idles when no tasks available instead of exiting:\n\n```bash\nticker run --auto --watch              # Watch indefinitely\nticker run --auto --watch --timeout 1h # Watch with timeout\nticker run --auto --watch --poll 5s    # Custom poll interval\n```\n\nImplementation:\n```go\nfunc (e *Engine) RunWatch(epicID string, timeout, pollInterval time.Duration) error {\n    deadline := time.Now().Add(timeout)\n    \n    for {\n        // Check timeout\n        if timeout \u003e 0 \u0026\u0026 time.Now().After(deadline) {\n            return nil\n        }\n        \n        // Try to get next task\n        task, err := e.ticks.NextTask(epicID)\n        if err != nil {\n            return err\n        }\n        \n        if task != nil {\n            // Process task\n            if err := e.processTask(task); err != nil {\n                return err\n            }\n            continue\n        }\n        \n        // No tasks - enter idle state\n        e.callbacks.OnIdle()\n        \n        // Poll for changes\n        select {\n        case \u003c-time.After(pollInterval):\n            continue\n        case \u003c-e.quit:\n            return nil\n        }\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] --watch flag enables watch mode\n- [ ] Engine idles when no tasks available\n- [ ] Polls at configurable interval (default 10s)\n- [ ] Resumes when tasks become available\n- [ ] --timeout limits watch duration\n- [ ] Graceful shutdown on quit signal",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "dqq"
+  ],
+  "parent": "8x8",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:16:35.326012Z",
+  "updated_at": "2026-01-14T16:16:35.326012Z"
+}

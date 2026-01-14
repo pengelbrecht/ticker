@@ -1,0 +1,16 @@
+{
+  "id": "vyb",
+  "title": "Build context with human feedback notes",
+  "description": "When a task returns from human (after rejection or input), include their feedback in the context:\n\n```go\nfunc (e *Engine) buildContext(task *ticks.Task) string {\n    var context strings.Builder\n    \n    // Get human notes\n    humanNotes, _ := e.ticks.GetHumanNotes(task.ID)\n    \n    if len(humanNotes) \u003e 0 {\n        context.WriteString(\"## Human Feedback\\n\\n\")\n        context.WriteString(\"This task was previously handed to a human. Their response:\\n\\n\")\n        for _, note := range humanNotes {\n            context.WriteString(fmt.Sprintf(\"- %s\\n\", note.Content))\n        }\n        context.WriteString(\"\\nAddress this feedback before proceeding.\\n\\n\")\n    }\n    \n    return context.String()\n}\n```\n\nThis context should be included in the agent prompt when working on a task that was previously handed off.\n\nAcceptance criteria:\n- [ ] Human feedback included in task context\n- [ ] Clear formatting for agent to read\n- [ ] Only recent/relevant feedback included\n- [ ] Context builds correctly for new tasks (no feedback)",
+  "status": "open",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "cw5"
+  ],
+  "parent": "eso",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:14:16.713618Z",
+  "updated_at": "2026-01-14T16:14:16.713618Z"
+}

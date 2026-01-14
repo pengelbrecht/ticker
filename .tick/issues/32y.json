@@ -1,0 +1,13 @@
+{
+  "id": "32y",
+  "title": "Add debounce on task pickup for race condition prevention",
+  "description": "Add optional debounce to prevent race conditions when human is still editing:\n\n```bash\nticker run --auto --debounce 2s  # Wait 2s before picking up newly available tasks\n```\n\nImplementation:\n```go\nfunc (e *Engine) getNextTaskWithDebounce() (*ticks.Task, error) {\n    task, err := e.ticks.NextTask(e.epicID)\n    if err != nil || task == nil {\n        return task, err\n    }\n    \n    if e.config.DebounceInterval \u003e 0 {\n        // Task just became available - wait for potential follow-up edits\n        time.Sleep(e.config.DebounceInterval)\n        \n        // Re-fetch to get any updates (human might have added notes)\n        return e.ticks.GetTask(task.ID)\n    }\n    \n    return task, nil\n}\n```\n\nThis prevents race conditions like:\n1. Human runs: tk reject abc123\n2. Ticker picks up task (awaiting cleared)\n3. Human runs: tk note abc123 \"feedback\"\n4. Agent misses the feedback\n\nWith debounce, ticker waits for human to finish editing.\n\nAcceptance criteria:\n- [ ] --debounce flag configures wait time\n- [ ] Re-fetches task after debounce\n- [ ] Default is no debounce (backwards compat)\n- [ ] Short debounce (1-2s) recommended for safety",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "8x8",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:16:51.007854Z",
+  "updated_at": "2026-01-14T16:16:51.007854Z"
+}

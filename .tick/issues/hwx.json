@@ -1,0 +1,16 @@
+{
+  "id": "hwx",
+  "title": "Add unit tests for all signal types",
+  "description": "Add comprehensive tests for signal parsing in internal/engine/signals_test.go:\n\n```go\nfunc TestParseSignals_AllTypes(t *testing.T) {\n    tests := []struct {\n        name     string\n        output   string\n        wantSig  Signal\n        wantCtx  string\n    }{\n        {\"complete\", \"\u003cpromise\u003eCOMPLETE\u003c/promise\u003e\", SignalComplete, \"\"},\n        {\"eject\", \"\u003cpromise\u003eEJECT: needs npm install\u003c/promise\u003e\", SignalEject, \"needs npm install\"},\n        {\"blocked\", \"\u003cpromise\u003eBLOCKED: missing API key\u003c/promise\u003e\", SignalBlocked, \"missing API key\"},\n        {\"approval\", \"\u003cpromise\u003eAPPROVAL_NEEDED: security change\u003c/promise\u003e\", SignalApprovalNeeded, \"security change\"},\n        {\"input\", \"\u003cpromise\u003eINPUT_NEEDED: which database?\u003c/promise\u003e\", SignalInputNeeded, \"which database?\"},\n        {\"review\", \"\u003cpromise\u003eREVIEW_REQUESTED: github.com/pr/123\u003c/promise\u003e\", SignalReviewRequested, \"github.com/pr/123\"},\n        {\"content\", \"\u003cpromise\u003eCONTENT_REVIEW: error messages\u003c/promise\u003e\", SignalContentReview, \"error messages\"},\n        {\"escalate\", \"\u003cpromise\u003eESCALATE: found security vuln\u003c/promise\u003e\", SignalEscalate, \"found security vuln\"},\n        {\"checkpoint\", \"\u003cpromise\u003eCHECKPOINT: phase 1 done\u003c/promise\u003e\", SignalCheckpoint, \"phase 1 done\"},\n        {\"no_signal\", \"just some text\", SignalNone, \"\"},\n        {\"no_context\", \"\u003cpromise\u003eCOMPLETE\u003c/promise\u003e\", SignalComplete, \"\"},\n    }\n    \n    for _, tt := range tests {\n        t.Run(tt.name, func(t *testing.T) {\n            sig, ctx := ParseSignals(tt.output)\n            assert.Equal(t, tt.wantSig, sig)\n            assert.Equal(t, tt.wantCtx, ctx)\n        })\n    }\n}\n```\n\nAcceptance criteria:\n- [ ] All 8 signal types tested\n- [ ] Context extraction tested\n- [ ] No signal case tested\n- [ ] Edge cases (no context, embedded signals) tested",
+  "status": "open",
+  "priority": 0,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "tps"
+  ],
+  "parent": "9bd",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:15:05.626058Z",
+  "updated_at": "2026-01-14T16:15:05.626058Z"
+}

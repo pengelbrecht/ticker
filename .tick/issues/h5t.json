@@ -1,0 +1,16 @@
+{
+  "id": "h5t",
+  "title": "Support standalone tasks in tk next",
+  "description": "Allow tk next to find tasks without a parent epic:\n\n```bash\n# Get next task across all epics and standalone\ntk next                    # Next task (any epic or standalone)\ntk next --epic epic-123    # Next task in specific epic (current behavior)\ntk next --standalone       # Next standalone task only\n```\n\nImplementation in ticks client:\n```go\nfunc (c *Client) NextTask(opts ...NextOption) (*Task, error) {\n    // If no epic specified, search all tasks\n    if opts.Epic == \"\" \u0026\u0026 opts.Standalone {\n        return c.nextStandaloneTask()\n    }\n    if opts.Epic == \"\" {\n        return c.nextAnyTask()\n    }\n    return c.nextTaskInEpic(opts.Epic)\n}\n\nfunc (c *Client) nextStandaloneTask() (*Task, error) {\n    tasks, _ := c.ListTasks(\"\")  // All tasks\n    for _, t := range tasks {\n        if t.Parent == \"\" \u0026\u0026 !t.IsAwaitingHuman() \u0026\u0026 !t.isBlocked() {\n            return \u0026t, nil\n        }\n    }\n    return nil, nil\n}\n```\n\nAcceptance criteria:\n- [ ] tk next without epic finds any ready task\n- [ ] --standalone filters to parentless tasks\n- [ ] Priority ordering respected\n- [ ] Awaiting and blocked tasks excluded",
+  "status": "open",
+  "priority": 3,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "rfx"
+  ],
+  "parent": "8x8",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-14T16:17:09.735443Z",
+  "updated_at": "2026-01-14T16:17:09.735443Z"
+}
