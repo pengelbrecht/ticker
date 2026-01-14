@@ -121,15 +121,29 @@ func TestPromptBuilder_Build_FullContext(t *testing.T) {
 	if !strings.Contains(prompt, "Always leave notes") {
 		t.Error("prompt missing always leave notes rule")
 	}
-	// Check exit signals (only EJECT and BLOCKED - no COMPLETE)
-	if !strings.Contains(prompt, "Exit signals") {
-		t.Error("prompt missing exit signals section")
+	// Check handoff signals section (all 8 signal types documented)
+	if !strings.Contains(prompt, "## Handoff Signals") {
+		t.Error("prompt missing handoff signals section")
 	}
-	if !strings.Contains(prompt, "<promise>EJECT:") {
-		t.Error("prompt missing EJECT signal example")
+	// Verify all 8 signals are documented
+	handoffSignals := []string{
+		"<promise>COMPLETE</promise>",
+		"<promise>APPROVAL_NEEDED:",
+		"<promise>INPUT_NEEDED:",
+		"<promise>REVIEW_REQUESTED:",
+		"<promise>CONTENT_REVIEW:",
+		"<promise>ESCALATE:",
+		"<promise>CHECKPOINT:",
+		"<promise>EJECT:",
 	}
-	if !strings.Contains(prompt, "<promise>BLOCKED:") {
-		t.Error("prompt missing BLOCKED signal example")
+	for _, sig := range handoffSignals {
+		if !strings.Contains(prompt, sig) {
+			t.Errorf("prompt missing handoff signal: %s", sig)
+		}
+	}
+	// Check human feedback documentation
+	if !strings.Contains(prompt, "## Reading Human Feedback") {
+		t.Error("prompt missing reading human feedback section")
 	}
 }
 
@@ -260,6 +274,8 @@ func TestPromptBuilder_Build_ContainsAllRequiredSections(t *testing.T) {
 		"## Current Task",
 		"Review Epic Notes First",
 		"## Instructions",
+		"## Handoff Signals",
+		"## Reading Human Feedback",
 		"## Rules",
 	}
 
