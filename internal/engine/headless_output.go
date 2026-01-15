@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/verify"
@@ -13,10 +14,14 @@ import (
 
 // HeadlessOutput formats output for headless mode, optimized for LLM consumption.
 // Supports both human-readable (default) and JSON Lines formats.
+// In JSONL mode, consecutive output chunks are buffered and emitted as a single
+// JSON object when any other event type is written or Flush() is called.
 type HeadlessOutput struct {
-	jsonl  bool
-	writer io.Writer
-	epicID string // For multi-epic mode, prefix output with epic ID
+	jsonl        bool
+	writer       io.Writer
+	epicID       string // For multi-epic mode, prefix output with epic ID
+	outputBuffer strings.Builder
+	mu           sync.Mutex
 }
 
 // NewHeadlessOutput creates a new headless output formatter.
@@ -44,6 +49,7 @@ func (h *HeadlessOutput) prefix() string {
 
 // Start outputs the start of an epic run.
 func (h *HeadlessOutput) Start(epic *ticks.Epic, maxIterations int, maxCost float64) {
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":           "start",
@@ -60,6 +66,7 @@ func (h *HeadlessOutput) Start(epic *ticks.Epic, maxIterations int, maxCost floa
 
 // Task outputs the start of a new task.
 func (h *HeadlessOutput) Task(task *ticks.Task, iteration int) {
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":      "task",
@@ -73,17 +80,29 @@ func (h *HeadlessOutput) Task(task *ticks.Task, iteration int) {
 }
 
 // Output outputs agent text (streaming).
+// In JSONL mode, text is buffered and emitted line-by-line (on newlines)
+// or when any other event type is written.
 func (h *HeadlessOutput) Output(text string) {
 	if h.jsonl {
-		// For streaming, emit each non-empty line as a separate event
-		lines := strings.Split(text, "\n")
-		for _, line := range lines {
-			if strings.TrimSpace(line) != "" {
+		h.mu.Lock()
+		h.outputBuffer.WriteString(text)
+		// Check if buffer contains complete lines to flush
+		content := h.outputBuffer.String()
+		if idx := strings.LastIndex(content, "\n"); idx >= 0 {
+			// Emit everything up to and including the last newline
+			toEmit := content[:idx+1]
+			h.outputBuffer.Reset()
+			h.outputBuffer.WriteString(content[idx+1:])
+			h.mu.Unlock()
+			// Emit as single output (trim trailing newline for cleaner JSON)
+			if trimmed := strings.TrimRight(toEmit, "\n"); trimmed != "" {
 				h.writeJSON(map[string]interface{}{
 					"type": "output",
-					"text": line,
+					"text": trimmed,
 				})
 			}
+		} else {
+			h.mu.Unlock()
 		}
 	} else {
 		// Stream text directly without prefix for readability
@@ -91,8 +110,35 @@ func (h *HeadlessOutput) Output(text string) {
 	}
 }
 
+// Flush emits any buffered output as a single JSON object.
+// This is called automatically before other event types are written.
+func (h *HeadlessOutput) Flush() {
+	if !h.jsonl {
+		return
+	}
+	h.mu.Lock()
+	text := h.outputBuffer.String()
+	h.outputBuffer.Reset()
+	h.mu.Unlock()
+
+	if strings.TrimSpace(text) != "" {
+		h.writeJSON(map[string]interface{}{
+			"type": "output",
+			"text": text,
+		})
+	}
+}
+
+// flushOutput flushes any buffered output before writing another event type.
+func (h *HeadlessOutput) flushOutput() {
+	if h.jsonl {
+		h.Flush()
+	}
+}
+
 // Error outputs an error message.
 func (h *HeadlessOutput) Error(err error) {
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":  "error",
@@ -105,6 +151,7 @@ func (h *HeadlessOutput) Error(err error) {
 
 // TaskComplete outputs task completion.
 func (h *HeadlessOutput) TaskComplete(taskID string, passed bool) {
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":              "task_complete",
@@ -122,6 +169,7 @@ func (h *HeadlessOutput) TaskComplete(taskID string, passed bool) {
 
 // VerifyStart outputs the start of verification.
 func (h *HeadlessOutput) VerifyStart(taskID string) {
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":    "verify_start",
@@ -137,6 +185,7 @@ func (h *HeadlessOutput) VerifyEnd(taskID string, results *verify.Results) {
 	if results == nil {
 		return
 	}
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":    "verify_end",
@@ -156,6 +205,7 @@ func (h *HeadlessOutput) VerifyEnd(taskID string, results *verify.Results) {
 
 // Signal outputs a signal (COMPLETE, BLOCKED, EJECT).
 func (h *HeadlessOutput) Signal(sig Signal, reason string) {
+	h.flushOutput()
 	sigStr := sig.String()
 	if h.jsonl {
 		data := map[string]interface{}{
@@ -186,6 +236,7 @@ func (h *HeadlessOutput) signalPrefix(sig Signal) string {
 
 // Complete outputs the final summary.
 func (h *HeadlessOutput) Complete(result *RunResult) {
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":         "complete",
@@ -208,6 +259,7 @@ func (h *HeadlessOutput) Complete(result *RunResult) {
 
 // Interrupted outputs when run is interrupted.
 func (h *HeadlessOutput) Interrupted() {
+	h.flushOutput()
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type": "interrupted",

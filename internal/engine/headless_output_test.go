@@ -135,6 +135,7 @@ func TestHeadlessOutput_Output(t *testing.T) {
 		out.SetWriter(&buf)
 
 		out.Output("Hello world")
+		out.Flush() // Must flush to emit buffered output (no newline in input)
 
 		var data map[string]interface{}
 		if err := json.Unmarshal(buf.Bytes(), &data); err != nil {
@@ -145,6 +146,80 @@ func TestHeadlessOutput_Output(t *testing.T) {
 		}
 		if data["text"] != "Hello world" {
 			t.Errorf("expected text='Hello world', got %v", data["text"])
+		}
+	})
+
+	t.Run("jsonl buffers until newline", func(t *testing.T) {
+		var buf bytes.Buffer
+		out := NewHeadlessOutput(true, "")
+		out.SetWriter(&buf)
+
+		// Simulate streaming chunks - no output until newline
+		out.Output("Hello ")
+		out.Output("world")
+		if buf.Len() != 0 {
+			t.Errorf("expected no output before newline, got %q", buf.String())
+		}
+
+		// Newline triggers flush
+		out.Output("!\n")
+
+		var data map[string]interface{}
+		if err := json.Unmarshal(buf.Bytes(), &data); err != nil {
+			t.Fatalf("invalid JSON: %v", err)
+		}
+		if data["type"] != "output" {
+			t.Errorf("expected type=output, got %v", data["type"])
+		}
+		if data["text"] != "Hello world!" {
+			t.Errorf("expected text='Hello world!', got %v", data["text"])
+		}
+	})
+
+	t.Run("jsonl consolidates multiple lines", func(t *testing.T) {
+		var buf bytes.Buffer
+		out := NewHeadlessOutput(true, "")
+		out.SetWriter(&buf)
+
+		// Multiple lines in one chunk
+		out.Output("Line 1\nLine 2\nLine 3\n")
+
+		var data map[string]interface{}
+		if err := json.Unmarshal(buf.Bytes(), &data); err != nil {
+			t.Fatalf("invalid JSON: %v", err)
+		}
+		if data["text"] != "Line 1\nLine 2\nLine 3" {
+			t.Errorf("expected multiline text, got %v", data["text"])
+		}
+	})
+
+	t.Run("jsonl flushes on other events", func(t *testing.T) {
+		var buf bytes.Buffer
+		out := NewHeadlessOutput(true, "")
+		out.SetWriter(&buf)
+
+		out.Output("Some output") // No newline
+		out.Error(testError{"an error"}) // Should trigger flush
+
+		lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+		if len(lines) != 2 {
+			t.Fatalf("expected 2 lines, got %d: %v", len(lines), lines)
+		}
+
+		var outputData map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[0]), &outputData); err != nil {
+			t.Fatalf("invalid JSON in line 0: %v", err)
+		}
+		if outputData["type"] != "output" {
+			t.Errorf("expected first line type=output, got %v", outputData["type"])
+		}
+
+		var errorData map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[1]), &errorData); err != nil {
+			t.Fatalf("invalid JSON in line 1: %v", err)
+		}
+		if errorData["type"] != "error" {
+			t.Errorf("expected second line type=error, got %v", errorData["type"])
 		}
 	})
 }
