@@ -59,6 +59,9 @@ func (pb *PromptBuilder) Build(ctx IterationContext) string {
 		data.TaskTitle = ctx.Task.Title
 		data.TaskDescription = ctx.Task.Description
 		data.AcceptanceCriteria = extractAcceptanceCriteria(ctx.Task.Description)
+		if ctx.Task.Requires != nil {
+			data.Requires = *ctx.Task.Requires
+		}
 	}
 
 	if err := pb.tmpl.Execute(&buf, data); err != nil {
@@ -79,6 +82,7 @@ type templateData struct {
 	TaskTitle          string
 	TaskDescription    string
 	AcceptanceCriteria string
+	Requires           string // Pre-declared gate: approval, review, content
 	EpicNotes          []string
 	HumanFeedback      []ticks.Note
 }
@@ -150,6 +154,53 @@ Address this feedback before proceeding.
 5. **Simplify your code (optional)** - If you have access to the code-simplifier skill, consider running it on your modified files before committing to ensure clean, maintainable code.
 6. **Commit your changes** - Create a commit with the task ID in the message.
 7. **Add epic note** - Run ` + "`tk note {{.EpicID}} \"<message>\"`" + ` to leave context for future iterations. Include learnings, gotchas, architectural decisions, or anything the next iteration should know.
+{{if eq .Requires "content"}}
+
+## ⚠️ Content Review Required
+
+This task requires **human content review** before closing. When you signal COMPLETE, a human will review your work for UI/copy quality.
+
+**CRITICAL: Before signaling COMPLETE, you MUST add a note to this task explaining where and how to review your changes:**
+
+` + "```bash" + `
+tk note {{.TaskID}} "Review: <specific files and locations to check, what to look for>"
+` + "```" + `
+
+**Good review note examples:**
+- "Review: Error messages in src/components/PaymentForm.tsx lines 45-60. Check tone is user-friendly."
+- "Review: New onboarding copy in src/pages/Welcome.tsx. Verify clarity and brand voice."
+- "Review: Button labels changed in src/components/Header.tsx - 'Submit' → 'Save Changes'"
+
+**Bad review notes:**
+- "Review: UI changes" (too vague - WHERE?)
+- "Done with the task" (not helpful - WHAT to review?)
+
+The human reviewer needs to know exactly what to look at and what to evaluate.
+{{else if eq .Requires "review"}}
+
+## ⚠️ Code Review Required
+
+This task requires **code review** before closing. When you signal COMPLETE, a human will review your PR.
+
+**Before signaling COMPLETE:**
+1. Create a PR with your changes
+2. Add a note to this task with the PR URL and key areas to review:
+
+` + "```bash" + `
+tk note {{.TaskID}} "PR: <url> - Key changes: <what to focus on during review>"
+` + "```" + `
+{{else if eq .Requires "approval"}}
+
+## ⚠️ Approval Required
+
+This task requires **human approval** before closing. When you signal COMPLETE, a human will review and approve your work.
+
+**Before signaling COMPLETE, add a note explaining what was done and any risks:**
+
+` + "```bash" + `
+tk note {{.TaskID}} "Summary: <what changed, any risks or considerations for approval>"
+` + "```" + `
+{{end}}
 
 ## Handoff Signals
 

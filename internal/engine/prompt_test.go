@@ -401,3 +401,140 @@ func TestPromptBuilder_Build_EmptyHumanFeedback(t *testing.T) {
 		t.Error("prompt should not have human feedback section when slice is empty")
 	}
 }
+
+func TestPromptBuilder_Build_RequiresContent(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	content := "content"
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Update error messages",
+			Description: "Improve error message copy.",
+			Requires:    &content,
+		},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should have content review section
+	if !strings.Contains(prompt, "## ⚠️ Content Review Required") {
+		t.Error("prompt missing content review section")
+	}
+	if !strings.Contains(prompt, "human content review") {
+		t.Error("prompt missing content review description")
+	}
+	// Should instruct to add note about where to review
+	if !strings.Contains(prompt, "CRITICAL") {
+		t.Error("prompt missing critical instruction about review note")
+	}
+	if !strings.Contains(prompt, "tk note task1") {
+		t.Error("prompt should include tk note command with task ID")
+	}
+	if !strings.Contains(prompt, "Good review note examples") {
+		t.Error("prompt missing good review note examples")
+	}
+	if !strings.Contains(prompt, "Bad review notes") {
+		t.Error("prompt missing bad review note examples")
+	}
+}
+
+func TestPromptBuilder_Build_RequiresReview(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	review := "review"
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Add new API endpoint",
+			Description: "Add GET /api/users endpoint.",
+			Requires:    &review,
+		},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should have code review section
+	if !strings.Contains(prompt, "## ⚠️ Code Review Required") {
+		t.Error("prompt missing code review section")
+	}
+	if !strings.Contains(prompt, "code review") {
+		t.Error("prompt missing code review description")
+	}
+	if !strings.Contains(prompt, "Create a PR") {
+		t.Error("prompt missing PR instruction")
+	}
+}
+
+func TestPromptBuilder_Build_RequiresApproval(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	approval := "approval"
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Database migration",
+			Description: "Add new column to users table.",
+			Requires:    &approval,
+		},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should have approval section
+	if !strings.Contains(prompt, "## ⚠️ Approval Required") {
+		t.Error("prompt missing approval section")
+	}
+	if !strings.Contains(prompt, "human approval") {
+		t.Error("prompt missing approval description")
+	}
+	if !strings.Contains(prompt, "risks") {
+		t.Error("prompt should mention risks for approval")
+	}
+}
+
+func TestPromptBuilder_Build_NoRequires(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Simple task",
+			Description: "Do something simple.",
+			Requires:    nil,
+		},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should not have any requires section
+	if strings.Contains(prompt, "Content Review Required") {
+		t.Error("prompt should not have content review section when requires is nil")
+	}
+	if strings.Contains(prompt, "Code Review Required") {
+		t.Error("prompt should not have code review section when requires is nil")
+	}
+	if strings.Contains(prompt, "Approval Required") {
+		t.Error("prompt should not have approval section when requires is nil")
+	}
+}

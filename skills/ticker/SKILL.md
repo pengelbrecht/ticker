@@ -446,6 +446,85 @@ Some tasks have a `requires` field set by humans at creation time. This is a **p
 
 This ensures humans can enforce approval gates on sensitive work without relying on agent judgment
 
+## Assisting Humans with Awaiting Ticks
+
+When working interactively with a user, proactively help them process ticks awaiting human action. This keeps the agent-human workflow moving efficiently.
+
+### Check for Awaiting Ticks
+
+Periodically check if there are ticks waiting for human input:
+
+```bash
+tk list --awaiting              # All ticks awaiting human
+tk next --awaiting              # Next tick needing attention
+```
+
+If you find awaiting ticks, offer to help the user work through them.
+
+### Help Users Respond Efficiently
+
+For each awaiting tick, use **AskUserQuestion** to help the user decide quickly:
+
+**For INPUT_NEEDED (agent asked a question):**
+```
+The task "Add rate limiting" is waiting for your input:
+"Should the rate limiter use sliding window or fixed window algorithm?"
+
+[Sliding window] - More accurate, slightly more complex
+[Fixed window] - Simpler, may allow bursts at boundaries
+```
+
+Then execute:
+```bash
+tk note <id> "Use sliding window algorithm" --from human
+tk approve <id>
+```
+
+**For APPROVAL_NEEDED (agent wants sign-off):**
+```
+The task "Update auth flow" is awaiting approval:
+Agent completed: "Added JWT refresh token rotation"
+
+[Approve] - Work looks good, close the task
+[Reject] - Needs changes (I'll ask for feedback)
+```
+
+**For CONTENT_REVIEW (subjective judgment):**
+```
+The task "Error messages" needs content review:
+New messages in PaymentForm - see diff at <file>
+
+[Approve] - Tone and content are good
+[Reject] - Needs adjustment (I'll ask what to change)
+```
+
+### Execute Commands on User's Behalf
+
+When the user makes a decision, run the appropriate commands:
+
+```bash
+# User approves
+tk approve <id>
+
+# User rejects with feedback
+tk note <id> "Make error messages friendlier, less technical" --from human
+tk reject <id>
+
+# User provides input/answer
+tk note <id> "Use Stripe for payment processing" --from human
+tk approve <id>
+```
+
+**Important:** Always use `--from human` when adding notes on behalf of the user. This helps the automated agent distinguish human feedback from its own notes.
+
+### Proactive Workflow Assistance
+
+When appropriate, proactively offer to help:
+
+- After running ticker, check if any tasks are now awaiting human input
+- When user mentions "waiting on me" or "blocked tasks", check `tk list --awaiting`
+- Before starting new work, see if pending human tasks could unblock agent work
+
 ## Creating Good Ticks
 
 See `references/tick-patterns.md` for detailed patterns.
