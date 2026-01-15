@@ -723,7 +723,7 @@ func TestUpdate_SignalMsg(t *testing.T) {
 		expectShow    bool
 		expectRunning bool
 	}{
-		{"COMPLETE", true, false},
+		{"COMPLETE", false, true}, // COMPLETE is ignored - engine handles completion via tk next
 		{"EJECT", true, false},
 		{"BLOCKED", true, false},
 		{"MAX_ITER", true, false},
@@ -1120,7 +1120,7 @@ func TestTaskStatusIcon(t *testing.T) {
 		expectIcon string
 	}{
 		{"open", TaskInfo{Status: TaskStatusOpen}, "⚪"},
-		{"in progress", TaskInfo{Status: TaskStatusInProgress}, "🔵"},
+		{"in progress", TaskInfo{Status: TaskStatusInProgress}, "🌕"},
 		{"closed", TaskInfo{Status: TaskStatusClosed}, "✅"},
 		{"blocked", TaskInfo{Status: TaskStatusOpen, BlockedBy: []string{"abc"}}, "🔴"},
 		{"awaiting human", TaskInfo{Status: TaskStatusOpen, Awaiting: "approval"}, "👤"},
@@ -3983,9 +3983,9 @@ func TestTaskInfo_StatusIcon_AllEmojiIcons(t *testing.T) {
 			expectIcon: "⚪",
 		},
 		{
-			name:       "in progress task shows blue circle",
+			name:       "in progress task shows moon",
 			task:       TaskInfo{ID: "t2", Status: TaskStatusInProgress},
-			expectIcon: "🔵",
+			expectIcon: "🌕",
 		},
 		{
 			name:       "closed task shows green checkmark",
@@ -4074,12 +4074,12 @@ func TestTaskInfo_StatusIcon_BlockedPriority(t *testing.T) {
 }
 
 func TestTaskInfo_StatusIcon_InProgressNotAffectedByBlockers(t *testing.T) {
-	// In progress status should show 🔵 even if blockers are present
+	// In progress status should show 🌕 even if blockers are present
 	// (edge case - shouldn't happen in practice but tests implementation)
 	task := TaskInfo{ID: "t1", Status: TaskStatusInProgress, BlockedBy: []string{"blocker"}}
 	icon := task.StatusIcon()
-	if !strings.Contains(icon, "🔵") {
-		t.Errorf("in_progress with blocker: expected 🔵, got %s", icon)
+	if !strings.Contains(icon, "🌕") {
+		t.Errorf("in_progress with blocker: expected 🌕, got %s", icon)
 	}
 }
 

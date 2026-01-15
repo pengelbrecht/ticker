@@ -1215,8 +1215,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.completeReason = msg.Reason
 
 		// Certain signals trigger completion overlay
+		// Note: COMPLETE is NOT included here - agent COMPLETE signals are ignored
+		// by the engine (ticker handles completion via tk next). Actual run completion
+		// comes via RunCompleteMsg when all tasks are done.
 		switch msg.Signal {
-		case "COMPLETE", "EJECT", "BLOCKED", "MAX_ITER", "MAX_COST":
+		case "EJECT", "BLOCKED", "MAX_ITER", "MAX_COST":
 			m.showComplete = true
 			m.running = false
 			m.endTime = time.Now()
