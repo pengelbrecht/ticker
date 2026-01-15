@@ -147,8 +147,9 @@ Address this feedback before proceeding.
 2. **Complete the current task** - Implement the required functionality as specified.
 3. **Run tests** - Ensure all existing tests pass and add new tests if appropriate.
 4. **Close the task** - Run ` + "`tk close {{.TaskID}} --reason \"<solution summary>\"`" + ` when complete. The reason should summarize HOW you solved the task (approach taken, key changes made, files modified).
-5. **Commit your changes** - Create a commit with the task ID in the message.
-6. **Add epic note** - Run ` + "`tk note {{.EpicID}} \"<message>\"`" + ` to leave context for future iterations. Include learnings, gotchas, architectural decisions, or anything the next iteration should know.
+5. **Simplify your code (optional)** - If you have access to the code-simplifier skill, consider running it on your modified files before committing to ensure clean, maintainable code.
+6. **Commit your changes** - Create a commit with the task ID in the message.
+7. **Add epic note** - Run ` + "`tk note {{.EpicID}} \"<message>\"`" + ` to leave context for future iterations. Include learnings, gotchas, architectural decisions, or anything the next iteration should know.
 
 ## Handoff Signals
 
