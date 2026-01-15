@@ -1150,6 +1150,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.taskOutputs[m.taskID] = m.output
 		}
 
+		// Remember currently selected task ID to restore selection after sorting
+		var selectedTaskID string
+		if m.selectedTask >= 0 && m.selectedTask < len(m.tasks) {
+			selectedTaskID = m.tasks[m.selectedTask].ID
+		}
+
 		// Update iteration state
 		m.iteration = msg.Iteration
 		m.taskID = msg.TaskID
@@ -1175,6 +1181,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Re-sort tasks after status change
 		m.sortTasks()
+
+		// Update selection: if viewing live output, follow the current task;
+		// otherwise, restore selection to the previously selected task
+		if m.viewingTask == "" && msg.TaskID != "" {
+			// In live output mode, move selection to the current task
+			for i, t := range m.tasks {
+				if t.ID == msg.TaskID {
+					m.selectedTask = i
+					break
+				}
+			}
+		} else if selectedTaskID != "" {
+			// Restore selection to the same task ID after sorting
+			for i, t := range m.tasks {
+				if t.ID == selectedTaskID {
+					m.selectedTask = i
+					break
+				}
+			}
+		}
+
+		// Clamp selectedTask if out of bounds
+		if m.selectedTask >= len(m.tasks) {
+			m.selectedTask = len(m.tasks) - 1
+		}
+		if m.selectedTask < 0 && len(m.tasks) > 0 {
+			m.selectedTask = 0
+		}
 
 		// Accumulate live token metrics to totals before clearing
 		m.totalInputTokens += m.liveInputTokens
