@@ -24,6 +24,54 @@ func NewClient() *Client {
 	return &Client{Command: "tk"}
 }
 
+// isNoTasksError returns true if the error indicates no tasks were found.
+func isNoTasksError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "no open") ||
+		strings.Contains(msg, "No tasks") ||
+		strings.Contains(msg, "no ready") ||
+		strings.Contains(msg, "No ready") ||
+		strings.Contains(msg, "no awaiting") ||
+		strings.Contains(msg, "No awaiting")
+}
+
+// parseTaskJSON parses JSON output into a Task. Returns nil for empty output or empty ID.
+func parseTaskJSON(out []byte) (*Task, error) {
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	var task Task
+	if err := json.Unmarshal(out, &task); err != nil {
+		return nil, fmt.Errorf("parse task JSON: %w", err)
+	}
+	if task.ID == "" {
+		return nil, nil
+	}
+	return &task, nil
+}
+
+// parseEpicJSON parses JSON output into an Epic. Returns nil for empty output or empty ID.
+func parseEpicJSON(out []byte) (*Epic, error) {
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return nil, nil
+	}
+
+	var epic Epic
+	if err := json.Unmarshal(out, &epic); err != nil {
+		return nil, fmt.Errorf("parse epic JSON: %w", err)
+	}
+	if epic.ID == "" {
+		return nil, nil
+	}
+	return &epic, nil
+}
+
 // NextTaskOptions configures the behavior of NextTask.
 type NextTaskOptions struct {
 	// EpicID filters to tasks under a specific epic. Empty means search all tasks.
@@ -65,36 +113,25 @@ func OrphanedOnly() NextTaskOption {
 func (c *Client) NextTask(epicID string) (*Task, error) {
 	out, err := c.run("next", epicID, "--all", "--json")
 	if err != nil {
-		// Check if it's "no tasks" vs actual error
-		if strings.Contains(err.Error(), "no open") || strings.Contains(err.Error(), "No tasks") {
+		if isNoTasksError(err) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("tk next %s: %w", epicID, err)
 	}
 
-	out = bytes.TrimSpace(out)
-	if len(out) == 0 {
+	task, err := parseTaskJSON(out)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
 		return nil, nil
 	}
 
-	var task Task
-	if err := json.Unmarshal(out, &task); err != nil {
-		return nil, fmt.Errorf("parse task JSON: %w", err)
+	// If the task is awaiting human action, find the next ready task
+	if task.IsAwaitingHuman() {
+		return c.findNextReadyTask(epicID)
 	}
-	// Guard against empty task (no ready tasks)
-	if task.ID == "" {
-		return nil, nil
-	}
-
-	// If the task is not awaiting human action, return it directly
-	if !task.IsAwaitingHuman() {
-		return &task, nil
-	}
-
-	// The tk CLI returned a task that's awaiting human action.
-	// We need to find the next task that's ready for agent work.
-	// Get all tasks and filter locally.
-	return c.findNextReadyTask(epicID)
+	return task, nil
 }
 
 // NextTaskWithOptions returns the next open, unblocked task ready for agent work.
@@ -314,29 +351,13 @@ func (c *Client) NextAwaitingTask(epicID string, awaitingTypes ...string) (*Task
 
 	out, err := c.run(args...)
 	if err != nil {
-		// Check if it's "no tasks" vs actual error
-		if strings.Contains(err.Error(), "no open") || strings.Contains(err.Error(), "No tasks") ||
-			strings.Contains(err.Error(), "no awaiting") || strings.Contains(err.Error(), "No awaiting") {
+		if isNoTasksError(err) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("tk next --awaiting: %w", err)
 	}
 
-	out = bytes.TrimSpace(out)
-	if len(out) == 0 {
-		return nil, nil
-	}
-
-	var task Task
-	if err := json.Unmarshal(out, &task); err != nil {
-		return nil, fmt.Errorf("parse task JSON: %w", err)
-	}
-	// Guard against empty task (no awaiting tasks)
-	if task.ID == "" {
-		return nil, nil
-	}
-
-	return &task, nil
+	return parseTaskJSON(out)
 }
 
 // findNextReadyTask finds the next task ready for agent work by filtering locally.
@@ -346,41 +367,7 @@ func (c *Client) findNextReadyTask(epicID string) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Build a set of blocked task IDs for efficient lookup
-	blockedIDs := make(map[string]bool)
-	for _, t := range tasks {
-		for _, blockerID := range t.BlockedBy {
-			// A task is blocked if any of its blockers are not closed
-			for _, blocker := range tasks {
-				if blocker.ID == blockerID && blocker.Status != "closed" {
-					blockedIDs[t.ID] = true
-					break
-				}
-			}
-		}
-	}
-
-	// Find the first task that is:
-	// 1. Open (not closed)
-	// 2. Not blocked
-	// 3. Not awaiting human action (awaiting=nil AND manual=false)
-	for _, t := range tasks {
-		if t.Status != "open" {
-			continue
-		}
-		if blockedIDs[t.ID] {
-			continue
-		}
-		if t.IsAwaitingHuman() {
-			continue
-		}
-		// Found a ready task
-		taskCopy := t
-		return &taskCopy, nil
-	}
-
-	return nil, nil
+	return c.findReadyTaskFromList(tasks)
 }
 
 // GetTask returns details for a specific task.
@@ -457,28 +444,13 @@ func (c *Client) ListAllTasks() ([]Task, error) {
 func (c *Client) NextReadyEpic() (*Epic, error) {
 	out, err := c.run("next", "--epic", "--all", "--json")
 	if err != nil {
-		// Check if it's "no ready epics" vs actual error
-		if strings.Contains(err.Error(), "no ready") || strings.Contains(err.Error(), "No ready") ||
-			strings.Contains(err.Error(), "no open") || strings.Contains(err.Error(), "No open") {
+		if isNoTasksError(err) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("tk next --epic: %w", err)
 	}
 
-	out = bytes.TrimSpace(out)
-	if len(out) == 0 {
-		return nil, nil
-	}
-
-	var epic Epic
-	if err := json.Unmarshal(out, &epic); err != nil {
-		return nil, fmt.Errorf("parse epic JSON: %w", err)
-	}
-	// Guard against empty epic
-	if epic.ID == "" {
-		return nil, nil
-	}
-	return &epic, nil
+	return parseEpicJSON(out)
 }
 
 // ListReadyEpics returns all open epics (for picker display).
@@ -501,14 +473,14 @@ func (c *Client) ListReadyEpics() ([]Epic, error) {
 	return wrapper.Ticks, nil
 }
 
-// HasOpenTasks returns true if the epic has any non-closed tasks (open or in_progress).
+// HasOpenTasks returns true if the epic has any non-closed tasks.
 func (c *Client) HasOpenTasks(epicID string) (bool, error) {
 	tasks, err := c.ListTasks(epicID)
 	if err != nil {
 		return false, err
 	}
 	for _, t := range tasks {
-		if t.Status != "closed" {
+		if !t.IsClosed() {
 			return true, nil
 		}
 	}
@@ -528,22 +500,18 @@ func (c *Client) CloseTask(taskID, reason string) error {
 // If the task has a requires field set (e.g., "approval", "review", "content"),
 // the task is routed to human review via SetAwaiting instead of closing.
 // Tasks without requires are closed directly with the provided summary.
-// The requires field persists through rejection cycles.
 func (c *Client) CompleteTask(taskID string, summary string) error {
 	task, err := c.GetTask(taskID)
 	if err != nil {
 		return fmt.Errorf("getting task for completion: %w", err)
 	}
 
-	// Check for pre-declared approval gate
-	if task.Requires != nil && *task.Requires != "" {
-		// Route to human instead of closing
-		note := fmt.Sprintf("Work complete, requires %s", *task.Requires)
-		return c.SetAwaiting(taskID, *task.Requires, note)
+	if task.Requires == nil || *task.Requires == "" {
+		return c.CloseTask(taskID, summary)
 	}
 
-	// No gate - close directly
-	return c.CloseTask(taskID, summary)
+	note := fmt.Sprintf("Work complete, requires %s", *task.Requires)
+	return c.SetAwaiting(taskID, *task.Requires, note)
 }
 
 // ReopenTask reopens a closed task.
@@ -653,15 +621,11 @@ func (c *Client) Reject(taskID string, feedback string) error {
 // This is used when ticker needs to process verdicts set by humans.
 // Returns the VerdictResult indicating what changes were made.
 func (c *Client) ProcessVerdict(taskID string) (VerdictResult, error) {
-	// Find the .tick/issues directory
-	tickDir, err := findTickDir()
+	filePath, err := tickFilePath(taskID)
 	if err != nil {
-		return VerdictResult{}, fmt.Errorf("finding .tick directory: %w", err)
+		return VerdictResult{}, err
 	}
 
-	filePath := filepath.Join(tickDir, "issues", taskID+".json")
-
-	// Read the existing file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return VerdictResult{}, fmt.Errorf("reading tick file %s: %w", taskID, err)
@@ -707,43 +671,40 @@ func (c *Client) ProcessVerdict(taskID string) (VerdictResult, error) {
 	return result, nil
 }
 
-// GetNotes returns the notes for an epic or task.
-// Notes are parsed from the tk show output.
+// GetNotes returns the notes for an epic or task as newline-separated strings.
 func (c *Client) GetNotes(epicID string) ([]string, error) {
 	epic, err := c.GetEpic(epicID)
 	if err != nil {
 		return nil, err
 	}
-
 	if epic.Notes == "" {
 		return nil, nil
 	}
 
-	// Notes are newline-separated in the notes field
-	lines := strings.Split(epic.Notes, "\n")
-	var notes []string
+	return splitNonEmpty(epic.Notes), nil
+}
+
+// splitNonEmpty splits a string by newlines and returns non-empty trimmed lines.
+func splitNonEmpty(s string) []string {
+	lines := strings.Split(s, "\n")
+	result := make([]string, 0, len(lines))
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			notes = append(notes, line)
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			result = append(result, trimmed)
 		}
 	}
-	return notes, nil
+	return result
 }
 
 // GetStructuredNotes returns notes as structured Note objects with author metadata.
 // Reads from the "structured_notes" field if present, otherwise parses legacy "notes" string.
 // Each legacy note line is treated as an agent note (default author).
 func (c *Client) GetStructuredNotes(issueID string) ([]Note, error) {
-	// Find the .tick/issues directory
-	tickDir, err := findTickDir()
+	filePath, err := tickFilePath(issueID)
 	if err != nil {
-		return nil, fmt.Errorf("finding .tick directory: %w", err)
+		return nil, err
 	}
 
-	filePath := filepath.Join(tickDir, "issues", issueID+".json")
-
-	// Read the tick file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -752,7 +713,6 @@ func (c *Client) GetStructuredNotes(issueID string) ([]Note, error) {
 		return nil, fmt.Errorf("reading tick file %s: %w", issueID, err)
 	}
 
-	// Parse into a struct that can hold both formats
 	var tickData struct {
 		Notes           string `json:"notes,omitempty"`
 		StructuredNotes []Note `json:"structured_notes,omitempty"`
@@ -761,24 +721,18 @@ func (c *Client) GetStructuredNotes(issueID string) ([]Note, error) {
 		return nil, fmt.Errorf("parsing tick file %s: %w", issueID, err)
 	}
 
-	// If structured_notes exists, use it
 	if len(tickData.StructuredNotes) > 0 {
 		return tickData.StructuredNotes, nil
 	}
-
-	// Fall back to parsing legacy notes string
 	if tickData.Notes == "" {
 		return nil, nil
 	}
 
-	lines := strings.Split(tickData.Notes, "\n")
-	var notes []Note
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			// Legacy notes are treated as agent notes
-			notes = append(notes, Note{Content: line, Author: "agent"})
-		}
+	// Convert legacy notes to structured format
+	lines := splitNonEmpty(tickData.Notes)
+	notes := make([]Note, len(lines))
+	for i, line := range lines {
+		notes[i] = Note{Content: line, Author: "agent"}
 	}
 	return notes, nil
 }
@@ -791,11 +745,10 @@ func (c *Client) GetNotesByAuthor(issueID string, author string) ([]Note, error)
 		return nil, err
 	}
 
+	wantHuman := author == "human"
 	var filtered []Note
 	for _, note := range notes {
-		if author == "human" && note.IsFromHuman() {
-			filtered = append(filtered, note)
-		} else if (author == "agent" || author == "") && note.IsFromAgent() {
+		if wantHuman == note.IsFromHuman() {
 			filtered = append(filtered, note)
 		}
 	}
@@ -818,67 +771,53 @@ func (c *Client) GetAgentNotes(issueID string) ([]Note, error) {
 // Since the tk CLI doesn't support the run field, we read-modify-write the JSON file.
 func (c *Client) SetRunRecord(taskID string, record *agent.RunRecord) error {
 	if record == nil {
-		return nil // nothing to set
+		return nil
 	}
 
-	// Find the .tick/issues directory relative to current working directory
-	tickDir, err := findTickDir()
+	filePath, err := tickFilePath(taskID)
 	if err != nil {
-		return fmt.Errorf("finding .tick directory: %w", err)
+		return err
 	}
 
-	filePath := filepath.Join(tickDir, "issues", taskID+".json")
-
-	// Read the existing file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("reading tick file %s: %w", taskID, err)
 	}
 
-	// Parse into a generic map to preserve all fields
 	var tickData map[string]interface{}
 	if err := json.Unmarshal(data, &tickData); err != nil {
 		return fmt.Errorf("parsing tick file %s: %w", taskID, err)
 	}
 
-	// Add the run field
 	tickData["run"] = record
 
-	// Write back with indentation
 	output, err := json.MarshalIndent(tickData, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling tick file %s: %w", taskID, err)
 	}
 
-	// Write to file
 	if err := os.WriteFile(filePath, output, 0600); err != nil {
 		return fmt.Errorf("writing tick file %s: %w", taskID, err)
 	}
-
 	return nil
 }
 
 // GetRunRecord retrieves the RunRecord for a task by reading the tick file directly.
 // Returns nil if no RunRecord exists.
 func (c *Client) GetRunRecord(taskID string) (*agent.RunRecord, error) {
-	// Find the .tick/issues directory relative to current working directory
-	tickDir, err := findTickDir()
+	filePath, err := tickFilePath(taskID)
 	if err != nil {
-		return nil, fmt.Errorf("finding .tick directory: %w", err)
+		return nil, err
 	}
 
-	filePath := filepath.Join(tickDir, "issues", taskID+".json")
-
-	// Read the existing file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil // Task doesn't exist, no record
+			return nil, nil
 		}
 		return nil, fmt.Errorf("reading tick file %s: %w", taskID, err)
 	}
 
-	// Parse into a struct that includes the run field
 	var tickData struct {
 		Run *agent.RunRecord `json:"run,omitempty"`
 	}
@@ -887,6 +826,15 @@ func (c *Client) GetRunRecord(taskID string) (*agent.RunRecord, error) {
 	}
 
 	return tickData.Run, nil
+}
+
+// tickFilePath returns the path to a tick's JSON file.
+func tickFilePath(tickID string) (string, error) {
+	tickDir, err := findTickDir()
+	if err != nil {
+		return "", fmt.Errorf("finding .tick directory: %w", err)
+	}
+	return filepath.Join(tickDir, "issues", tickID+".json"), nil
 }
 
 // findTickDir locates the .tick directory by walking up from cwd.

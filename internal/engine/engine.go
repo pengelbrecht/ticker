@@ -627,19 +627,11 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 	}
 	state.epic = epic
 
-	// Get epic notes
-	notes, err := e.ticks.GetNotes(state.epicID)
-	if err != nil {
-		// Continue without notes
-		notes = nil
-	}
+	// Get epic notes (continue without notes on error)
+	notes, _ := e.ticks.GetNotes(state.epicID)
 
-	// Get human feedback notes for this task
-	humanNotes, err := e.ticks.GetHumanNotes(task.ID)
-	if err != nil {
-		// Continue without human notes
-		humanNotes = nil
-	}
+	// Get human feedback notes for this task (continue without on error)
+	humanNotes, _ := e.ticks.GetHumanNotes(task.ID)
 
 	// Build prompt
 	iterCtx := IterationContext{
@@ -699,13 +691,11 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 	// Handle timeout specially - capture partial output
 	if errors.Is(err, agent.ErrTimeout) {
 		result.IsTimeout = true
-		// agentResult contains partial output on timeout
 		if agentResult != nil {
 			result.Output = agentResult.Output
 			result.TokensIn = agentResult.TokensIn
 			result.TokensOut = agentResult.TokensOut
 			result.Cost = agentResult.Cost
-			// Still persist the partial RunRecord
 			if agentResult.Record != nil {
 				_ = e.ticks.SetRunRecord(task.ID, agentResult.Record)
 			}
@@ -725,10 +715,7 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 
 	// Persist RunRecord to task (enables viewing historical run data)
 	if agentResult.Record != nil {
-		if err := e.ticks.SetRunRecord(task.ID, agentResult.Record); err != nil {
-			// Log but don't fail on record persistence error
-			_ = e.ticks.AddNote(state.epicID, fmt.Sprintf("Warning: could not persist RunRecord for %s: %v", task.ID, err))
-		}
+		_ = e.ticks.SetRunRecord(task.ID, agentResult.Record)
 	}
 
 	// Parse signals
@@ -790,13 +777,12 @@ func (e *Engine) wasTaskClosed(taskID string) (bool, error) {
 
 // runVerification executes verification for a completed task.
 // workDir specifies the directory to verify (worktree path or empty for cwd).
-// Returns nil if verification is not enabled.
+// Returns nil if verification is not enabled or cannot run.
 func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput string, epicID string, workDir string) *verify.Results {
 	if !e.verifyEnabled {
 		return nil
 	}
 
-	// Determine verification directory
 	dir := workDir
 	if dir == "" {
 		var err error
@@ -806,22 +792,18 @@ func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput
 		}
 	}
 
-	// Create GitVerifier for the correct directory
 	gitVerifier := verify.NewGitVerifier(dir)
 	if gitVerifier == nil {
-		return nil // Not a git repo
+		return nil
 	}
 
-	// Call start callback
 	if e.OnVerificationStart != nil {
 		e.OnVerificationStart(taskID)
 	}
 
-	// Run verification
 	runner := verify.NewRunner(dir, gitVerifier)
 	results := runner.Run(ctx, taskID, agentOutput)
 
-	// Call end callback
 	if e.OnVerificationEnd != nil {
 		e.OnVerificationEnd(taskID, results)
 	}
@@ -847,27 +829,25 @@ var signalToAwaiting = map[Signal]string{
 // For handoff signals (EJECT, BLOCKED, etc.), it sets the task to awaiting state.
 // Returns nil for unknown signals or SignalNone (no-op).
 func (e *Engine) handleSignal(task *ticks.Task, signal Signal, context string) error {
-	switch signal {
-	case SignalNone:
-		// No signal detected - nothing to do
+	if signal == SignalNone {
 		return nil
+	}
 
-	case SignalComplete:
+	if signal == SignalComplete {
 		// Check for pre-declared approval gate
 		if task.Requires != nil && *task.Requires != "" {
 			note := "Work complete, requires " + *task.Requires
 			return e.ticks.SetAwaiting(task.ID, *task.Requires, note)
 		}
 		return e.ticks.CloseTask(task.ID, "Completed by agent")
+	}
 
-	default:
-		// Check if this signal maps to an awaiting state
-		if awaiting, ok := signalToAwaiting[signal]; ok {
-			return e.ticks.SetAwaiting(task.ID, awaiting, context)
-		}
-		// Unknown signal - gracefully ignore
+	// Check if this signal maps to an awaiting state
+	awaiting, ok := signalToAwaiting[signal]
+	if !ok {
 		return nil
 	}
+	return e.ticks.SetAwaiting(task.ID, awaiting, context)
 }
 
 // buildVerificationFailureNote creates a note about verification failure.

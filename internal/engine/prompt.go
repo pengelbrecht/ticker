@@ -43,16 +43,9 @@ func (pb *PromptBuilder) Build(ctx IterationContext) string {
 	var buf strings.Builder
 
 	data := templateData{
-		Iteration:          ctx.Iteration,
-		EpicTitle:          "",
-		EpicDescription:    "",
-		EpicID:             "",
-		TaskID:             "",
-		TaskTitle:          "",
-		TaskDescription:    "",
-		AcceptanceCriteria: "",
-		EpicNotes:          ctx.EpicNotes,
-		HumanFeedback:      ctx.HumanFeedback,
+		Iteration:     ctx.Iteration,
+		EpicNotes:     ctx.EpicNotes,
+		HumanFeedback: ctx.HumanFeedback,
 	}
 
 	if ctx.Epic != nil {

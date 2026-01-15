@@ -70,23 +70,23 @@ func (t TaskInfo) IsBlocked() bool {
 func (t TaskInfo) StatusIcon() string {
 	// Awaiting human takes priority - task is open but waiting for human
 	if t.Awaiting != "" {
-		return lipgloss.NewStyle().Foreground(colorPeach).Render("👤")
+		return "👤"
 	}
 
 	// Blocked status overrides open
 	if t.Status == TaskStatusOpen && t.IsBlocked() {
-		return lipgloss.NewStyle().Foreground(colorRed).Render("🔴")
+		return "🔴"
 	}
 
 	switch t.Status {
 	case TaskStatusInProgress:
-		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("🔵")
+		return "🔵"
 	case TaskStatusClosed:
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("✅")
+		return "✅"
 	case TaskStatusOpen:
-		return lipgloss.NewStyle().Foreground(colorGray).Render("⚪")
+		return "⚪"
 	default:
-		return lipgloss.NewStyle().Foreground(colorGray).Render("⚪")
+		return "⚪"
 	}
 }
 

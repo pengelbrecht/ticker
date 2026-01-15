@@ -95,13 +95,8 @@ func (h *ConflictHandler) GetActiveConflicts() []*ConflictState {
 
 	result := make([]*ConflictState, 0, len(h.conflicts))
 	for _, state := range h.conflicts {
-		// Return copies to avoid races
-		stateCopy := *state
-		stateCopy.Conflicts = make([]string, len(state.Conflicts))
-		copy(stateCopy.Conflicts, state.Conflicts)
-		result = append(result, &stateCopy)
+		result = append(result, state.copy())
 	}
-
 	return result
 }
 
@@ -114,11 +109,14 @@ func (h *ConflictHandler) GetConflict(epicID string) *ConflictState {
 	if !exists {
 		return nil
 	}
+	return state.copy()
+}
 
-	// Return a copy to avoid races
-	stateCopy := *state
-	stateCopy.Conflicts = make([]string, len(state.Conflicts))
-	copy(stateCopy.Conflicts, state.Conflicts)
+// copy returns a deep copy of the conflict state to avoid races.
+func (s *ConflictState) copy() *ConflictState {
+	stateCopy := *s
+	stateCopy.Conflicts = make([]string, len(s.Conflicts))
+	copy(stateCopy.Conflicts, s.Conflicts)
 	return &stateCopy
 }
 

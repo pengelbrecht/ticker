@@ -156,42 +156,45 @@ func (t *Tracker) Remaining() Remaining {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	rem := Remaining{
-		Iterations: -1,
-		Tokens:     -1,
-		Cost:       -1,
-		Duration:   -1,
+	return Remaining{
+		Iterations: remainingInt(t.limits.MaxIterations, t.usage.Iterations),
+		Tokens:     remainingInt(t.limits.MaxTokens, t.usage.TotalTokens()),
+		Cost:       remainingFloat(t.limits.MaxCost, t.usage.Cost),
+		Duration:   remainingDuration(t.limits.MaxDuration, t.usage.Duration()),
 	}
+}
 
-	if t.limits.MaxIterations > 0 {
-		rem.Iterations = t.limits.MaxIterations - t.usage.Iterations
-		if rem.Iterations < 0 {
-			rem.Iterations = 0
-		}
+// remainingInt returns max-used clamped to 0, or -1 if max is 0 (unlimited).
+func remainingInt(max, used int) int {
+	if max <= 0 {
+		return -1
 	}
-
-	if t.limits.MaxTokens > 0 {
-		rem.Tokens = t.limits.MaxTokens - t.usage.TotalTokens()
-		if rem.Tokens < 0 {
-			rem.Tokens = 0
-		}
+	if remaining := max - used; remaining > 0 {
+		return remaining
 	}
+	return 0
+}
 
-	if t.limits.MaxCost > 0 {
-		rem.Cost = t.limits.MaxCost - t.usage.Cost
-		if rem.Cost < 0 {
-			rem.Cost = 0
-		}
+// remainingFloat returns max-used clamped to 0, or -1 if max is 0 (unlimited).
+func remainingFloat(max, used float64) float64 {
+	if max <= 0 {
+		return -1
 	}
-
-	if t.limits.MaxDuration > 0 {
-		rem.Duration = t.limits.MaxDuration - t.usage.Duration()
-		if rem.Duration < 0 {
-			rem.Duration = 0
-		}
+	if remaining := max - used; remaining > 0 {
+		return remaining
 	}
+	return 0
+}
 
-	return rem
+// remainingDuration returns max-used clamped to 0, or -1 if max is 0 (unlimited).
+func remainingDuration(max, used time.Duration) time.Duration {
+	if max <= 0 {
+		return -1
+	}
+	if remaining := max - used; remaining > 0 {
+		return remaining
+	}
+	return 0
 }
 
 // Usage returns a copy of the current usage statistics.

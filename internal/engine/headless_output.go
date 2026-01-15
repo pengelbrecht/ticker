@@ -178,16 +178,10 @@ func (h *HeadlessOutput) Signal(sig Signal, reason string) {
 
 // signalPrefix returns the appropriate prefix tag for a signal.
 func (h *HeadlessOutput) signalPrefix(sig Signal) string {
-	switch sig {
-	case SignalComplete:
-		return "COMPLETE"
-	case SignalBlocked:
-		return "BLOCKED"
-	case SignalEject:
-		return "EJECT"
-	default:
+	if sig == SignalNone {
 		return "SIGNAL"
 	}
+	return sig.String()
 }
 
 // Complete outputs the final summary.

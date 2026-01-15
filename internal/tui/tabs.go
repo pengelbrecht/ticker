@@ -98,13 +98,12 @@ func (m Model) renderSingleTab(index int, tab EpicTab, isActive bool) string {
 func (m Model) getTabStatusIcon(status EpicTabStatus) string {
 	switch status {
 	case EpicTabStatusRunning:
-		return lipgloss.NewStyle().Foreground(colorBlueAlt).Render("🔵")
+		return "🔵"
 	case EpicTabStatusComplete:
-		return lipgloss.NewStyle().Foreground(colorGreen).Render("✅")
+		return "✅"
 	case EpicTabStatusFailed:
-		return lipgloss.NewStyle().Foreground(colorRed).Render("🔴")
+		return "🔴"
 	case EpicTabStatusConflict:
-		// Warning symbol kept as-is - distinct from task "blocked" status
 		return lipgloss.NewStyle().Foreground(colorPeach).Render("⚠")
 	default:
 		return ""
@@ -128,12 +127,6 @@ func (m *Model) switchTab(index int) bool {
 
 	if m.activeTab == index {
 		return false // Already on this tab
-	}
-
-	// Save current tab's viewport state before switching
-	if m.activeTab >= 0 && m.activeTab < len(m.epicTabs) {
-		// The viewport content is shared; each tab maintains its own output/tasks
-		// so we don't need to save viewport state here
 	}
 
 	m.activeTab = index

@@ -59,17 +59,20 @@ type Results struct {
 // NewResults creates a Results from a slice of Result pointers.
 // It computes AllPassed based on individual results.
 func NewResults(results []*Result) *Results {
-	allPassed := true
-	for _, r := range results {
-		if !r.Passed {
-			allPassed = false
-			break
-		}
-	}
 	return &Results{
 		Results:   results,
-		AllPassed: allPassed,
+		AllPassed: allPassed(results),
 	}
+}
+
+// allPassed returns true if all results passed.
+func allPassed(results []*Result) bool {
+	for _, r := range results {
+		if !r.Passed {
+			return false
+		}
+	}
+	return true
 }
 
 // Summary returns a human-readable summary of all results.
@@ -79,37 +82,38 @@ func (r *Results) Summary() string {
 	}
 
 	var sb strings.Builder
-	var passed, failed int
-
-	for _, result := range r.Results {
-		if result.Passed {
-			passed++
-		} else {
-			failed++
-		}
-	}
+	passed := r.countPassed()
+	total := len(r.Results)
 
 	// Overall status line
 	if r.AllPassed {
-		sb.WriteString(fmt.Sprintf("Verification passed (%d/%d)\n", passed, len(r.Results)))
+		fmt.Fprintf(&sb, "Verification passed (%d/%d)\n", passed, total)
 	} else {
-		sb.WriteString(fmt.Sprintf("Verification failed (%d/%d passed)\n", passed, len(r.Results)))
+		fmt.Fprintf(&sb, "Verification failed (%d/%d passed)\n", passed, total)
 	}
 
 	// Individual results
 	for _, result := range r.Results {
-		sb.WriteString(fmt.Sprintf("  %s\n", result.String()))
-		// Include output for failed verifications
+		fmt.Fprintf(&sb, "  %s\n", result.String())
 		if !result.Passed && result.Output != "" {
-			// Indent the output
-			lines := strings.Split(strings.TrimSpace(result.Output), "\n")
-			for _, line := range lines {
-				sb.WriteString(fmt.Sprintf("    %s\n", line))
+			for _, line := range strings.Split(strings.TrimSpace(result.Output), "\n") {
+				fmt.Fprintf(&sb, "    %s\n", line)
 			}
 		}
 	}
 
 	return strings.TrimSuffix(sb.String(), "\n")
+}
+
+// countPassed returns the number of passed results.
+func (r *Results) countPassed() int {
+	count := 0
+	for _, result := range r.Results {
+		if result.Passed {
+			count++
+		}
+	}
+	return count
 }
 
 // FailedResults returns only the results that did not pass.

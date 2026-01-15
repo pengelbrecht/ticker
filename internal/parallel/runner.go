@@ -276,16 +276,19 @@ func (r *Runner) updateStatus(epicID, status string, result *engine.RunResult, e
 	s.Result = result
 	s.Error = err
 	s.Conflict = conflict
-
-	switch status {
-	case "running":
+	if status == "running" {
 		s.StartedAt = time.Now()
-	case "completed", "failed", "conflict":
+	} else {
 		s.CompletedAt = time.Now()
 	}
 	r.mu.Unlock()
 
 	// Call callbacks outside lock
+	r.notifyStatusChange(epicID, status, result, err, conflict)
+}
+
+// notifyStatusChange calls the appropriate callbacks for a status change.
+func (r *Runner) notifyStatusChange(epicID, status string, result *engine.RunResult, err error, conflict *ConflictState) {
 	if r.callbacks.OnStatusChange != nil {
 		r.callbacks.OnStatusChange(epicID, status)
 	}

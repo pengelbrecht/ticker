@@ -144,13 +144,10 @@ func (tw *TicksWatcher) processEvents() {
 			}
 
 			// Debounce: wait for writes to settle before notifying
-			if debounceTimer == nil {
-				debounceTimer = time.AfterFunc(tw.debounceDelay, notify)
-			} else {
-				// Reset timer if we get more events
+			if debounceTimer != nil {
 				debounceTimer.Stop()
-				debounceTimer = time.AfterFunc(tw.debounceDelay, notify)
 			}
+			debounceTimer = time.AfterFunc(tw.debounceDelay, notify)
 
 		case err, ok := <-tw.watcher.Errors:
 			if !ok {
