@@ -1,16 +1,121 @@
 {
-  "id": "jx9",
-  "title": "Show awaiting type in task list tooltip/detail",
-  "description": "Display the specific awaiting type when rendering task in the list, so users know what kind of human action is needed.\n\nOptions:\n1. Append to title: \"Task title [approval]\" or \"Task title (👤 approval)\"\n2. Show in detail pane when task is selected\n3. Different icons per awaiting type (more complex)\n\nRecommended: Option 1 - append abbreviated type after title for quick scanning.\n\nFile: internal/tui/model.go - RenderTask() method (around line 86-99)\n\nExample output:\n```\n👤 [abc123] Fix auth flow [approval]\n👤 [def456] Configure API key [input]\n👤 [ghi789] Review PR #42 [review]\n```\n\nThe bracketed type helps users understand what action they need to take.",
-  "status": "open",
-  "priority": 3,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
     "2d6"
   ],
-  "parent": "zyv",
-  "created_by": "peter@engelbrecht.dk",
+  "closed_at": "2026-01-14T22:51:09.436634Z",
+  "closed_reason": "Added awaiting type display to RenderTask() in model.go. When a task has an Awaiting field set, the awaiting type is now shown in peach-colored brackets after the title (e.g., 👤 [abc] Fix auth flow [approval]). Added 2 test functions covering 4 awaiting types and the no-awaiting case.",
   "created_at": "2026-01-14T22:37:22.035736Z",
-  "updated_at": "2026-01-14T22:37:22.035736Z"
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Display the specific awaiting type when rendering task in the list, so users know what kind of human action is needed.\n\nOptions:\n1. Append to title: \"Task title [approval]\" or \"Task title (👤 approval)\"\n2. Show in detail pane when task is selected\n3. Different icons per awaiting type (more complex)\n\nRecommended: Option 1 - append abbreviated type after title for quick scanning.\n\nFile: internal/tui/model.go - RenderTask() method (around line 86-99)\n\nExample output:\n```\n👤 [abc123] Fix auth flow [approval]\n👤 [def456] Configure API key [input]\n👤 [ghi789] Review PR #42 [review]\n```\n\nThe bracketed type helps users understand what action they need to take.",
+  "id": "jx9",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zyv",
+  "priority": 3,
+  "run": {
+    "session_id": "f164e610-e151-4f0a-beef-3dc0ead2c312",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T23:49:33.262748+01:00",
+    "ended_at": "2026-01-14T23:52:02.378933+01:00",
+    "output": "I'll start by reviewing the current task and understanding the existing code structure.\n\nLet me search for the RenderTask method first.\n\nNow let me read around that area to understand the current implementation.\n\nI can see the `RenderTask` method at lines 94-106. Currently it shows: `icon + \" \" + id + \" \" + title`. \n\nNow let me also look at the TaskInfo struct to confirm the Awaiting field is present.\n\nThe `Awaiting` field exists. Now I need to modify `RenderTask()` to append the awaiting type after the title when the task is awaiting.\n\nLet me also check the StatusIcon method to understand the awaiting check:\n\nNow I understand the task. I need to modify the `RenderTask()` method to append the awaiting type in brackets when the task has an awaiting state. Based on the task description, the format should be:\n```\n👤 [abc123] Fix auth flow [approval]\n```\n\nLet me implement this change:\n\nNow let me update the todo and run the tests to ensure everything works:\n\nAll 165 tests pass. Now let me add a test for the new RenderTask functionality with awaiting type. Let me first look at the existing RenderTask test:\n\nLet me add a test for the awaiting type display in RenderTask. I'll add it after the existing RenderTask test:\n\nNow let's run the tests again to ensure the new tests pass:\n\nAll tests pass. Let me also run all tests to make sure nothing is broken:\n\nAll tests pass. Now let me update the todo list and proceed with closing the task and committing:\n\nNow let me add a note to the epic for future iterations:\n\nTask jx9 is complete. Here's a summary of what was implemented:\n\n**Changes Made:**\n\n1. **internal/tui/model.go** (lines 93-115): Modified `RenderTask()` to append the awaiting type in brackets after the task title when the `Awaiting` field is non-empty. The awaiting tag is styled with `colorPeach` to match the human icon (👤).\n\n   Example output:\n   ```\n   👤 [abc123] Fix auth flow [approval]\n   👤 [def456] Configure API key [input]\n   👤 [ghi789] Review PR #42 [review]\n   ```\n\n2. **internal/tui/model_test.go**: Added two new test functions:\n   - `TestTaskInfo_RenderTask_WithAwaitingType`: Tests that approval, input, review, and content awaiting types are displayed correctly in brackets\n   - `TestTaskInfo_RenderTask_NoAwaitingType`: Verifies that tasks without awaiting status don't show extra brackets\n\nAll tests pass (169 total including the new ones).\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 379
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1168
+      },
+      {
+        "name": "Read",
+        "duration_ms": 648
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 920
+      },
+      {
+        "name": "Read",
+        "duration_ms": 616
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1665
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3738
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1009
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 926
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1630
+      },
+      {
+        "name": "Read",
+        "duration_ms": 781
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 7972
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1193
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 544
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1687
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2794
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 575
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 403
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3697
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3125
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1008
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 4452,
+      "cache_read_tokens": 1099873,
+      "cache_creation_tokens": 45752,
+      "cost_usd": 0.9685274999999999,
+      "duration_ms": 148616
+    },
+    "success": true,
+    "num_turns": 22
+  },
+  "status": "closed",
+  "title": "Show awaiting type in task list tooltip/detail",
+  "type": "task",
+  "updated_at": "2026-01-14T22:51:09.436634Z"
 }

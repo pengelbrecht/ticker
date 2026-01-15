@@ -73,12 +73,30 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts RunOpts) (*Re
 
 	// Create state and parser for structured streaming
 	state := &AgentState{}
+	var prevOutputLen int // Track output length for delta streaming
 	var onUpdate func()
-	if opts.StateCallback != nil {
-		onUpdate = func() {
-			opts.StateCallback(state.Snapshot())
+
+	// Build update callback that notifies both StateCallback and legacy Stream
+	onUpdate = func() {
+		snap := state.Snapshot()
+
+		// Call StateCallback if set (preferred API)
+		if opts.StateCallback != nil {
+			opts.StateCallback(snap)
+		}
+
+		// Stream output deltas to legacy Stream channel if set (backward compat)
+		if opts.Stream != nil && len(snap.Output) > prevOutputLen {
+			delta := snap.Output[prevOutputLen:]
+			select {
+			case opts.Stream <- delta:
+				prevOutputLen = len(snap.Output)
+			default:
+				// Channel full, skip this delta (will be included in next)
+			}
 		}
 	}
+
 	parser := NewStreamParser(state, onUpdate)
 
 	// Parse stream-json output
@@ -118,14 +136,6 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts RunOpts) (*Re
 	// Build result from parsed state
 	snap := state.Snapshot()
 	record := state.ToRecord()
-
-	// Also send text to legacy Stream channel if provided (backward compat)
-	if opts.Stream != nil {
-		select {
-		case opts.Stream <- snap.Output:
-		default:
-		}
-	}
 
 	return &Result{
 		Output:    snap.Output,

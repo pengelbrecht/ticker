@@ -1,19 +1,110 @@
 {
-  "id": "2b8",
-  "title": "Add tests for new status icons and awaiting display",
-  "description": "Add unit tests for new StatusIcon() behavior and awaiting field handling.\n\nFile: internal/tui/model_test.go\n\nTests to add:\n1. TestTaskInfo_StatusIcon_Emoji - verify all emoji icons render correctly\n2. TestTaskInfo_StatusIcon_AwaitingPriority - awaiting takes priority over open\n3. TestTaskInfo_StatusIcon_BlockedPriority - blocked takes priority over open but not awaiting\n4. TestUpdate_TasksUpdate_WithAwaiting - verify awaiting field propagates\n\nExample test:\n```go\nfunc TestTaskInfo_StatusIcon_Awaiting(t *testing.T) {\n    task := TaskInfo{\n        ID:       \"abc\",\n        Status:   TaskStatusOpen,\n        Awaiting: \"approval\",\n    }\n    icon := task.StatusIcon()\n    if !strings.Contains(icon, \"👤\") {\n        t.Errorf(\"expected human icon for awaiting task, got %s\", icon)\n    }\n}\n```",
-  "status": "closed",
-  "priority": 2,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
     "nu3",
     "ok0"
   ],
-  "parent": "zyv",
-  "created_by": "peter@engelbrecht.dk",
-  "created_at": "2026-01-14T22:37:11.392507Z",
-  "updated_at": "2026-01-14T22:49:07.206958Z",
   "closed_at": "2026-01-14T22:49:07.206958Z",
-  "closed_reason": "Added comprehensive unit tests for StatusIcon() emoji icons and Awaiting field handling. Tests cover: all 5 emoji icons (⚪🔵✅🔴👤), awaiting priority over blocked/open states, blocked priority over open, and TasksUpdateMsg propagation of Awaiting field. 8 new test functions added to model_test.go."
+  "closed_reason": "Added comprehensive unit tests for StatusIcon() emoji icons and Awaiting field handling. Tests cover: all 5 emoji icons (⚪🔵✅🔴👤), awaiting priority over blocked/open states, blocked priority over open, and TasksUpdateMsg propagation of Awaiting field. 8 new test functions added to model_test.go.",
+  "created_at": "2026-01-14T22:37:11.392507Z",
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Add unit tests for new StatusIcon() behavior and awaiting field handling.\n\nFile: internal/tui/model_test.go\n\nTests to add:\n1. TestTaskInfo_StatusIcon_Emoji - verify all emoji icons render correctly\n2. TestTaskInfo_StatusIcon_AwaitingPriority - awaiting takes priority over open\n3. TestTaskInfo_StatusIcon_BlockedPriority - blocked takes priority over open but not awaiting\n4. TestUpdate_TasksUpdate_WithAwaiting - verify awaiting field propagates\n\nExample test:\n```go\nfunc TestTaskInfo_StatusIcon_Awaiting(t *testing.T) {\n    task := TaskInfo{\n        ID:       \"abc\",\n        Status:   TaskStatusOpen,\n        Awaiting: \"approval\",\n    }\n    icon := task.StatusIcon()\n    if !strings.Contains(icon, \"👤\") {\n        t.Errorf(\"expected human icon for awaiting task, got %s\", icon)\n    }\n}\n```",
+  "id": "2b8",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "zyv",
+  "priority": 2,
+  "run": {
+    "session_id": "cad17d5b-79b9-44d6-a965-4233a820e0cd",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-14T23:47:18.996373+01:00",
+    "ended_at": "2026-01-14T23:49:30.444224+01:00",
+    "output": "I'll review the epic notes and then implement the tests for the new status icons and awaiting display.\n\nLet me first look at the existing test file and the current StatusIcon implementation to understand what needs to be tested.\n\nThe files are large. Let me search for the specific sections I need.\n\nLet me read the StatusIcon function and the existing tests.\n\nI can see there's already a `TestTaskStatusIcon` function with the basic test cases. Let me see where it ends and check what other tests exist.\n\nGood, I can see the existing test structure. Looking at the existing tests in `TestTaskStatusIcon`, I can see that it already covers:\n1. Basic emoji icons for open, in progress, closed\n2. Blocked status\n3. Awaiting human status\n4. Awaiting taking priority over blocked\n\nThe task asks me to add more comprehensive tests. Let me check what additional test scenarios would be valuable according to the task requirements:\n\n1. `TestTaskInfo_StatusIcon_Emoji` - verify all emoji icons render correctly (partially covered)\n2. `TestTaskInfo_StatusIcon_AwaitingPriority` - awaiting takes priority over open (covered in existing test)\n3. `TestTaskInfo_StatusIcon_BlockedPriority` - blocked takes priority over open but not awaiting (partially covered)\n4. `TestUpdate_TasksUpdate_WithAwaiting` - verify awaiting field propagates\n\nLet me check how TasksUpdateMsg is handled and look for existing Update tests.\n\nLet me look at the integration test and model_test to understand the test patterns better.\n\nNow I have a good understanding of the test patterns. The existing `TestTaskStatusIcon` already covers the basic cases. I need to add more comprehensive tests as specified in the task. Let me find the end of the file to see where to add new tests.\n\nNow let me add the new tests. I'll add comprehensive tests for:\n1. All emoji icons rendering correctly with colors\n2. Awaiting priority over other statuses\n3. Blocked priority (takes priority over open but not awaiting)\n4. TasksUpdateMsg with Awaiting field propagation\n\nNow let me run the tests to make sure they pass.\n\nAll new tests pass. Let me also run the full test suite to make sure I didn't break anything.\n\nAll tests pass. Now let me close the task and commit the changes.\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 897
+      },
+      {
+        "name": "Read",
+        "duration_ms": 566
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1503
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1273
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1041
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1013
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1279
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1405
+      },
+      {
+        "name": "Read",
+        "duration_ms": 877
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1458
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1214
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 41050
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 1708
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 789
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3644
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 954
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 5077
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4002
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5813,
+      "cache_read_tokens": 789861,
+      "cache_creation_tokens": 21460,
+      "cost_usd": 0.6893794999999997,
+      "duration_ms": 130956
+    },
+    "success": true,
+    "num_turns": 19
+  },
+  "status": "closed",
+  "title": "Add tests for new status icons and awaiting display",
+  "type": "task",
+  "updated_at": "2026-01-14T22:49:07.206958Z"
 }

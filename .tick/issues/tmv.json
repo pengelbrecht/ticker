@@ -2,11 +2,13 @@
   "id": "tmv",
   "title": "Investigate headless output not displaying",
   "description": "When running `./ticker run \u003cepic\u003e --headless`, output is not being displayed to stdout.\n\nObserved behavior:\n- Ticker runs and completes tasks (verified via tk notes/list)\n- But no output is shown in the terminal\n- The system mentions output is being written to a file but the file isn't accessible\n\nFiles to investigate:\n- internal/engine/headless_output.go - headless output formatting\n- cmd/ticker/main.go - headless mode setup (look for --headless flag handling)\n\nPotential issues:\n1. Output buffering not being flushed\n2. Output going to wrong stream (stderr vs stdout)\n3. Output writer not properly connected\n4. Goroutine output not reaching main thread",
-  "status": "open",
+  "notes": "2026-01-15 08:10 - Fixed: The legacy Stream channel was only receiving output at the END of agent execution, not during streaming. Modified internal/agent/claude.go to send output deltas incrementally in the onUpdate callback. Now headless mode receives real-time streaming output.",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T22:46:40.495951Z",
-  "updated_at": "2026-01-14T22:46:40.495951Z"
+  "updated_at": "2026-01-15T07:10:56.004021Z",
+  "closed_at": "2026-01-15T07:10:56.004021Z"
 }
