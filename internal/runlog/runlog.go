@@ -62,6 +62,7 @@ const (
 
 	// Verification events
 	EventVerificationStarted   EventType = "verification_started"
+	EventVerifierResult        EventType = "verifier_result"
 	EventVerificationCompleted EventType = "verification_completed"
 	EventTaskReopened          EventType = "task_reopened"
 	EventTaskCompleted         EventType = "task_completed"
@@ -616,6 +617,30 @@ func (l *Logger) LogVerificationStarted(taskID string) {
 	l.log(EventVerificationStarted, fmt.Sprintf("Starting verification for task %s", taskID), VerificationStartedData{
 		TaskID: taskID,
 	})
+}
+
+// VerifierResultData contains detailed results from a single verifier.
+type VerifierResultData struct {
+	TaskID   string        `json:"task_id"`
+	Verifier string        `json:"verifier"`
+	Passed   bool          `json:"passed"`
+	Output   string        `json:"output"`
+	Error    string        `json:"error,omitempty"`
+	Duration time.Duration `json:"duration"`
+	WorkDir  string        `json:"work_dir,omitempty"`
+}
+
+// LogVerifierResult logs detailed results from a single verifier.
+func (l *Logger) LogVerifierResult(data VerifierResultData) {
+	status := "passed"
+	if !data.Passed {
+		status = "failed"
+	}
+	msg := fmt.Sprintf("Verifier %s %s for task %s", data.Verifier, status, data.TaskID)
+	if data.Error != "" {
+		msg = fmt.Sprintf("Verifier %s error for task %s: %s", data.Verifier, data.TaskID, data.Error)
+	}
+	l.log(EventVerifierResult, msg, data)
 }
 
 // VerificationCompletedData contains verification completion event data.

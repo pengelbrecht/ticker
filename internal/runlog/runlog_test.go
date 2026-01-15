@@ -194,23 +194,75 @@ func TestLogVerificationEvents(t *testing.T) {
 	}
 
 	logger.LogVerificationStarted("task-1")
+	logger.LogVerifierResult(VerifierResultData{
+		TaskID:   "task-1",
+		Verifier: "git",
+		Passed:   true,
+		Output:   "working tree clean",
+		Duration: 50 * time.Millisecond,
+		WorkDir:  "/tmp/test",
+	})
+	logger.LogVerifierResult(VerifierResultData{
+		TaskID:   "task-1",
+		Verifier: "build",
+		Passed:   false,
+		Output:   "exit status 1: undefined: foo",
+		Error:    "build failed",
+		Duration: 2 * time.Second,
+		WorkDir:  "/tmp/test",
+	})
 	logger.LogVerificationCompleted("task-1", false, []string{"git", "build"}, []string{"build"})
 	logger.LogTaskReopened("task-1", "verification failed")
 	logger.Close()
 
 	events := readLogFile(t, logger.FilePath())
-	if len(events) != 3 {
-		t.Fatalf("expected 3 events, got %d", len(events))
+	if len(events) != 5 {
+		t.Fatalf("expected 5 events, got %d", len(events))
 	}
 
 	if events[0].Type != EventVerificationStarted {
 		t.Errorf("event 0 Type = %s, want %s", events[0].Type, EventVerificationStarted)
 	}
-	if events[1].Type != EventVerificationCompleted {
-		t.Errorf("event 1 Type = %s, want %s", events[1].Type, EventVerificationCompleted)
+	if events[1].Type != EventVerifierResult {
+		t.Errorf("event 1 Type = %s, want %s", events[1].Type, EventVerifierResult)
 	}
-	if events[2].Type != EventTaskReopened {
-		t.Errorf("event 2 Type = %s, want %s", events[2].Type, EventTaskReopened)
+	if events[2].Type != EventVerifierResult {
+		t.Errorf("event 2 Type = %s, want %s", events[2].Type, EventVerifierResult)
+	}
+	if events[3].Type != EventVerificationCompleted {
+		t.Errorf("event 3 Type = %s, want %s", events[3].Type, EventVerificationCompleted)
+	}
+	if events[4].Type != EventTaskReopened {
+		t.Errorf("event 4 Type = %s, want %s", events[4].Type, EventTaskReopened)
+	}
+
+	// Verify detailed verifier result data
+	var gitResult VerifierResultData
+	if err := json.Unmarshal(events[1].Data, &gitResult); err != nil {
+		t.Fatalf("failed to unmarshal git result: %v", err)
+	}
+	if gitResult.Verifier != "git" {
+		t.Errorf("git result Verifier = %s, want git", gitResult.Verifier)
+	}
+	if !gitResult.Passed {
+		t.Error("git result Passed = false, want true")
+	}
+	if gitResult.Output != "working tree clean" {
+		t.Errorf("git result Output = %s, want 'working tree clean'", gitResult.Output)
+	}
+
+	var buildResult VerifierResultData
+	if err := json.Unmarshal(events[2].Data, &buildResult); err != nil {
+		t.Fatalf("failed to unmarshal build result: %v", err)
+	}
+	if buildResult.Verifier != "build" {
+		t.Errorf("build result Verifier = %s, want build", buildResult.Verifier)
+	}
+	if buildResult.Passed {
+		t.Error("build result Passed = true, want false")
+	}
+	if buildResult.Error != "build failed" {
+		t.Errorf("build result Error = %s, want 'build failed'", buildResult.Error)
 	}
 }
 

@@ -623,6 +623,26 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 				}
 				// Run verification in the correct working directory
 				verifyResult := e.runVerification(ctx, task.ID, iterResult.Output, config.EpicID, state.workDir)
+
+				// Log detailed results for each verifier
+				if e.runLog != nil && verifyResult != nil {
+					for _, r := range verifyResult.Results {
+						errStr := ""
+						if r.Error != nil {
+							errStr = r.Error.Error()
+						}
+						e.runLog.LogVerifierResult(runlog.VerifierResultData{
+							TaskID:   task.ID,
+							Verifier: r.Verifier,
+							Passed:   r.Passed,
+							Output:   r.Output,
+							Error:    errStr,
+							Duration: r.Duration,
+							WorkDir:  state.workDir,
+						})
+					}
+				}
+
 				if verifyResult != nil && !verifyResult.AllPassed {
 					// Log verification failure
 					if e.runLog != nil {
