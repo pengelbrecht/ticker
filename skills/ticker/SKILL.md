@@ -1,6 +1,6 @@
 ---
 name: ticker
-description: Work with Ticks issue tracker and Ticker AI agent runner. Use when managing tasks/issues with `tk` commands, running AI agents on epics, creating ticks from a SPEC.md, or working in a repo with a `.tick/` directory. Triggers on phrases like "create ticks", "tk", "run ticker", "epic", "close the task", "plan this", "break this down".
+description: Work with Ticks issue tracker and Ticker AI agent runner. Use when managing tasks or issues with tk commands, running AI agents on epics, creating ticks from a SPEC.md, or working in a repo with a .tick directory. Triggers on phrases like create ticks, tk, run ticker, epic, close the task, plan this, break this down.
 ---
 
 # Ticker & Ticks Workflow
