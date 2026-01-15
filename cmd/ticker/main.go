@@ -17,6 +17,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
 	"github.com/pengelbrecht/ticker/internal/engine"
 	"github.com/pengelbrecht/ticker/internal/parallel"
+	"github.com/pengelbrecht/ticker/internal/runlog"
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/tui"
 	"github.com/pengelbrecht/ticker/internal/update"
@@ -1095,6 +1096,16 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		}
 	}
 
+	// Create run logger
+	runLogger, err := runlog.New(epicID)
+	if err != nil {
+		// Log warning but continue without run logging
+		fmt.Fprintf(os.Stderr, "Warning: could not create run log: %v\n", err)
+	} else {
+		eng.SetRunLog(runLogger)
+		runLogger.LogRunStart("tui", false)
+	}
+
 	// Helper to refresh task list in TUI
 	refreshTasks := func() {
 		tasks, err := ticksClient.ListTasks(epicID)
@@ -1289,6 +1300,28 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		}
 
 		result, err := eng.Run(ctx, config)
+
+		// Log run end
+		if runLogger != nil {
+			if result != nil {
+				signalStr := ""
+				if result.Signal != engine.SignalNone {
+					signalStr = result.Signal.String()
+				}
+				runLogger.LogRunEnd(runlog.RunEndData{
+					ExitReason:     result.ExitReason,
+					Iterations:     result.Iterations,
+					CompletedTasks: result.CompletedTasks,
+					TotalTokens:    result.TotalTokens,
+					TotalCost:      result.TotalCost,
+					Duration:       result.Duration,
+					Signal:         signalStr,
+					SignalReason:   result.SignalReason,
+				})
+			}
+			runLogger.Close()
+		}
+
 		if err != nil {
 			p.Send(tui.ErrorMsg{Err: err})
 			return
@@ -1357,6 +1390,16 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		if isVerificationEnabled() {
 			eng.EnableVerification()
 		}
+	}
+
+	// Create run logger
+	runLogger, err := runlog.New(epicID)
+	if err != nil {
+		// Log warning but continue without run logging
+		fmt.Fprintf(os.Stderr, "Warning: could not create run log: %v\n", err)
+	} else {
+		eng.SetRunLog(runLogger)
+		runLogger.LogRunStart("headless", true)
 	}
 
 	// Track verification pass status for task_complete output
@@ -1431,6 +1474,28 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	}
 
 	result, err := eng.Run(ctx, config)
+
+	// Log run end
+	if runLogger != nil {
+		if result != nil {
+			signalStr := ""
+			if result.Signal != engine.SignalNone {
+				signalStr = result.Signal.String()
+			}
+			runLogger.LogRunEnd(runlog.RunEndData{
+				ExitReason:     result.ExitReason,
+				Iterations:     result.Iterations,
+				CompletedTasks: result.CompletedTasks,
+				TotalTokens:    result.TotalTokens,
+				TotalCost:      result.TotalCost,
+				Duration:       result.Duration,
+				Signal:         signalStr,
+				SignalReason:   result.SignalReason,
+			})
+		}
+		runLogger.Close()
+	}
+
 	if err != nil {
 		out.Error(err)
 		os.Exit(ExitError)

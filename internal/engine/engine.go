@@ -11,6 +11,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/agent"
 	"github.com/pengelbrecht/ticker/internal/budget"
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
+	"github.com/pengelbrecht/ticker/internal/runlog"
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/verify"
 	"github.com/pengelbrecht/ticker/internal/worktree"
@@ -44,6 +45,9 @@ type Engine struct {
 
 	// Verification enabled flag (set via EnableVerification)
 	verifyEnabled bool
+
+	// Run logger for control flow events (optional)
+	runLog *runlog.Logger
 
 	// Callbacks for TUI integration (optional)
 	OnIterationStart func(ctx IterationContext)
@@ -259,6 +263,17 @@ func (e *Engine) EnableVerification() {
 	e.verifyEnabled = true
 }
 
+// SetRunLog sets the run logger for control flow events.
+// When set, all control flow decisions are logged to .ticker/runs/<run-id>.jsonl.
+func (e *Engine) SetRunLog(l *runlog.Logger) {
+	e.runLog = l
+}
+
+// RunLog returns the current run logger (may be nil).
+func (e *Engine) RunLog() *runlog.Logger {
+	return e.runLog
+}
+
 // Run executes the engine loop until completion, signal, or budget exceeded.
 func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, err error) {
 	// Apply defaults
@@ -277,6 +292,26 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 	}
 	if config.Watch && config.WatchPollInterval == 0 {
 		config.WatchPollInterval = DefaultWatchPollInterval
+	}
+
+	// Log configuration after defaults applied
+	if e.runLog != nil {
+		e.runLog.LogRunConfig(runlog.RunConfigData{
+			MaxIterations:     config.MaxIterations,
+			MaxCost:           config.MaxCost,
+			MaxDuration:       config.MaxDuration,
+			AgentTimeout:      config.AgentTimeout,
+			MaxTaskRetries:    config.MaxTaskRetries,
+			CheckpointEvery:   config.CheckpointEvery,
+			UseWorktree:       config.UseWorktree,
+			Watch:             config.Watch,
+			WatchTimeout:      config.WatchTimeout,
+			WatchPollInterval: config.WatchPollInterval,
+			DebounceInterval:  config.DebounceInterval,
+			VerifyEnabled:     e.verifyEnabled,
+			SkipVerify:        config.SkipVerify,
+			ResumeFrom:        config.ResumeFrom,
+		})
 	}
 
 	// Calculate watch deadline (0 = unlimited)
@@ -321,8 +356,15 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 				if err != nil {
 					return nil, fmt.Errorf("getting existing worktree: %w", err)
 				}
+				if e.runLog != nil {
+					e.runLog.LogWorktreeReused(wt.Path)
+				}
 			} else {
 				return nil, fmt.Errorf("creating worktree: %w", err)
+			}
+		} else {
+			if e.runLog != nil {
+				e.runLog.LogWorktreeCreated(wt.Path)
 			}
 		}
 
@@ -334,7 +376,11 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 		// Preserve worktree for handoffs, interruptions, and budget limits.
 		defer func() {
 			if wtManager != nil && wt != nil && result != nil {
-				if ShouldCleanupWorktree(result.ExitReason) {
+				shouldCleanup := ShouldCleanupWorktree(result.ExitReason)
+				if e.runLog != nil {
+					e.runLog.LogWorktreeCleanup(wt.Path, result.ExitReason, shouldCleanup)
+				}
+				if shouldCleanup {
 					_ = wtManager.Remove(config.EpicID)
 				}
 			}
@@ -354,6 +400,9 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 		}
 		state.iteration = cp.Iteration
 		state.completedTasks = cp.CompletedTasks
+		if e.runLog != nil {
+			e.runLog.LogCheckpointLoaded(config.ResumeFrom, cp.Iteration)
+		}
 		// Note: budget tracker starts fresh, but we could restore from checkpoint
 	}
 
@@ -390,6 +439,17 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 
 		// Check budget limits before starting iteration
 		if shouldStop, reason := e.budget.ShouldStop(); shouldStop {
+			if e.runLog != nil {
+				usage := e.budget.Usage()
+				e.runLog.LogBudgetCheck(runlog.BudgetCheckData{
+					LimitType:   "budget",
+					ShouldStop:  true,
+					StopReason:  reason,
+					Iteration:   state.iteration,
+					TotalTokens: usage.TotalTokens(),
+					TotalCost:   usage.Cost,
+				})
+			}
 			return state.toResult(reason, e.budget.Usage()), nil
 		}
 
@@ -398,6 +458,9 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			select {
 			case paused := <-config.PauseChan:
 				if paused {
+					if e.runLog != nil {
+						e.runLog.LogPauseEntered(state.iteration)
+					}
 					// Wait for unpause
 					for paused {
 						select {
@@ -406,6 +469,9 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 							return state.toResult("context cancelled while paused", e.budget.Usage()), ctx.Err()
 						case paused = <-config.PauseChan:
 						}
+					}
+					if e.runLog != nil {
+						e.runLog.LogPauseExited(state.iteration)
 					}
 				}
 			default:
@@ -429,6 +495,9 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 
 			if hasOpen {
 				// There are tasks but they're all blocked or awaiting human
+				if e.runLog != nil {
+					e.runLog.LogNoTaskAvailable("all tasks blocked or awaiting human", hasOpen, config.Watch)
+				}
 				if config.Watch {
 					// Watch mode: enter idle state and poll for changes
 					idleResult := e.handleWatchIdle(ctx, config, state, watchDeadline)
@@ -449,6 +518,10 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			if state.iteration == 0 {
 				reason = ExitReasonNoTasksFound
 			}
+			if e.runLog != nil {
+				e.runLog.LogNoTaskAvailable(reason, hasOpen, config.Watch)
+				e.runLog.LogEpicCompleted(reason, state.completedTasks)
+			}
 			if err := e.ticks.CloseEpic(config.EpicID, reason); err != nil {
 				// Log but don't fail - epic may already be closed or race condition
 				fmt.Fprintf(os.Stderr, "warning: failed to close epic %s: %v\n", config.EpicID, err)
@@ -460,11 +533,22 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 		if task.ID == state.lastTaskID {
 			state.sameTaskCount++
 			if state.sameTaskCount > config.MaxTaskRetries {
+				if e.runLog != nil {
+					e.runLog.LogStuckLoopExceeded(task.ID, state.sameTaskCount, config.MaxTaskRetries)
+				}
 				return state.toResult(fmt.Sprintf("stuck on task %s after %d iterations - may need manual review", task.ID, state.sameTaskCount), e.budget.Usage()), nil
+			}
+			if e.runLog != nil && state.sameTaskCount > 1 {
+				e.runLog.LogStuckLoopWarning(task.ID, state.sameTaskCount, config.MaxTaskRetries)
 			}
 		} else {
 			state.lastTaskID = task.ID
 			state.sameTaskCount = 1
+		}
+
+		// Log task selection
+		if e.runLog != nil {
+			e.runLog.LogTaskSelected(task.ID, task.Title, state.sameTaskCount)
 		}
 
 		// Track current task for interruption notes
@@ -483,8 +567,34 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			e.OnIterationEnd(iterResult)
 		}
 
+		// Log iteration end
+		if e.runLog != nil {
+			errStr := ""
+			if iterResult.Error != nil {
+				errStr = iterResult.Error.Error()
+			}
+			signalStr := ""
+			if iterResult.Signal != SignalNone {
+				signalStr = iterResult.Signal.String()
+			}
+			e.runLog.LogIterationEnd(runlog.IterationEndData{
+				Iteration: iterResult.Iteration,
+				TaskID:    iterResult.TaskID,
+				Duration:  iterResult.Duration,
+				TokensIn:  iterResult.TokensIn,
+				TokensOut: iterResult.TokensOut,
+				Cost:      iterResult.Cost,
+				Signal:    signalStr,
+				Error:     errStr,
+				IsTimeout: iterResult.IsTimeout,
+			})
+		}
+
 		// Handle timeout specially - add detailed note for recovery
 		if iterResult.IsTimeout {
+			if e.runLog != nil {
+				e.runLog.LogAgentTimeout(iterResult.TaskID, config.AgentTimeout, len(iterResult.Output))
+			}
 			note := buildTimeoutNote(state.iteration, iterResult.TaskID, config.AgentTimeout, iterResult.Output)
 			_ = e.ticks.AddNote(config.EpicID, note)
 			continue // Try next iteration
@@ -492,6 +602,9 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 
 		// Handle iteration error
 		if iterResult.Error != nil {
+			if e.runLog != nil {
+				e.runLog.LogAgentError(iterResult.TaskID, iterResult.Error.Error())
+			}
 			// Add note about the error for next iteration
 			_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Iteration %d error: %v", state.iteration, iterResult.Error))
 			continue // Try next iteration
@@ -504,12 +617,50 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 				// Log but don't fail on status check error
 				_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not check task status: %v", err))
 			} else if taskClosed {
+				// Log verification start
+				if e.runLog != nil {
+					e.runLog.LogVerificationStarted(task.ID)
+				}
 				// Run verification in the correct working directory
 				verifyResult := e.runVerification(ctx, task.ID, iterResult.Output, config.EpicID, state.workDir)
+
+				// Log detailed results for each verifier
+				if e.runLog != nil && verifyResult != nil {
+					for _, r := range verifyResult.Results {
+						errStr := ""
+						if r.Error != nil {
+							errStr = r.Error.Error()
+						}
+						e.runLog.LogVerifierResult(runlog.VerifierResultData{
+							TaskID:   task.ID,
+							Verifier: r.Verifier,
+							Passed:   r.Passed,
+							Output:   r.Output,
+							Error:    errStr,
+							Duration: r.Duration,
+							WorkDir:  state.workDir,
+						})
+					}
+				}
+
 				if verifyResult != nil && !verifyResult.AllPassed {
+					// Log verification failure
+					if e.runLog != nil {
+						var verifiers, failed []string
+						for _, r := range verifyResult.Results {
+							verifiers = append(verifiers, r.Verifier)
+							if !r.Passed {
+								failed = append(failed, r.Verifier)
+							}
+						}
+						e.runLog.LogVerificationCompleted(task.ID, false, verifiers, failed)
+					}
 					// Verification failed - reopen task and add note
 					if err := e.ticks.ReopenTask(task.ID); err != nil {
 						_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not reopen task %s: %v", task.ID, err))
+					}
+					if e.runLog != nil {
+						e.runLog.LogTaskReopened(task.ID, "verification failed")
 					}
 					// Add epic note with failure details
 					note := buildVerificationFailureNote(state.iteration, task.ID, verifyResult)
@@ -518,6 +669,16 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 					continue
 				}
 				// Verification passed - track as completed
+				if e.runLog != nil {
+					var verifiers []string
+					if verifyResult != nil {
+						for _, r := range verifyResult.Results {
+							verifiers = append(verifiers, r.Verifier)
+						}
+					}
+					e.runLog.LogVerificationCompleted(task.ID, true, verifiers, nil)
+					e.runLog.LogTaskCompleted(task.ID, true)
+				}
 				state.completedTasks = append(state.completedTasks, task.ID)
 			}
 		}
@@ -527,12 +688,20 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			state.signal = iterResult.Signal
 			state.signalReason = iterResult.SignalReason
 
+			// Log signal detection
+			if e.runLog != nil {
+				e.runLog.LogSignalDetected(iterResult.Signal.String(), iterResult.SignalReason, task.ID)
+			}
+
 			if e.OnSignal != nil {
 				e.OnSignal(iterResult.Signal, iterResult.SignalReason)
 			}
 
 			// Special case: COMPLETE signal is ignored (ticker handles completion via tk next)
 			if iterResult.Signal == SignalComplete {
+				if e.runLog != nil {
+					e.runLog.LogSignalHandled(iterResult.Signal.String(), task.ID, "ignored (ticker handles completion automatically)", "")
+				}
 				if e.OnOutput != nil {
 					e.OnOutput("\n[Warning: Agent emitted COMPLETE signal - ignoring. Ticker handles completion automatically.]\n")
 				}
@@ -540,9 +709,13 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			} else {
 				// All other signals (handoff signals) set the task to awaiting state
 				// and continue to the next available task
+				awaitingState := signalToAwaiting[iterResult.Signal]
 				if err := e.handleSignal(task, iterResult.Signal, iterResult.SignalReason); err != nil {
 					// Log error but don't fail - task state update is not critical
 					_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Warning: could not update task %s awaiting state: %v", task.ID, err))
+				}
+				if e.runLog != nil {
+					e.runLog.LogSignalHandled(iterResult.Signal.String(), task.ID, "set task awaiting", awaitingState)
 				}
 				// Continue to next task - never block waiting for human response
 				// The task is now awaiting human, so tk next won't return it
@@ -563,6 +736,8 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			if err := e.checkpoint.Save(cp); err != nil {
 				// Log but don't fail on checkpoint error
 				_ = e.ticks.AddNote(config.EpicID, fmt.Sprintf("Checkpoint error at iteration %d: %v", state.iteration, err))
+			} else if e.runLog != nil {
+				e.runLog.LogCheckpointSaved(cp.ID, state.iteration, state.completedTasks)
 			}
 		}
 	}
@@ -646,7 +821,17 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 		e.OnIterationStart(iterCtx)
 	}
 
+	// Log iteration start
+	if e.runLog != nil {
+		e.runLog.LogIterationStart(state.iteration, task.ID, task.Title)
+	}
+
 	prompt := e.prompt.Build(iterCtx)
+
+	// Log agent started
+	if e.runLog != nil {
+		e.runLog.LogAgentStarted(task.ID, len(prompt), timeout, state.workDir)
+	}
 
 	// Create context with timeout
 	iterCtx2, cancel := context.WithTimeout(ctx, timeout)
@@ -892,6 +1077,11 @@ func (e *Engine) getNextTaskWithDebounce(ctx context.Context, config RunConfig) 
 		return task, nil
 	}
 
+	// Log debounce start
+	if e.runLog != nil {
+		e.runLog.LogTaskDebounce(task.ID, config.DebounceInterval)
+	}
+
 	// Task just became available - wait for potential follow-up edits
 	select {
 	case <-ctx.Done():
@@ -911,6 +1101,11 @@ func (e *Engine) getNextTaskWithDebounce(ctx context.Context, config RunConfig) 
 // Returns nil if tasks become available (continue processing).
 // Returns a RunResult if watch should end (timeout or cancellation).
 func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *runState, watchDeadline time.Time) *RunResult {
+	// Log entering idle state
+	if e.runLog != nil {
+		e.runLog.LogIdleEntered("tasks blocked or awaiting human", config.WatchPollInterval)
+	}
+
 	// Notify caller that we're entering idle state
 	if e.OnIdle != nil {
 		e.OnIdle()
@@ -940,6 +1135,9 @@ func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *r
 
 		case <-fileChanges:
 			// File change detected - check for new tasks immediately
+			if e.runLog != nil {
+				e.runLog.LogIdleFileChange(".tick/issues")
+			}
 			task, err := e.ticks.NextTask(config.EpicID)
 			if err != nil {
 				// Transient error - continue watching
@@ -947,7 +1145,13 @@ func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *r
 			}
 			if task != nil {
 				// Tasks available - continue processing
+				if e.runLog != nil {
+					e.runLog.LogIdleTaskCheck(true, task.ID)
+				}
 				return nil
+			}
+			if e.runLog != nil {
+				e.runLog.LogIdleTaskCheck(false, "")
 			}
 			// Check if epic is now complete
 			result := e.checkForEpicCompletion(config, state)
@@ -960,7 +1164,13 @@ func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *r
 			// Periodic poll - check for new tasks
 			task, err := e.ticks.NextTask(config.EpicID)
 			if err == nil && task != nil {
+				if e.runLog != nil {
+					e.runLog.LogIdleTaskCheck(true, task.ID)
+				}
 				return nil // Tasks available - continue processing
+			}
+			if e.runLog != nil {
+				e.runLog.LogIdleTaskCheck(false, "")
 			}
 
 			// Check if epic is now complete
