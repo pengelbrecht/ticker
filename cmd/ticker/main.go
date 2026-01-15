@@ -610,10 +610,7 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 			}
 		}
 
-		// Legacy output callback
-		eng.OnOutput = func(chunk string) {
-			p.Send(tui.EpicOutputMsg{EpicID: epicID, Text: chunk})
-		}
+		// Note: OnOutput callback not set in TUI mode - OnAgentState handles streaming
 
 		eng.OnIterationStart = func(ctx engine.IterationContext) {
 			prevOutput = "" // Reset for new iteration
@@ -1219,10 +1216,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		})
 	}
 
-	// Legacy output callback kept for backward compatibility
-	eng.OnOutput = func(chunk string) {
-		p.Send(tui.OutputMsg(chunk))
-	}
+	// Note: OnOutput callback not set in TUI mode - OnAgentState handles streaming
 
 	eng.OnIterationStart = func(ctx engine.IterationContext) {
 		// Reset delta tracking state for new iteration
