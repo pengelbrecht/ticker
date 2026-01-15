@@ -64,7 +64,7 @@ func (t TaskInfo) IsBlocked() bool {
 // Priority order (first match wins):
 //  1. Awaiting human → 👤 (yellow/peach)
 //  2. Blocked → 🔴 (red)
-//  3. InProgress → 🔵 (blue)
+//  3. InProgress → 🌕 (moon - animated in task list)
 //  4. Closed → ✅ (green)
 //  5. Open → ⚪ (gray)
 func (t TaskInfo) StatusIcon() string {
@@ -80,7 +80,7 @@ func (t TaskInfo) StatusIcon() string {
 
 	switch t.Status {
 	case TaskStatusInProgress:
-		return "🔵"
+		return "🌕"
 	case TaskStatusClosed:
 		return "✅"
 	case TaskStatusOpen:
@@ -2718,11 +2718,17 @@ func (m Model) renderTaskLine(task TaskInfo, selected bool, maxWidth int) string
 		cursor = " "
 	}
 
-	// Status icon with pulsing effect for in-progress tasks
+	// Status icon with animated moon phases for in-progress tasks
 	var icon string
 	if task.Status == TaskStatusInProgress {
-		// Pulsing indicator for in-progress tasks
-		icon = pulsingStyle(m.animFrame, m.running).Render("●")
+		// Animated moon phases for in-progress tasks
+		moonPhases := []string{"🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"}
+		if m.running {
+			icon = moonPhases[m.animFrame%len(moonPhases)]
+		} else {
+			// Static half moon when paused
+			icon = "🌓"
+		}
 	} else {
 		icon = task.StatusIcon()
 	}
