@@ -2765,7 +2765,10 @@ func (m Model) renderTaskLine(task TaskInfo, selected bool, maxWidth int) string
 
 	// Status icon with animated moon phases for in-progress tasks
 	var icon string
-	if task.Status == TaskStatusInProgress {
+	if task.Awaiting != "" {
+		// Awaiting human takes priority over all other states
+		icon = "👤"
+	} else if task.Status == TaskStatusInProgress {
 		// Animated moon phases for in-progress tasks
 		moonPhases := []string{"🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"}
 		if m.running {
