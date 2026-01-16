@@ -1369,24 +1369,24 @@ EXAMPLES:
 
 ---
 
-# Watch Mode and Idle Behavior
+# Auto Mode and Idle Behavior
 
 ## Problem
 
-When ticker runs in `--auto` mode and exhausts all available tasks (all awaiting human or done), it currently exits. With the agent-human workflow, ticker should **wait** for tasks to become available again.
+When ticker runs on an epic and exhausts all available tasks (all awaiting human or done), it needs to **wait** for tasks to become available again rather than exit immediately.
 
-## Watch Mode Design
+## Auto Mode Design (Implemented)
 
 ```
-ticker run --auto --watch
+ticker run --auto
 ```
 
 Behavior:
-1. Process all available tasks
-2. When no tasks available, enter idle/watch state
-3. Poll for changes (or use file system watcher on `.tick/`)
-4. When task becomes available, resume processing
-5. Exit only on explicit quit, budget exhaustion, or `--timeout`
+1. Auto-select next ready epic (or use specified epic)
+2. Process all available tasks
+3. When no tasks available, enter idle state with file system watcher on `.tick/`
+4. When task becomes available (human approves/rejects), resume processing
+5. Exit only on explicit quit or budget exhaustion
 
 ```mermaid
 flowchart TD
@@ -1396,27 +1396,24 @@ flowchart TD
     HasTask -->|Yes| RunAgent[Run agent]
     RunAgent --> GetNext
 
-    HasTask -->|No| WatchMode{Watch mode?}
+    HasTask -->|No| AutoMode{Auto mode?}
 
-    WatchMode -->|No| Exit([Exit])
-    WatchMode -->|Yes| Idle[Enter idle state]
+    AutoMode -->|No| Exit([Exit])
+    AutoMode -->|Yes| Idle[Enter idle state]
 
-    Idle --> Poll[Poll for changes]
-    Poll --> Changed{Tasks available?}
+    Idle --> Watch[Watch .tick/ for changes]
+    Watch --> Changed{Tasks available?}
 
-    Changed -->|No| CheckTimeout{Timeout?}
-    CheckTimeout -->|No| Poll
-    CheckTimeout -->|Yes| Exit
-
+    Changed -->|No| Watch
     Changed -->|Yes| GetNext
 ```
 
 ### CLI Flags
 
 ```bash
-ticker run --auto --watch              # Watch indefinitely
-ticker run --auto --watch --timeout 1h # Watch with timeout
-ticker run --auto --watch --poll 5s    # Custom poll interval (default 10s)
+ticker run --auto              # Auto-select epic, watch for changes
+ticker run <epic-id>           # Run specific epic (no watching)
+ticker run <epic-id> --headless # Run headless without TUI
 ```
 
 ---
@@ -1587,35 +1584,35 @@ tk next --orphan           # Next orphaned task only
 
 ## ticks (tk CLI)
 
-- [ ] Add `requires` field to tick schema
-- [ ] Add `awaiting` field to tick schema
-- [ ] Add `verdict` field to tick schema
-- [ ] Add `--requires` flag to `tk create` and `tk update`
-- [ ] Add `--awaiting` flag to `tk create` and `tk update`
-- [ ] Add `--verdict` flag to `tk update`
-- [ ] Add `tk approve` command
-- [ ] Add `tk reject` command
-- [ ] Add `--from` flag to `tk note`
-- [ ] Add `--awaiting` filter to `tk list`
-- [ ] Update `tk next` to exclude awaiting != null (agent mode)
-- [ ] Add `tk next --awaiting` for human mode
-- [ ] Update `tk ready` to exclude awaiting != null
-- [ ] Implement verdict processing logic
-- [ ] Deprecate `--manual` flag (alias to `--awaiting work`)
-- [ ] Update help text with workflow examples
+- [x] Add `requires` field to tick schema
+- [x] Add `awaiting` field to tick schema
+- [x] Add `verdict` field to tick schema
+- [x] Add `--requires` flag to `tk create` and `tk update`
+- [x] Add `--awaiting` flag to `tk create` and `tk update`
+- [x] Add `--verdict` flag to `tk update`
+- [x] Add `tk approve` command
+- [x] Add `tk reject` command
+- [x] Add `--from` flag to `tk note`
+- [x] Add `--awaiting` filter to `tk list`
+- [x] Update `tk next` to exclude awaiting != null (agent mode)
+- [x] Add `tk next --awaiting` for human mode
+- [x] Update `tk ready` to exclude awaiting != null
+- [x] Implement verdict processing logic
+- [x] Deprecate `--manual` flag (alias to `--awaiting work`)
+- [x] Update help text with workflow examples
 
 ## ticks (tk CLI) - Backwards Compatibility
 
-- [ ] Read: If `manual: true` and `awaiting` is null, treat as `awaiting: "work"`
-- [ ] Write: Always write to `awaiting`, clear `manual` field
-- [ ] CLI: `--manual` flag shows deprecation warning, maps to `--awaiting work`
-- [ ] Queries: Check both `awaiting` and `manual` fields when filtering
-- [ ] v2.0: Support both fields (read old, write new)
+- [x] Read: If `manual: true` and `awaiting` is null, treat as `awaiting: "work"`
+- [x] Write: Always write to `awaiting`, clear `manual` field
+- [x] CLI: `--manual` flag shows deprecation warning, maps to `--awaiting work`
+- [x] Queries: Check both `awaiting` and `manual` fields when filtering
+- [x] v2.0: Support both fields (read old, write new)
 - [ ] v3.0: Remove `manual` field entirely (breaking change)
 
 ## ticks (tk CLI) - Orphaned/Standalone Support
 
-- [ ] Add `tk next` without epic-id (search all)
+- [x] Add `tk next` without epic-id (search all)
 - [ ] Add `--epic` flag to `tk next` for specific epic
 - [ ] Add `--standalone` flag to filter tasks without parent
 - [ ] Add `--orphan` flag to filter tasks with closed parent
@@ -1623,28 +1620,30 @@ tk next --orphan           # Next orphaned task only
 
 ## ticker (Engine)
 
-- [ ] Add new signal parsing (APPROVAL_NEEDED, INPUT_NEEDED, etc.)
-- [ ] Implement signal → awaiting mapping
-- [ ] Handle `requires` field on COMPLETE signal
-- [ ] Update loop to continue after handoff signals
-- [ ] Build context with human feedback notes
-- [ ] Update agent system prompt with signal documentation
-- [ ] Update CLI help text with workflow documentation
+- [x] Add new signal parsing (APPROVAL_NEEDED, INPUT_NEEDED, etc.)
+- [x] Implement signal → awaiting mapping
+- [x] Handle `requires` field on COMPLETE signal
+- [x] Update loop to continue after handoff signals
+- [x] Build context with human feedback notes
+- [x] Update agent system prompt with signal documentation
+- [x] Update CLI help text with workflow documentation
 
-## ticker (Watch Mode)
+## ticker (Auto Mode)
 
-- [ ] Add `--watch` flag to enable watch mode
-- [ ] Implement idle state when no tasks available
-- [ ] Add polling/file watching for `.tick/` changes
-- [ ] Add `--timeout` flag for watch duration limit
+Note: `--watch` was replaced by `--auto` which continuously processes tasks.
+
+- [x] Add `--auto` flag to enable continuous mode
+- [x] Implement idle state when no tasks available
+- [x] Add file watching for `.tick/` changes
+- [ ] Add `--timeout` flag for duration limit
 - [ ] Add `--poll` flag for custom poll interval
-- [ ] Resume processing when tasks become available
+- [x] Resume processing when tasks become available
 
 ## ticker (Race Condition Prevention)
 
-- [ ] Ensure `tk reject` adds note before processing verdict
-- [ ] Add optional debounce on task pickup (`--debounce`)
-- [ ] Re-fetch task after debounce to get latest state
+- [x] Ensure `tk reject` adds note before processing verdict
+- [x] Add debounce on task pickup
+- [x] Re-fetch task after debounce to get latest state
 
 ## ticker (Orphaned/Standalone Support)
 
@@ -1652,4 +1651,4 @@ tk next --orphan           # Next orphaned task only
 - [ ] Add `--include-orphans` flag to auto mode
 - [ ] Add `--all` flag (alias for both)
 - [ ] Implement priority order (epics > standalone > orphans)
-- [ ] Track current epic for momentum continuation
+- [x] Track current epic for momentum continuation
