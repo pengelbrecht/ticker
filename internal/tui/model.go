@@ -1168,6 +1168,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tasks[i].Status = TaskStatusInProgress
 			} else {
 				m.tasks[i].IsCurrent = false
+				// Reset in_progress tasks back to open (but not closed tasks)
+				if m.tasks[i].Status == TaskStatusInProgress {
+					m.tasks[i].Status = TaskStatusOpen
+				}
 			}
 		}
 
@@ -1724,6 +1728,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tab.Tasks[i].Status = TaskStatusInProgress
 				} else {
 					tab.Tasks[i].IsCurrent = false
+					// Reset in_progress tasks back to open (but not closed tasks)
+					if tab.Tasks[i].Status == TaskStatusInProgress {
+						tab.Tasks[i].Status = TaskStatusOpen
+					}
 				}
 			}
 
