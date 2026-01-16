@@ -358,7 +358,7 @@ func runRun(cmd *cobra.Command, args []string) {
 					os.Exit(ExitError)
 				}
 
-				// Watch mode - poll for new tasks
+				// Watch mode - use file watcher with polling fallback
 				pollInterval := watchPollInterval
 				if pollInterval == 0 {
 					pollInterval = 10 * time.Second
@@ -368,26 +368,27 @@ func runRun(cmd *cobra.Command, args []string) {
 					watchDeadline = time.Now().Add(watchTimeout)
 				}
 
+				// Create file watcher for .tick/issues directory
+				watcher := engine.NewTicksWatcher("")
+				defer watcher.Close()
+				fileChanges := watcher.Changes() // nil if fsnotify unavailable
+
 				if jsonl {
-					fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks"}`+"\n")
+					if watcher.UsingFsnotify() {
+						fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks (fsnotify)"}`+"\n")
+					} else {
+						fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks (polling)"}`+"\n")
+					}
 				} else {
-					fmt.Printf("[WATCH] No tasks found, watching for new tasks (poll every %s)\n", pollInterval)
+					if watcher.UsingFsnotify() {
+						fmt.Printf("[WATCH] No tasks found, watching for new tasks (fsnotify + poll every %s)\n", pollInterval)
+					} else {
+						fmt.Printf("[WATCH] No tasks found, watching for new tasks (poll every %s)\n", pollInterval)
+					}
 				}
 
-				// Poll until we find something or timeout
-				for {
-					// Check timeout
-					if !watchDeadline.IsZero() && time.Now().After(watchDeadline) {
-						if jsonl {
-							fmt.Printf(`{"type":"watch_timeout","message":"Watch timeout reached"}`+"\n")
-						} else {
-							fmt.Fprintln(os.Stderr, "[WATCH] Timeout reached, exiting")
-						}
-						os.Exit(ExitError)
-					}
-
-					time.Sleep(pollInterval)
-
+				// checkForTasks is a helper to find available work
+				checkForTasks := func() bool {
 					// Try to find epics first
 					selected, _ = autoSelectEpics(selectCount)
 					if len(selected) > 0 {
@@ -397,7 +398,7 @@ func runRun(cmd *cobra.Command, args []string) {
 						} else {
 							fmt.Printf("[WATCH] Found epic(s): %v\n", epicIDs)
 						}
-						break
+						return true
 					}
 
 					// Try standalone tasks
@@ -410,7 +411,7 @@ func runRun(cmd *cobra.Command, args []string) {
 							} else {
 								fmt.Printf("[WATCH] Found standalone task: [%s] %s\n", task.ID, task.Title)
 							}
-							break
+							return true
 						}
 					}
 
@@ -424,8 +425,41 @@ func runRun(cmd *cobra.Command, args []string) {
 							} else {
 								fmt.Printf("[WATCH] Found orphaned task: [%s] %s\n", task.ID, task.Title)
 							}
+							return true
+						}
+					}
+					return false
+				}
+
+				// Watch until we find something or timeout
+				for {
+					// Check timeout
+					if !watchDeadline.IsZero() && time.Now().After(watchDeadline) {
+						if jsonl {
+							fmt.Printf(`{"type":"watch_timeout","message":"Watch timeout reached"}`+"\n")
+						} else {
+							fmt.Fprintln(os.Stderr, "[WATCH] Timeout reached, exiting")
+						}
+						os.Exit(ExitError)
+					}
+
+					// Wait for file change or poll interval
+					select {
+					case <-fileChanges:
+						// File changed - check for tasks immediately
+						if checkForTasks() {
 							break
 						}
+					case <-time.After(pollInterval):
+						// Periodic poll
+						if checkForTasks() {
+							break
+						}
+					}
+
+					// Check if we found something (break from outer loop)
+					if len(epicIDs) > 0 || standaloneTask != nil {
+						break
 					}
 				}
 			}
