@@ -195,7 +195,7 @@ func init() {
 	runCmd.Flags().Bool("auto", false, "Auto-select next ready epic")
 	runCmd.Flags().Bool("headless", false, "Run without TUI (stdout/stderr only)")
 	runCmd.Flags().Bool("jsonl", false, "Output JSON Lines format (requires --headless)")
-	runCmd.Flags().Bool("skip-verify", false, "Skip verification after task completion")
+	runCmd.Flags().Bool("skip-verify", true, "Skip git verification after task completion (default: true)")
 	runCmd.Flags().Bool("verify-only", false, "Run verification without the agent (for debugging)")
 	runCmd.Flags().Bool("worktree", false, "Run epic(s) in isolated git worktree")
 	runCmd.Flags().Int("parallel", 0, "Max parallel epics (default: number of epics)")
@@ -247,10 +247,14 @@ func runRun(cmd *cobra.Command, args []string) {
 		includeOrphans = true
 	}
 
-	// Check mutual exclusivity
-	if skipVerify && verifyOnly {
-		fmt.Fprintln(os.Stderr, "Error: --skip-verify and --verify-only are mutually exclusive")
-		os.Exit(ExitError)
+	// Check mutual exclusivity - only error if user explicitly set --skip-verify with --verify-only
+	if verifyOnly {
+		if cmd.Flags().Changed("skip-verify") && skipVerify {
+			fmt.Fprintln(os.Stderr, "Error: --skip-verify and --verify-only are mutually exclusive")
+			os.Exit(ExitError)
+		}
+		// --verify-only implies verification should run
+		skipVerify = false
 	}
 
 	// --jsonl requires --headless

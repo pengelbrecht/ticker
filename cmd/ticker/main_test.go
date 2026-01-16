@@ -15,8 +15,8 @@ func TestFlagParsing(t *testing.T) {
 	if flag == nil {
 		t.Fatal("--skip-verify flag not registered")
 	}
-	if flag.DefValue != "false" {
-		t.Errorf("--skip-verify default value = %q, want %q", flag.DefValue, "false")
+	if flag.DefValue != "true" {
+		t.Errorf("--skip-verify default value = %q, want %q", flag.DefValue, "true")
 	}
 
 	// Test that verify-only flag is registered
