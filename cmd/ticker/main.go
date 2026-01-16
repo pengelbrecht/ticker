@@ -2038,6 +2038,11 @@ func runStandaloneTask(initialTask *ticks.Task, maxIterations int, maxCost float
 		totalCost += agentResult.Cost
 		totalTokens += agentResult.TokensIn + agentResult.TokensOut
 
+		// Store run record on task (enables viewing conversation history)
+		if agentResult.Record != nil {
+			_ = ticksClient.SetRunRecord(currentTask.ID, agentResult.Record)
+		}
+
 		// Parse signals from output
 		signal, signalReason := engine.ParseSignals(agentResult.Output)
 
