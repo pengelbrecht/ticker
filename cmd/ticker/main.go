@@ -263,12 +263,17 @@ func runRun(cmd *cobra.Command, args []string) {
 		os.Exit(ExitError)
 	}
 
-	// Watch mode validation
-	if watchTimeout > 0 && !watch {
-		fmt.Fprintln(os.Stderr, "Warning: --timeout has no effect without --watch")
+	// --auto implies --watch (continuous operation)
+	if auto {
+		watch = true
 	}
-	if watchPollInterval != 10*time.Second && !watch {
-		fmt.Fprintln(os.Stderr, "Warning: --poll has no effect without --watch")
+
+	// Watch mode validation (only warn if not using --auto, since --auto implies --watch)
+	if watchTimeout > 0 && !watch && !auto {
+		fmt.Fprintln(os.Stderr, "Warning: --timeout has no effect without --watch or --auto")
+	}
+	if watchPollInterval != 10*time.Second && !watch && !auto {
+		fmt.Fprintln(os.Stderr, "Warning: --poll has no effect without --watch or --auto")
 	}
 
 	// Handle --verify-only mode (no epic required, runs in current directory)
@@ -342,13 +347,87 @@ func runRun(cmd *cobra.Command, args []string) {
 
 			// If still nothing found
 			if standaloneTask == nil {
-				if includeStandalone || includeOrphans {
-					fmt.Fprintln(os.Stderr, "No ready epics, standalone tasks, or orphaned tasks found")
-				} else {
-					fmt.Fprintln(os.Stderr, "No ready epics found")
-					fmt.Fprintln(os.Stderr, "Tip: Use --include-standalone or --include-orphans to also process tasks without active epics")
+				if !watch {
+					// No watch mode - exit immediately
+					if includeStandalone || includeOrphans {
+						fmt.Fprintln(os.Stderr, "No ready epics, standalone tasks, or orphaned tasks found")
+					} else {
+						fmt.Fprintln(os.Stderr, "No ready epics found")
+						fmt.Fprintln(os.Stderr, "Tip: Use --include-standalone or --include-orphans to also process tasks without active epics")
+					}
+					os.Exit(ExitError)
 				}
-				os.Exit(ExitError)
+
+				// Watch mode - poll for new tasks
+				pollInterval := watchPollInterval
+				if pollInterval == 0 {
+					pollInterval = 10 * time.Second
+				}
+				var watchDeadline time.Time
+				if watchTimeout > 0 {
+					watchDeadline = time.Now().Add(watchTimeout)
+				}
+
+				if jsonl {
+					fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks"}`+"\n")
+				} else {
+					fmt.Printf("[WATCH] No tasks found, watching for new tasks (poll every %s)\n", pollInterval)
+				}
+
+				// Poll until we find something or timeout
+				for {
+					// Check timeout
+					if !watchDeadline.IsZero() && time.Now().After(watchDeadline) {
+						if jsonl {
+							fmt.Printf(`{"type":"watch_timeout","message":"Watch timeout reached"}`+"\n")
+						} else {
+							fmt.Fprintln(os.Stderr, "[WATCH] Timeout reached, exiting")
+						}
+						os.Exit(ExitError)
+					}
+
+					time.Sleep(pollInterval)
+
+					// Try to find epics first
+					selected, _ = autoSelectEpics(selectCount)
+					if len(selected) > 0 {
+						epicIDs = selected
+						if jsonl {
+							fmt.Printf(`{"type":"watch_found","epic_ids":%q}`+"\n", epicIDs)
+						} else {
+							fmt.Printf("[WATCH] Found epic(s): %v\n", epicIDs)
+						}
+						break
+					}
+
+					// Try standalone tasks
+					if includeStandalone {
+						task, _ := ticksClient.NextTaskWithOptions(ticks.StandaloneOnly())
+						if task != nil {
+							standaloneTask = task
+							if jsonl {
+								fmt.Printf(`{"type":"watch_found","task_id":"%s","task_type":"standalone"}`+"\n", task.ID)
+							} else {
+								fmt.Printf("[WATCH] Found standalone task: [%s] %s\n", task.ID, task.Title)
+							}
+							break
+						}
+					}
+
+					// Try orphaned tasks
+					if includeOrphans {
+						task, _ := ticksClient.NextTaskWithOptions(ticks.OrphanedOnly())
+						if task != nil {
+							standaloneTask = task
+							if jsonl {
+								fmt.Printf(`{"type":"watch_found","task_id":"%s","task_type":"orphan"}`+"\n", task.ID)
+							} else {
+								fmt.Printf("[WATCH] Found orphaned task: [%s] %s\n", task.ID, task.Title)
+							}
+							break
+						}
+					}
+				}
 			}
 		}
 	} else if !headless {
