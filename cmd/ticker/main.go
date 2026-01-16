@@ -2005,6 +2005,16 @@ func runStandaloneTask(initialTask *ticks.Task, maxIterations int, maxCost float
 
 		prompt := promptBuilder.Build(iterCtx)
 
+		// Mark task as in_progress before starting (enables crash recovery)
+		if err := ticksClient.SetStatus(currentTask.ID, "in_progress"); err != nil {
+			// Log but continue - status update is not critical
+			if jsonl {
+				fmt.Printf(`{"type":"warning","message":"could not mark %s as in_progress: %v"}`+"\n", currentTask.ID, err)
+			} else {
+				fmt.Printf("[WARN] Could not mark %s as in_progress: %v\n", currentTask.ID, err)
+			}
+		}
+
 		// Run the agent
 		agentResult, err := claudeAgent.Run(ctx, prompt, agent.RunOpts{
 			Timeout: 30 * time.Minute,
