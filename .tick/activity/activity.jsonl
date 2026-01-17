@@ -62,3 +62,4 @@
 {"ts":"2026-01-17T14:35:06.001471Z","tick":"jcw","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Security-sensitive change"}}
 {"ts":"2026-01-17T14:35:06.028092Z","tick":"cra","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Configure production credentials"}}
 {"ts":"2026-01-17T14:35:06.054069Z","tick":"wtd","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Deploy to production"}}
+{"ts":"2026-01-17T16:05:21.887547Z","tick":"mqi","action":"close","actor":"peter@engelbrecht.dk","data":{"title":"Watch mode shows complete modal after task rejection"}}

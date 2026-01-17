@@ -2,11 +2,12 @@
   "id": "mqi",
   "title": "Watch mode shows complete modal after task rejection",
   "description": "When running ticker in watch mode and a human rejects a task:\n\nReproduction:\n1. Task y1m had requires=approval, agent completed it, routed to human  \n2. Human ran: tk reject y1m \"Please add timestamps\"\n3. Task returned to agent queue (awaiting=null, status=in_progress)\n4. tk next lyo correctly returns y1m as next ready task\n5. BUT ticker showed 'complete' modal: 'Epic completed successfully, 1/5 completed'\n\nExpected: Watch mode should detect y1m became available again and continue processing.\n\nActual: Watch mode thinks epic is complete. Shows '1/5 completed' even though y1m is ready.\n\nScreenshot shows:\n- Signal: COMPLETE  \n- Tasks: 1/5 completed\n- But y1m is in_progress with awaiting=null (should be picked up)\n\nRoot cause hypothesis:\n- tk next may not be finding y1m because it's in_progress (not open)?\n- Or watch mode polling doesn't re-check after rejection clears awaiting",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "bug",
   "owner": "peter@engelbrecht.dk",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-14T22:08:39.662428Z",
-  "updated_at": "2026-01-14T22:08:39.662428Z"
+  "updated_at": "2026-01-17T16:05:21.88664Z",
+  "closed_at": "2026-01-17T16:05:21.88664Z"
 }

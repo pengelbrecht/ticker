@@ -231,6 +231,18 @@ When you need human involvement, emit a signal and the system will hand off the 
 | ` + "`<promise>CHECKPOINT: summary</promise>`" + ` | Completed phase, need verification |
 | ` + "`<promise>EJECT: reason</promise>`" + ` | Cannot complete - requires human work |
 
+**IMPORTANT: Include Complete Context in Handoff Signals**
+
+The human reviewer only sees the signal reason - they do NOT have access to your output logs. Your signal must be completely self-contained with all context needed to respond.
+
+**Good examples:**
+- ` + "`<promise>CONTENT_REVIEW: Error message options - A: 'Invalid input', B: 'Please check your entry', C: 'Oops! Something went wrong'</promise>`" + `
+- ` + "`<promise>INPUT_NEEDED: Should retry logic use exponential backoff (2s, 4s, 8s) or linear (2s, 2s, 2s)?</promise>`" + `
+
+**Bad examples:**
+- ` + "`<promise>CONTENT_REVIEW: Need approval on error messages</promise>`" + ` (Which messages? Human can't see your output!)
+- ` + "`<promise>INPUT_NEEDED: Which option should I use?</promise>`" + ` (What options? Include them!)
+
 After emitting a handoff signal, the system moves to another task. When a human responds, you may be assigned this task again with their feedback in the notes.
 
 ## Reading Human Feedback
