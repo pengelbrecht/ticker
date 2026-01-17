@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1073,9 +1074,13 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 			checkpointMgr,
 		)
 
-		// Set up context generation
+		// Set up context generation (use discard logger in jsonl mode)
 		contextStore := epiccontext.NewStore()
-		contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+		var contextGenOpts []epiccontext.GeneratorOption
+		if jsonl {
+			contextGenOpts = append(contextGenOpts, epiccontext.WithLogger(slog.New(slog.DiscardHandler)))
+		}
+		contextGenerator, err := epiccontext.NewGenerator(claudeAgent, contextGenOpts...)
 		if err == nil {
 			eng.SetContextComponents(contextStore, contextGenerator)
 		}
@@ -1743,11 +1748,17 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	// Create and configure engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
 
-	// Set up context generation
+	// Set up context generation (use discard logger in jsonl mode)
 	contextStore := epiccontext.NewStore()
-	contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+	var contextGenOpts []epiccontext.GeneratorOption
+	if jsonl {
+		contextGenOpts = append(contextGenOpts, epiccontext.WithLogger(slog.New(slog.DiscardHandler)))
+	}
+	contextGenerator, err := epiccontext.NewGenerator(claudeAgent, contextGenOpts...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not create context generator: %v\n", err)
+		if !jsonl {
+			fmt.Fprintf(os.Stderr, "Warning: could not create context generator: %v\n", err)
+		}
 	} else {
 		eng.SetContextComponents(contextStore, contextGenerator)
 	}
@@ -1763,7 +1774,9 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	runLogger, err := runlog.New(epicID)
 	if err != nil {
 		// Log warning but continue without run logging
-		fmt.Fprintf(os.Stderr, "Warning: could not create run log: %v\n", err)
+		if !jsonl {
+			fmt.Fprintf(os.Stderr, "Warning: could not create run log: %v\n", err)
+		}
 	} else {
 		eng.SetRunLog(runLogger)
 		runLogger.LogRunStart("headless", true)
@@ -2472,9 +2485,13 @@ func runStandaloneTask(initialTask *ticks.Task, maxIterations int, maxCost float
 	// Create engine for running iterations
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
 
-	// Set up context generation
+	// Set up context generation (use discard logger in jsonl mode)
 	contextStore := epiccontext.NewStore()
-	contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+	var contextGenOpts []epiccontext.GeneratorOption
+	if jsonl {
+		contextGenOpts = append(contextGenOpts, epiccontext.WithLogger(slog.New(slog.DiscardHandler)))
+	}
+	contextGenerator, err := epiccontext.NewGenerator(claudeAgent, contextGenOpts...)
 	if err == nil {
 		eng.SetContextComponents(contextStore, contextGenerator)
 	}
