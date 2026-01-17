@@ -269,6 +269,70 @@ func (h *HeadlessOutput) Interrupted() {
 	}
 }
 
+// ContextGenerating outputs when context generation starts.
+func (h *HeadlessOutput) ContextGenerating(epicID string, taskCount int) {
+	if h.jsonl {
+		h.writeJSON(map[string]interface{}{
+			"type":       "context_generating",
+			"epic_id":    epicID,
+			"task_count": taskCount,
+		})
+	} else {
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Generating context for epic %s (%d tasks)...\n", h.prefix(), epicID, taskCount)
+	}
+}
+
+// ContextGenerated outputs when context generation completes.
+func (h *HeadlessOutput) ContextGenerated(epicID string, tokens int) {
+	if h.jsonl {
+		h.writeJSON(map[string]interface{}{
+			"type":    "context_generated",
+			"epic_id": epicID,
+			"tokens":  tokens,
+		})
+	} else {
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Context generated (%d tokens)\n", h.prefix(), tokens)
+	}
+}
+
+// ContextLoaded outputs when existing context is loaded.
+func (h *HeadlessOutput) ContextLoaded(epicID string) {
+	if h.jsonl {
+		h.writeJSON(map[string]interface{}{
+			"type":    "context_loaded",
+			"epic_id": epicID,
+		})
+	} else {
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Loaded existing context\n", h.prefix())
+	}
+}
+
+// ContextSkipped outputs when context generation is skipped.
+func (h *HeadlessOutput) ContextSkipped(epicID string, reason string) {
+	if h.jsonl {
+		h.writeJSON(map[string]interface{}{
+			"type":    "context_skipped",
+			"epic_id": epicID,
+			"reason":  reason,
+		})
+	} else {
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Skipped: %s\n", h.prefix(), reason)
+	}
+}
+
+// ContextFailed outputs when context generation fails.
+func (h *HeadlessOutput) ContextFailed(epicID string, errMsg string) {
+	if h.jsonl {
+		h.writeJSON(map[string]interface{}{
+			"type":    "context_failed",
+			"epic_id": epicID,
+			"error":   errMsg,
+		})
+	} else {
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Failed: %s\n", h.prefix(), errMsg)
+	}
+}
+
 // writeJSON writes a JSON object as a single line.
 func (h *HeadlessOutput) writeJSON(data map[string]interface{}) {
 	if h.epicID != "" {

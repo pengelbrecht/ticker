@@ -2,7 +2,7 @@
   "id": "esq",
   "title": "End-to-end smoke test of context feature",
   "description": "Final validation that the complete context feature works end-to-end.\n\n## Test Scenario\n1. Create new epic with 3 tasks\n2. Run `ticker run \u003cepic-id\u003e`\n3. Verify context generated before first task\n4. Verify context appears in task prompts\n5. Verify TUI shows context status\n6. Run `ticker context \u003cepic-id\u003e --show`\n7. Run `ticker context \u003cepic-id\u003e --refresh`\n\n## Acceptance Criteria\n- [ ] Context file created at .ticker/context/\u003cepic-id\u003e.md\n- [ ] First task prompt includes context section\n- [ ] Subsequent tasks include same context\n- [ ] TUI header shows context indicator\n- [ ] CLI commands work as documented\n- [ ] No errors in logs\n\n## Human Workflow\n1. Build ticker: `go build -o ticker ./cmd/ticker`\n2. Create test epic: `./scripts/create-test-epic.sh`\n3. Run ticker and observe behavior\n4. Verify all acceptance criteria manually\n5. Clean up test data",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -14,5 +14,6 @@
   "awaiting": "work",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-17T11:26:28.850718Z",
-  "updated_at": "2026-01-17T11:26:28.850718Z"
+  "updated_at": "2026-01-17T14:23:42.194098Z",
+  "closed_at": "2026-01-17T14:23:42.194098Z"
 }

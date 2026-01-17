@@ -1111,6 +1111,33 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 			}
 		}
 
+		// Context generation callbacks for multi-epic headless mode
+		eng.OnContextGenerating = func(eid string, taskCount int) {
+			if out != nil {
+				out.ContextGenerating(eid, taskCount)
+			}
+		}
+		eng.OnContextGenerated = func(eid string, tokenCount int) {
+			if out != nil {
+				out.ContextGenerated(eid, tokenCount)
+			}
+		}
+		eng.OnContextLoaded = func(eid string) {
+			if out != nil {
+				out.ContextLoaded(eid)
+			}
+		}
+		eng.OnContextSkipped = func(eid string, reason string) {
+			if out != nil {
+				out.ContextSkipped(eid, reason)
+			}
+		}
+		eng.OnContextFailed = func(eid string, errMsg string) {
+			if out != nil {
+				out.ContextFailed(eid, errMsg)
+			}
+		}
+
 		return eng
 	}
 
@@ -1741,6 +1768,23 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 		} else {
 			fmt.Println("[IDLE] No tasks available, waiting...")
 		}
+	}
+
+	// Context generation callbacks for headless mode
+	eng.OnContextGenerating = func(epicID string, taskCount int) {
+		out.ContextGenerating(epicID, taskCount)
+	}
+	eng.OnContextGenerated = func(epicID string, tokenCount int) {
+		out.ContextGenerated(epicID, tokenCount)
+	}
+	eng.OnContextLoaded = func(epicID string) {
+		out.ContextLoaded(epicID)
+	}
+	eng.OnContextSkipped = func(epicID string, reason string) {
+		out.ContextSkipped(epicID, reason)
+	}
+	eng.OnContextFailed = func(epicID string, errMsg string) {
+		out.ContextFailed(epicID, errMsg)
 	}
 
 	// Output start
