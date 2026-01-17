@@ -61,6 +61,20 @@ through tasks until completion, ejection, or budget limits are reached.
 When multiple epics are provided, they run in parallel in isolated git worktrees.
 Use --parallel to control concurrency (default: number of epics).
 
+AUTO MODE:
+  Use --auto to automatically select work. By default, --auto picks ready epics.
+  Add --include-standalone to also process tasks without a parent epic.
+  Add --include-orphans to also process tasks whose parent epic is closed.
+  Add --all for both standalone and orphan tasks.
+
+  In auto mode, ticker continuously processes work:
+    1. Runs available epics until all complete
+    2. Then runs standalone tasks (if --include-standalone)
+    3. Then runs orphan tasks (if --include-orphans)
+    4. Exits when no more work is available
+
+  This works in both TUI and headless modes.
+
 AGENT SIGNALS:
   The agent communicates task state via XML signals in its output:
 
@@ -110,7 +124,10 @@ Examples:
   ticker run abc123                      # Single epic with TUI
   ticker run abc123 --worktree           # Single epic in worktree
   ticker run abc def ghi                 # Three epics in parallel
-  ticker run abc def ghi --parallel 2    # Three epics, max 2 at a time`,
+  ticker run abc def ghi --parallel 2    # Three epics, max 2 at a time
+  ticker run --auto                      # Auto-select and run epics
+  ticker run --auto --include-standalone # Run epics, then standalone tasks
+  ticker run --auto --all --headless     # Headless: run all available work`,
 	Run: runRun,
 }
 
@@ -538,12 +555,52 @@ func runRun(cmd *cobra.Command, args []string) {
 
 	// TUI mode (default)
 	if !headless {
-		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, watch, watchTimeout, watchPollInterval, debounceInterval)
+		runWithTUI(epicID, epicTitle, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, watch, watchTimeout, watchPollInterval, debounceInterval, auto, includeStandalone, includeOrphans)
 		return
 	}
 
-	// Headless mode
-	runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, jsonl, watch, watchTimeout, watchPollInterval, debounceInterval)
+	// Headless mode - run in a loop if auto mode with standalone/orphan support
+	ticksClientLoop := ticks.NewClient()
+
+	for {
+		exitCode := runHeadless(epicID, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, useWorktree, jsonl, watch, watchTimeout, watchPollInterval, debounceInterval)
+
+		// If not in auto mode with continuation support, exit immediately
+		if !auto || (!includeStandalone && !includeOrphans) {
+			os.Exit(exitCode)
+		}
+
+		// Epic completed - check for more work using shared function
+		nextWork := findNextWork(ticksClientLoop, includeStandalone, includeOrphans)
+		if nextWork == nil {
+			if jsonl {
+				fmt.Printf(`{"type":"auto_complete","message":"No more epics or tasks found"}`+"\n")
+			} else {
+				fmt.Println("[AUTO] No more epics or tasks found")
+			}
+			os.Exit(exitCode)
+		}
+
+		if nextWork.IsStandalone {
+			// Switch to standalone task mode
+			if jsonl {
+				fmt.Printf(`{"type":"auto_next","task_id":"%s","title":"%s","mode":"standalone"}`+"\n", nextWork.Task.ID, nextWork.Task.Title)
+			} else {
+				fmt.Printf("[AUTO] Switching to standalone task: [%s] %s\n", nextWork.Task.ID, nextWork.Task.Title)
+			}
+			runStandaloneTask(nextWork.Task, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, jsonl, includeStandalone, includeOrphans)
+			return // runStandaloneTask exits on its own
+		}
+
+		// Continue with next epic
+		epicID = nextWork.EpicID
+		epicTitle = nextWork.EpicTitle
+		if jsonl {
+			fmt.Printf(`{"type":"auto_next","epic_id":"%s","title":"%s"}`+"\n", epicID, epicTitle)
+		} else {
+			fmt.Printf("[AUTO] Found next epic: [%s] %s\n", epicID, epicTitle)
+		}
+	}
 }
 
 // validateEpicIDs checks that all epic IDs exist, are open, and are unique.
@@ -1169,7 +1226,7 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 	os.Exit(ExitError)
 }
 
-func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, watch bool, watchTimeout, watchPollInterval, debounceInterval time.Duration) {
+func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, watch bool, watchTimeout, watchPollInterval, debounceInterval time.Duration, auto, includeStandalone, includeOrphans bool) {
 	// Create pause channel for TUI <-> engine communication
 	pauseChan := make(chan bool, 1)
 
@@ -1400,56 +1457,109 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		p.Send(tui.IdleMsg{})
 	}
 
-	// Run engine in background
+	// Run engine in background with auto-continuation support
 	go func() {
-		config := engine.RunConfig{
-			EpicID:            epicID,
-			MaxIterations:     maxIterations,
-			MaxCost:           maxCost,
-			CheckpointEvery:   checkpointInterval,
-			MaxTaskRetries:    maxTaskRetries,
-			PauseChan:         pauseChan,
-			UseWorktree:       useWorktree,
-			Watch:             watch,
-			WatchTimeout:      watchTimeout,
-			WatchPollInterval: watchPollInterval,
-			DebounceInterval:  debounceInterval,
-		}
+		currentEpicID := epicID
+		totalIterations := 0
+		totalCost := 0.0
 
-		result, err := eng.Run(ctx, config)
-
-		// Log run end
-		if runLogger != nil {
-			if result != nil {
-				signalStr := ""
-				if result.Signal != engine.SignalNone {
-					signalStr = result.Signal.String()
-				}
-				runLogger.LogRunEnd(runlog.RunEndData{
-					ExitReason:     result.ExitReason,
-					Iterations:     result.Iterations,
-					CompletedTasks: result.CompletedTasks,
-					TotalTokens:    result.TotalTokens,
-					TotalCost:      result.TotalCost,
-					Duration:       result.Duration,
-					Signal:         signalStr,
-					SignalReason:   result.SignalReason,
-				})
+		for {
+			config := engine.RunConfig{
+				EpicID:            currentEpicID,
+				MaxIterations:     maxIterations,
+				MaxCost:           maxCost,
+				CheckpointEvery:   checkpointInterval,
+				MaxTaskRetries:    maxTaskRetries,
+				PauseChan:         pauseChan,
+				UseWorktree:       useWorktree,
+				Watch:             watch,
+				WatchTimeout:      watchTimeout,
+				WatchPollInterval: watchPollInterval,
+				DebounceInterval:  debounceInterval,
 			}
-			runLogger.Close()
-		}
 
-		if err != nil {
-			p.Send(tui.ErrorMsg{Err: err})
-			return
-		}
+			result, err := eng.Run(ctx, config)
 
-		p.Send(tui.RunCompleteMsg{
-			Reason:     result.ExitReason,
-			Signal:     result.Signal.String(),
-			Iterations: result.Iterations,
-			Cost:       result.TotalCost,
-		})
+			// Log run end
+			if runLogger != nil {
+				if result != nil {
+					signalStr := ""
+					if result.Signal != engine.SignalNone {
+						signalStr = result.Signal.String()
+					}
+					runLogger.LogRunEnd(runlog.RunEndData{
+						ExitReason:     result.ExitReason,
+						Iterations:     result.Iterations,
+						CompletedTasks: result.CompletedTasks,
+						TotalTokens:    result.TotalTokens,
+						TotalCost:      result.TotalCost,
+						Duration:       result.Duration,
+						Signal:         signalStr,
+						SignalReason:   result.SignalReason,
+					})
+				}
+				runLogger.Close()
+				runLogger = nil // Don't close again
+			}
+
+			if err != nil {
+				p.Send(tui.ErrorMsg{Err: err})
+				return
+			}
+
+			totalIterations += result.Iterations
+			totalCost += result.TotalCost
+
+			// If not in auto mode with continuation support, we're done
+			if !auto || (!includeStandalone && !includeOrphans) {
+				p.Send(tui.RunCompleteMsg{
+					Reason:     result.ExitReason,
+					Signal:     result.Signal.String(),
+					Iterations: totalIterations,
+					Cost:       totalCost,
+				})
+				return
+			}
+
+			// Check for more work
+			nextWork := findNextWork(ticksClient, includeStandalone, includeOrphans)
+			if nextWork == nil {
+				p.Send(tui.RunCompleteMsg{
+					Reason:     "all work completed",
+					Signal:     result.Signal.String(),
+					Iterations: totalIterations,
+					Cost:       totalCost,
+				})
+				return
+			}
+
+			// Handle standalone task - run it directly here
+			if nextWork.IsStandalone {
+				p.Send(tui.GlobalStatusMsg{Message: fmt.Sprintf("[AUTO] Switching to standalone task: [%s] %s", nextWork.Task.ID, nextWork.Task.Title)})
+
+				// Run standalone task using the same pattern as runStandaloneTask but with TUI output
+				runStandaloneInTUI(ctx, p, nextWork.Task, ticksClient, claudeAgent, budgetTracker, checkpointMgr, skipVerify, includeStandalone, includeOrphans)
+
+				// After standalone tasks complete, check for more epics
+				nextWork = findNextWork(ticksClient, includeStandalone, includeOrphans)
+				if nextWork == nil || nextWork.IsStandalone {
+					// No more epics, and standalone was just handled
+					p.Send(tui.RunCompleteMsg{
+						Reason:     "all work completed",
+						Iterations: totalIterations,
+						Cost:       totalCost,
+					})
+					return
+				}
+			}
+
+			// Continue with next epic
+			currentEpicID = nextWork.EpicID
+			p.Send(tui.GlobalStatusMsg{Message: fmt.Sprintf("[AUTO] Continuing with epic: [%s] %s", nextWork.EpicID, nextWork.EpicTitle)})
+
+			// Refresh task list for the new epic
+			refreshTasks()
+		}
 	}()
 
 	// Run TUI (blocks until quit)
@@ -1462,7 +1572,9 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	cancel()
 }
 
-func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, jsonl, watch bool, watchTimeout, watchPollInterval, debounceInterval time.Duration) {
+// runHeadless runs an epic in headless mode and returns the exit code.
+// Returns ExitSuccess, ExitMaxIterations, ExitEject, ExitBlocked, or ExitError.
+func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointInterval, maxTaskRetries int, skipVerify, useWorktree, jsonl, watch bool, watchTimeout, watchPollInterval, debounceInterval time.Duration) int {
 	// Create context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1482,7 +1594,7 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	claudeAgent := agent.NewClaudeAgent()
 	if !claudeAgent.Available() {
 		out.Error(fmt.Errorf("claude CLI not found - please install Claude Code"))
-		os.Exit(ExitError)
+		return ExitError
 	}
 
 	ticksClient := ticks.NewClient()
@@ -1496,7 +1608,7 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	epic, err := ticksClient.GetEpic(epicID)
 	if err != nil {
 		out.Error(fmt.Errorf("failed to get epic %s: %w", epicID, err))
-		os.Exit(ExitError)
+		return ExitError
 	}
 
 	// Create and configure engine
@@ -1615,26 +1727,26 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 
 	if err != nil {
 		out.Error(err)
-		os.Exit(ExitError)
+		return ExitError
 	}
 
 	// Output final summary
 	out.Complete(result)
 
-	// Exit with appropriate code
+	// Return appropriate exit code
 	switch result.Signal {
 	case engine.SignalComplete:
-		os.Exit(ExitSuccess)
+		return ExitSuccess
 	case engine.SignalEject:
-		os.Exit(ExitEject)
+		return ExitEject
 	case engine.SignalBlocked:
-		os.Exit(ExitBlocked)
+		return ExitBlocked
 	default:
 		// Check if it was budget exceeded
 		if result.Iterations >= maxIterations {
-			os.Exit(ExitMaxIterations)
+			return ExitMaxIterations
 		}
-		os.Exit(ExitSuccess)
+		return ExitSuccess
 	}
 }
 
@@ -1790,6 +1902,60 @@ func autoSelectEpics(max int) ([]string, error) {
 		ids[i] = epics[i].ID
 	}
 	return ids, nil
+}
+
+// WorkItem represents the next piece of work to run - either an epic or a standalone task.
+type WorkItem struct {
+	// Epic fields (mutually exclusive with Task)
+	EpicID    string
+	EpicTitle string
+
+	// Task fields (for standalone/orphan tasks)
+	Task *ticks.Task
+
+	// IsStandalone is true when this is a standalone/orphan task (not an epic)
+	IsStandalone bool
+}
+
+// findNextWork finds the next available work item (epic or standalone task).
+// Priority: epics first, then standalone tasks, then orphan tasks.
+func findNextWork(client *ticks.Client, includeStandalone, includeOrphans bool) *WorkItem {
+	// Try to find an epic first
+	epicIDs, _ := autoSelectEpics(1)
+	if len(epicIDs) > 0 {
+		epic, err := client.GetEpic(epicIDs[0])
+		if err == nil {
+			return &WorkItem{
+				EpicID:       epic.ID,
+				EpicTitle:    epic.Title,
+				IsStandalone: false,
+			}
+		}
+	}
+
+	// Try standalone tasks
+	if includeStandalone {
+		task, _ := client.NextTaskWithOptions(ticks.StandaloneOnly())
+		if task != nil {
+			return &WorkItem{
+				Task:         task,
+				IsStandalone: true,
+			}
+		}
+	}
+
+	// Try orphaned tasks
+	if includeOrphans {
+		task, _ := client.NextTaskWithOptions(ticks.OrphanedOnly())
+		if task != nil {
+			return &WorkItem{
+				Task:         task,
+				IsStandalone: true,
+			}
+		}
+	}
+
+	return nil
 }
 
 // runPicker shows the interactive epic picker and returns the selected epic
@@ -1999,6 +2165,107 @@ func runMerge(cmd *cobra.Command, args []string) {
 	}
 
 	os.Exit(ExitSuccess)
+}
+
+// runStandaloneInTUI runs standalone tasks with output sent to the TUI.
+// This is used when auto mode switches from epic to standalone task processing.
+func runStandaloneInTUI(ctx context.Context, p *tea.Program, initialTask *ticks.Task, ticksClient *ticks.Client, claudeAgent *agent.ClaudeAgent, budgetTracker *budget.Tracker, checkpointMgr *checkpoint.Manager, skipVerify, includeStandalone, includeOrphans bool) {
+	currentTask := initialTask
+
+	for currentTask != nil {
+		// Check context cancellation
+		if ctx.Err() != nil {
+			return
+		}
+
+		// Check budget limits
+		if shouldStop, _ := budgetTracker.ShouldStop(); shouldStop {
+			return
+		}
+
+		p.Send(tui.GlobalStatusMsg{Message: fmt.Sprintf("Running standalone task: [%s] %s", currentTask.ID, currentTask.Title)})
+
+		// Build prompt using the prompt builder
+		promptBuilder := engine.NewPromptBuilder()
+
+		// Get task notes for human feedback context
+		humanNotes, _ := ticksClient.GetHumanNotes(currentTask.ID)
+
+		// Try to get parent epic info for context (even if closed/orphaned)
+		var parentEpic *ticks.Epic
+		var epicNotes []string
+		if currentTask.Parent != "" {
+			if epic, err := ticksClient.GetEpic(currentTask.Parent); err == nil {
+				parentEpic = epic
+				epicNotes, _ = ticksClient.GetNotes(currentTask.Parent)
+			}
+		}
+
+		iterCtx := engine.IterationContext{
+			Iteration:     1,
+			Epic:          parentEpic,
+			Task:          currentTask,
+			EpicNotes:     epicNotes,
+			HumanFeedback: humanNotes,
+		}
+
+		prompt := promptBuilder.Build(iterCtx)
+
+		// Mark task as in_progress before starting
+		_ = ticksClient.SetStatus(currentTask.ID, "in_progress")
+
+		// Run the agent
+		agentResult, err := claudeAgent.Run(ctx, prompt, agent.RunOpts{
+			Timeout: 30 * time.Minute,
+		})
+
+		if err != nil {
+			p.Send(tui.ErrorMsg{Err: err})
+			return
+		}
+
+		// Send output to TUI
+		p.Send(tui.AgentTextMsg{Text: agentResult.Output})
+
+		// Update budget tracking
+		budgetTracker.Add(agentResult.TokensIn, agentResult.TokensOut, agentResult.Cost)
+
+		// Store run record on task
+		if agentResult.Record != nil {
+			_ = ticksClient.SetRunRecord(currentTask.ID, agentResult.Record)
+		}
+
+		// Parse signals from output
+		signal, signalReason := engine.ParseSignals(agentResult.Output)
+
+		if signal != engine.SignalNone && signal != engine.SignalComplete {
+			handleStandaloneSignal(ticksClient, currentTask, signal, signalReason)
+		}
+
+		// Check if task was closed
+		updatedTask, err := ticksClient.GetTask(currentTask.ID)
+		if err == nil && updatedTask.Status == "closed" {
+			// Run verification if enabled
+			if !skipVerify && isVerificationEnabled() {
+				passed := runStandaloneVerification(ctx, currentTask.ID, agentResult.Output)
+				if !passed {
+					_ = ticksClient.ReopenTask(currentTask.ID)
+					continue // Retry the same task
+				}
+			}
+		}
+
+		// Get next standalone/orphan task
+		var nextTask *ticks.Task
+		if includeStandalone {
+			nextTask, _ = ticksClient.NextTaskWithOptions(ticks.StandaloneOnly())
+		}
+		if nextTask == nil && includeOrphans {
+			nextTask, _ = ticksClient.NextTaskWithOptions(ticks.OrphanedOnly())
+		}
+
+		currentTask = nextTask
+	}
 }
 
 // runStandaloneTask runs a single standalone or orphan task (task without active parent epic).
