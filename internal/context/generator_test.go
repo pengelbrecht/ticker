@@ -371,3 +371,51 @@ func TestGenerator_Generate_SpecialCharacters(t *testing.T) {
 		t.Errorf("unexpected result: %q", result)
 	}
 }
+
+func TestExtractEpicContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name: "extracts from tags",
+			input: `Let me analyze the codebase...
+
+<epic_context>
+# Epic Context: Test
+
+This is the content.
+</epic_context>
+
+Done!`,
+			expected: `# Epic Context: Test
+
+This is the content.`,
+		},
+		{
+			name:     "handles no tags - returns trimmed",
+			input:    "  # Just markdown\n\nContent here  ",
+			expected: "# Just markdown\n\nContent here",
+		},
+		{
+			name: "handles empty tags",
+			input: "<epic_context></epic_context>",
+			expected: "",
+		},
+		{
+			name: "handles whitespace in tags",
+			input: "<epic_context>  \n# Title\n  </epic_context>",
+			expected: "# Title",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractEpicContext(tt.input)
+			if result != tt.expected {
+				t.Errorf("extractEpicContext() =\n%q\nwant\n%q", result, tt.expected)
+			}
+		})
+	}
+}

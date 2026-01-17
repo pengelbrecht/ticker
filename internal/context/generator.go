@@ -4,11 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/pengelbrecht/ticker/internal/agent"
 	"github.com/pengelbrecht/ticker/internal/ticks"
 )
+
+// epicContextTagPattern extracts content from <epic_context> tags.
+var epicContextTagPattern = regexp.MustCompile(`(?s)<epic_context>\s*(.*?)\s*</epic_context>`)
 
 // DefaultTimeout is the default timeout for context generation.
 const DefaultTimeout = 5 * time.Minute
@@ -114,5 +119,19 @@ func (g *Generator) Generate(ctx context.Context, epic *ticks.Epic, tasks []tick
 		"cost_usd", result.Cost,
 	)
 
-	return result.Output, nil
+	// Extract content from <epic_context> tags if present
+	content := extractEpicContext(result.Output)
+
+	return content, nil
+}
+
+// extractEpicContext extracts markdown content from <epic_context> tags.
+// If tags are not found, returns the original output trimmed.
+func extractEpicContext(output string) string {
+	matches := epicContextTagPattern.FindStringSubmatch(output)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+	// Fallback: return original output trimmed
+	return strings.TrimSpace(output)
 }

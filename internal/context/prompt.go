@@ -86,12 +86,13 @@ Include:
 
 ## Output Format
 
-CRITICAL: Your response must start IMMEDIATELY with the markdown heading. Example:
+Wrap your context document in <epic_context> tags:
 
+<epic_context>
 # Epic Context: [epic-id] Epic Title
 
-Do NOT output any text before the heading. No "Let me...", no "I'll...", no "Here is...".
-The very first character of your response MUST be "#".
+(your markdown content here)
+</epic_context>
 `
 
 // DefaultMaxTokens is the default max token limit for context documents.

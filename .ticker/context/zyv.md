@@ -1,154 +1,98 @@
-Now I have all the information needed to generate the context document.
-
-# Epic Context: TUI Agent-Human Workflow Status Indicators [zyv]
+# Epic Context: [zyv] TUI: Agent-Human Workflow Status Indicators
 
 ## Relevant Code
 
-### Primary Files to Modify
+### TUI Core Files
+- **internal/tui/model.go** - Main TUI model containing:
+  - `TaskInfo` struct (lines 49-56): Already has `Awaiting string` field ✓
+  - `StatusIcon()` method (lines 70-91): Already implements emoji icons with awaiting priority ✓
+  - `RenderTask()` method (lines 95-115): Already appends `[awaiting-type]` to task title ✓
+  - Color constants (lines 783-796): Catppuccin Mocha palette with colorGray, colorBlue, colorGreen, colorRed, colorPeach
+  - `TaskStatus` enum (lines 42-46): open, in_progress, closed
 
-| File | Purpose | Key Lines |
-|------|---------|-----------|
-| `internal/tui/model.go` | TUI model with TaskInfo, StatusIcon, RenderTask | 49-115 |
-| `internal/tui/tabs.go` | Tab rendering with getTabStatusIcon | 92-111 |
-| `cmd/ticker/main.go` | Task loading functions | 755-792 (loadTasksForEpic), 1335-1386 (refreshTasks + watcher) |
+- **internal/tui/tabs.go** - Tab rendering:
+  - `getTabStatusIcon()` (lines 98-111): Already uses emoji style (🔵, ✅, 🔴, ⚠) ✓
+  - `renderTabBar()`, `renderSingleTab()` - Tab bar rendering
 
-### Key Types
+- **internal/tui/model_test.go** - Test file with:
+  - `TestTaskInfo_StatusIcon_AllEmojiIcons` (line 3973)
+  - `TestTaskInfo_StatusIcon_AwaitingPriority` (line 4017)
+  - `TestTaskInfo_StatusIcon_BlockedPriority` (line 4045)
+  - `TestUpdate_TasksUpdateMsg_WithAwaiting` (line 4096)
+  - `TestTaskInfo_RenderTask_WithAwaitingType` (line 1216)
 
-**TaskInfo** (model.go:49-56):
-```go
-type TaskInfo struct {
-    ID        string
-    Title     string
-    Status    TaskStatus
-    BlockedBy []string
-    IsCurrent bool
-    Awaiting  string  // already exists
-}
-```
+### Main Entry Point
+- **cmd/ticker/main.go**:
+  - `refreshTasks()` (lines 1335-1372): Maps ticks.Task to tui.TaskInfo with `Awaiting: t.GetAwaitingType()` ✓
+  - `loadTasksForEpic()` (lines 755-792): Same mapping for parallel mode ✓
+  - TicksWatcher setup (lines 1377-1386): Already connects watcher to refreshTasks() ✓
 
-**ticks.Task** (internal/ticks/types.go:10-40):
-- Has `Awaiting *string` field (pointer)
-- Has `GetAwaitingType()` method for backwards compat with Manual field
+### Ticks Integration
+- **internal/ticks/types.go**:
+  - `Task` struct (lines 10-35): Has `Manual bool`, `Awaiting *string`, `Verdict *string` fields
+  - `GetAwaitingType()` method: Returns awaiting type string or "work" for backwards-compat Manual=true
 
-**TaskStatus** constants (model.go):
-- `TaskStatusOpen`, `TaskStatusInProgress`, `TaskStatusClosed`
-
-### Implemented Functions
-
-**StatusIcon** (model.go:70-91) - Already implements emoji style:
-```go
-func (t TaskInfo) StatusIcon() string {
-    if t.Awaiting != "" { return "👤" }           // Human icon
-    if t.Status == TaskStatusOpen && t.IsBlocked() { return "🔴" }
-    switch t.Status {
-    case TaskStatusInProgress: return "🌕"       // NOTE: Task says 🔵
-    case TaskStatusClosed: return "✅"
-    case TaskStatusOpen: return "⚪"
-    }
-}
-```
-
-**RenderTask** (model.go:95-115) - Already appends awaiting type:
-```go
-if t.Awaiting != "" {
-    awaitingTag := lipgloss.NewStyle().Foreground(colorPeach).Render("[" + t.Awaiting + "]")
-    result += " " + awaitingTag
-}
-```
-
-**getTabStatusIcon** (tabs.go:98-111) - Already uses emoji:
-- Running: 🔵, Complete: ✅, Failed: 🔴, Conflict: ⚠
-
-### Task Loading (main.go)
-
-**loadTasksForEpic** (line 755) - Multi-epic parallel mode:
-```go
-taskInfos[i] = tui.TaskInfo{
-    ID:        t.ID,
-    Title:     t.Title,
-    Status:    tui.TaskStatus(t.Status),
-    BlockedBy: openBlockers,
-    Awaiting:  t.GetAwaitingType(),  // Already wired
-}
-```
-
-**refreshTasks** (line 1335) - Single-epic mode - same pattern
-
-**File watcher** (lines 1377-1386) - Already implemented:
-```go
-ticksWatcher := engine.NewTicksWatcher("")
-defer ticksWatcher.Close()
-if changes := ticksWatcher.Changes(); changes != nil {
-    go func() {
-        for range changes { refreshTasks() }
-    }()
-}
-```
+### File Watcher
+- **internal/engine/watcher.go**:
+  - `TicksWatcher` struct (lines 14-22): Watches `.tick/issues` for changes
+  - `Changes()` (lines 86-91): Returns channel for change notifications
+  - `NewTicksWatcher()` (lines 42-81): Creates watcher with debouncing (100ms default)
 
 ## Architecture Notes
 
-### Data Flow
-1. `ticks.Client.ListTasks()` returns `[]ticks.Task`
-2. Converted to `[]tui.TaskInfo` in main.go
-3. Sent via `tui.TasksUpdateMsg` or `tui.EpicTasksUpdateMsg`
-4. TUI model stores in `m.tasks` and renders via `renderTaskPane()`
+### Data Flow for Task Status
+1. Ticks stored in `.tick/issues/<id>.json` files
+2. `ticks.Client.ListTasks()` reads and parses JSON files
+3. `refreshTasks()` or `loadTasksForEpic()` converts `ticks.Task` → `tui.TaskInfo`
+4. TUI receives `TasksUpdateMsg` and updates display
 
-### TicksWatcher (engine/watcher.go)
-- Uses `fsnotify` to watch `.tick/issues/` directory
-- Debounces at 100ms
-- `Changes()` returns `<-chan struct{}` (nil if fsnotify unavailable)
-- `Close()` is safe to call multiple times
+### Status Icon Priority (implemented)
+1. Awaiting → 👤 (highest priority)
+2. Blocked → 🔴
+3. InProgress → 🌕
+4. Closed → ✅
+5. Open → ⚪
 
-## Color Constants (model.go:785-795)
+### File Watcher Integration (implemented)
+- Watcher created in main.go after engine setup
+- Goroutine listens on `watcher.Changes()` channel
+- On notification, calls `refreshTasks()`
 
+## Conventions
+
+### Emoji Style Guide (documented in epic)
+- ⚪ Open (ready for agent)
+- 🔵 In Progress (agent working) - Note: TUI uses 🌕 for task animation
+- ✅ Closed/Done
+- 🔴 Blocked
+- 👤 Awaiting Human
+
+### Testing Patterns
+- Table-driven tests with `testCases` slice
+- Test function names: `TestTypeName_MethodName_Scenario`
+- Use `strings.Contains()` for checking emoji output
+- Verify priority ordering with multiple test cases
+
+### Color Usage
 ```go
-colorBlue     = "#89DCEB"  // Selected items (Sky)
-colorBlueAlt  = "#89B4FA"  // In-progress status
-colorGreen    = "#A6E3A1"  // Success, closed
-colorRed      = "#F38BA8"  // Errors, blocked, bugs
-colorPeach    = "#FAB387"  // Warnings, awaiting
-colorGray     = "#6C7086"  // Borders, muted
-colorLavender = "#A6ADC8"  // Dim text
+colorPeach    = "#FAB387"  // Awaiting tags, warnings
+colorRed      = "#F38BA8"  // Blocked status
+colorGreen    = "#A6E3A1"  // Closed status
+colorBlueAlt  = "#89B4FA"  // In progress
+colorGray     = "#6C7086"  // Open, borders
+colorLavender = "#A6ADC8"  // Dim text, IDs
 ```
 
-## Testing Patterns
+## Current State Analysis
 
-### Test File: `internal/tui/model_test.go`
+Looking at the modified files in git status:
+- All 7 tasks appear to be **already implemented** based on the code analysis:
+  1. ✅ TaskInfo.Awaiting field exists (model.go:55)
+  2. ✅ StatusIcon() uses emojis with awaiting priority (model.go:70-91)
+  3. ✅ refreshTasks() passes Awaiting field (main.go:1359)
+  4. ✅ TicksWatcher connected to refreshTasks() (main.go:1377-1386)
+  5. ✅ Tab icons already emoji style (tabs.go:98-111)
+  6. ✅ Tests exist for all icon behaviors (model_test.go:3973-4127)
+  7. ✅ RenderTask() shows awaiting type in brackets (model.go:109-112)
 
-**Existing StatusIcon tests** (lines 1116-1138, 3973-4094):
-- `TestTaskStatusIcon` - basic cases
-- `TestTaskInfo_StatusIcon_AllEmojiIcons` - all emoji render
-- `TestTaskInfo_StatusIcon_AwaitingPriority` - awaiting > blocked
-- `TestTaskInfo_StatusIcon_BlockedPriority` - blocked > open
-
-**RenderTask tests** (lines 1190-1284):
-- `TestTaskInfo_RenderTask` - basic rendering
-- `TestTaskInfo_RenderTask_WithAwaitingType` - awaiting brackets
-- `TestTaskInfo_RenderTask_NoAwaitingType` - no extra brackets
-
-**TasksUpdateMsg test** (line 4096):
-- `TestUpdate_TasksUpdateMsg_WithAwaiting` - awaiting field propagates
-
-### Test Pattern
-```go
-func TestTaskInfo_StatusIcon_Example(t *testing.T) {
-    task := TaskInfo{ID: "abc", Status: TaskStatusOpen, Awaiting: "approval"}
-    icon := task.StatusIcon()
-    if !strings.Contains(icon, "👤") {
-        t.Errorf("expected human icon, got %s", icon)
-    }
-}
-```
-
-## Current Status
-
-Based on grep results, most tasks appear **already implemented**:
-- ✅ `Awaiting` field exists in TaskInfo (task 2d6)
-- ✅ `StatusIcon()` handles awaiting with 👤 (task nu3 - but uses 🌕 not 🔵 for in-progress)
-- ✅ `Awaiting` wired in loadTasksForEpic/refreshTasks (task ok0)
-- ✅ File watcher exists in refreshTasks (task b2n)
-- ✅ Tab icons use emoji style (task 4ds)
-- ✅ Tests exist (task 2b8)
-- ✅ RenderTask appends `[awaiting-type]` (task jx9)
-
-**Potential discrepancy**: Task nu3 specifies 🔵 for in-progress, but code uses 🌕. May need verification if this is intentional.
+Tasks may be ready for verification/closure or may need review of implementation details.
