@@ -1,0 +1,14 @@
+{
+  "id": "9y1",
+  "title": "Remove COMPLETE from prompt signals table (only COMPLETE is outdated)",
+  "description": "The prompt template (internal/engine/prompt.go) still lists COMPLETE as a valid signal, but the engine explicitly ignores it with a warning message. This confuses agents - they emit COMPLETE, then get told it's ignored.\n\nRemove COMPLETE from the Handoff Signals table in the prompt template. The prompt already says in rule #5: 'Just close your task with tk close when done. Ticker automatically detects when all tasks in the epic are complete.'\n\nThe table should only list the handoff signals that actually trigger behavior:\n- APPROVAL_NEEDED\n- INPUT_NEEDED  \n- REVIEW_REQUESTED\n- CONTENT_REVIEW\n- ESCALATE\n- CHECKPOINT\n- EJECT",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-17T21:44:21.210414Z",
+  "updated_at": "2026-01-17T22:03:57.670503Z",
+  "closed_at": "2026-01-17T22:03:57.670503Z",
+  "closed_reason": "Removed COMPLETE from prompt signals table in v0.4.18"
+}

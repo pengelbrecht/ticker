@@ -1648,7 +1648,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.focusedPane == PaneOutput {
 				// Scroll down in output pane
-				m.viewport.LineDown(1)
+				m.viewport.ScrollDown(1)
 			}
 		case "k", "up":
 			// Navigate up in task list when task pane is focused
@@ -1664,17 +1664,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.focusedPane == PaneOutput {
 				// Scroll up in output pane
-				m.viewport.LineUp(1)
+				m.viewport.ScrollUp(1)
 			}
 		case "ctrl+d":
 			// Half-page scroll down in output pane when focused
 			if m.focusedPane == PaneOutput {
-				m.viewport.HalfViewDown()
+				m.viewport.HalfPageDown()
 			}
 		case "ctrl+u":
 			// Half-page scroll up in output pane when focused
 			if m.focusedPane == PaneOutput {
-				m.viewport.HalfViewUp()
+				m.viewport.HalfPageUp()
 			}
 		case "g":
 			// Go to top
@@ -1710,7 +1710,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.updateSelectedTaskView()
 				}
 			} else if m.focusedPane == PaneOutput {
-				m.viewport.ViewUp()
+				m.viewport.PageUp()
 			}
 		case "pgdown":
 			// Page down
@@ -1724,7 +1724,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.updateSelectedTaskView()
 				}
 			} else if m.focusedPane == PaneOutput {
-				m.viewport.ViewDown()
+				m.viewport.PageDown()
 			}
 		case "?":
 			m.showHelp = !m.showHelp
@@ -2984,7 +2984,7 @@ func (m Model) renderTaskPane(height int) string {
 	content := strings.Join(lines, "\n")
 
 	// Create styled panel with focus-aware border
-	style := panelStyle.Copy().
+	style := panelStyle.
 		Width(taskPaneWidth).
 		Height(height).
 		BorderForeground(m.focusBorderColor(PaneTasks))
@@ -3149,7 +3149,7 @@ func (m Model) renderOutputPane(height int) string {
 	content := strings.Join(contentLines, "\n")
 
 	// Create styled panel with focus-aware border
-	style := panelStyle.Copy().
+	style := panelStyle.
 		Width(outputWidth).
 		Height(height).
 		BorderForeground(m.focusBorderColor(PaneOutput))

@@ -79,14 +79,13 @@ func TestRunner_SingleEpic(t *testing.T) {
 			},
 		}
 
-		r := NewRunner(config)
-
 		// Override runEpic behavior by simulating completion
 		ctx := context.Background()
+		_ = ctx // silence unused warning
 
 		// Use a mock that just marks completion
 		config.EngineFactory = nil
-		r = NewRunner(config)
+		r := NewRunner(config)
 
 		// Manually test status transitions
 		r.updateStatus("epic1", "running", nil, nil, nil)

@@ -1,0 +1,12 @@
+{
+  "id": "rvt",
+  "title": "Add golangci-lint with CI workflow",
+  "description": "Add golangci-lint for comprehensive Go linting.\n\n## Tasks\n\n1. **Add .golangci.yml config**\n   - Enable useful linters (errcheck, gosimple, govet, ineffassign, staticcheck, unused, etc.)\n   - Configure any project-specific exclusions\n   - Set reasonable timeouts\n\n2. **Add GitHub Actions workflow**\n   - Run on PRs and pushes to main\n   - Use official golangci-lint-action\n   - Cache for speed\n\n3. **Fix any existing lint issues**\n   - Run `golangci-lint run` locally\n   - Fix or suppress legitimate issues\n\n4. **Document in README/CLAUDE.md**\n   - Add lint command to development workflow\n   - Note: `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`\n\n## Example .golangci.yml\n\n```yaml\nrun:\n  timeout: 5m\n\nlinters:\n  enable:\n    - errcheck\n    - gosimple\n    - govet\n    - ineffassign\n    - staticcheck\n    - unused\n    - gofmt\n    - goimports\n```\n\n## Example CI workflow\n\n```yaml\nname: Lint\non: [push, pull_request]\njobs:\n  golangci:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-go@v5\n        with:\n          go-version: '1.24'\n      - uses: golangci/golangci-lint-action@v6\n```",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-17T22:06:12.1043Z",
+  "updated_at": "2026-01-17T22:06:12.1043Z"
+}

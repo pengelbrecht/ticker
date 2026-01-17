@@ -1839,7 +1839,7 @@ func TestPicker_Selected(t *testing.T) {
 	p.chosen = &epics[0]
 	selected := p.Selected()
 	if selected == nil {
-		t.Error("expected Selected() to return non-nil after selection")
+		t.Fatal("expected Selected() to return non-nil after selection")
 	}
 	if selected.ID != "abc" {
 		t.Errorf("expected selected ID 'abc', got '%s'", selected.ID)

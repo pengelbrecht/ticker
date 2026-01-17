@@ -195,8 +195,8 @@ func (l *Logger) log(eventType EventType, message string, data interface{}) {
 		return
 	}
 
-	l.file.Write(line)
-	l.file.Write([]byte("\n"))
+	_, _ = l.file.Write(line)
+	_, _ = l.file.Write([]byte("\n"))
 }
 
 // generateRunID creates a unique run identifier.

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -773,8 +774,9 @@ func TestWorktree_WorkDirPassedToAgent(t *testing.T) {
 	workDir := agentMock.lastWorkDirs[0]
 
 	// WorkDir should be under .worktrees
-	if !filepath.HasPrefix(workDir, filepath.Join(repoRoot, ".worktrees")) {
-		t.Errorf("WorkDir = %q, should be under %q", workDir, filepath.Join(repoRoot, ".worktrees"))
+	worktreesDir := filepath.Join(repoRoot, ".worktrees")
+	if !strings.HasPrefix(workDir, worktreesDir) {
+		t.Errorf("WorkDir = %q, should be under %q", workDir, worktreesDir)
 	}
 
 	// WorkDir should contain epic1

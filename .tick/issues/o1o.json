@@ -1,0 +1,14 @@
+{
+  "id": "o1o",
+  "title": "Add logging when epic context is injected",
+  "description": "Add context visibility to headless output with per-iteration output and content preview.\n\n## Current Behavior\n- Context is loaded once at epic start\n- ContextLoaded() outputs just: {\"type\": \"context_loaded\", \"epic_id\": \"abc\"}\n- No visibility into WHAT context was loaded\n- Users looking at later iterations don't see any context indication\n\n## Required Changes\n\n### 1. Enhanced ContextLoaded output (at epic start)\nInclude content preview in the initial load event:\n```json\n{\n  \"type\": \"context_loaded\",\n  \"epic_id\": \"abc\",\n  \"tokens\": 2500,\n  \"preview\": \"# Epic Context: Add user auth\\n\\nRelevant files: src/auth/...\"\n}\n```\n\nFor text mode:\n```\n[CONTEXT] Loaded context for epic abc (2.5k tokens)\n[CONTEXT] Preview: # Epic Context: Add user auth...\n```\n\n### 2. Per-iteration context indicator\nAdd a new output event at the start of each iteration when context is being used:\n```json\n{\n  \"type\": \"context_active\",\n  \"epic_id\": \"abc\",\n  \"preview\": \"# Epic Context: Add user auth...\"\n}\n```\n\nFor text mode:\n```\n[CONTEXT] Using epic context: # Epic Context: Add user...\n```\n\nThis ensures users always see context is active, even when looking at iteration N.\n\n### Implementation Notes\n- Preview should be first 2-3 non-empty lines of context, truncated to ~150 chars\n- Need to pass context content to HeadlessOutput.ContextLoaded()\n- Need new method for per-iteration output, called from iteration start\n- Consider adding OnContextUsed callback to engine for per-iteration events",
+  "status": "closed",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-17T21:44:20.160004Z",
+  "updated_at": "2026-01-17T22:03:57.639543Z",
+  "closed_at": "2026-01-17T22:03:57.639543Z",
+  "closed_reason": "Added context preview and per-iteration visibility in v0.4.18"
+}

@@ -532,7 +532,6 @@ func runRun(cmd *cobra.Command, args []string) {
 	if standaloneTask != nil {
 		if !headless {
 			fmt.Fprintln(os.Stderr, "Note: TUI mode not supported for standalone tasks. Use --headless.")
-			headless = true
 		}
 		runStandaloneTask(standaloneTask, maxIterations, maxCost, checkpointInterval, maxTaskRetries, skipVerify, jsonl, includeStandalone, includeOrphans)
 		return

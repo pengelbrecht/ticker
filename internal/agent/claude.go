@@ -75,10 +75,9 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts RunOpts) (*Re
 	// Create state and parser for structured streaming
 	state := &AgentState{}
 	var prevOutputLen int // Track output length for delta streaming
-	var onUpdate func()
 
 	// Build update callback that notifies both StateCallback and legacy Stream
-	onUpdate = func() {
+	onUpdate := func() {
 		snap := state.Snapshot()
 
 		// Call StateCallback if set (preferred API)

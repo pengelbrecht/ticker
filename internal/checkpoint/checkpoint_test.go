@@ -161,7 +161,7 @@ func TestManager_List_NonexistentDir(t *testing.T) {
 		t.Fatalf("List() error = %v", err)
 	}
 
-	if list != nil && len(list) != 0 {
+	if len(list) != 0 {
 		t.Errorf("List() should return nil or empty for nonexistent dir")
 	}
 }

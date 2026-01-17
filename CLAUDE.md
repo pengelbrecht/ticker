@@ -169,6 +169,22 @@ go test ./internal/tui/...       # Test TUI only
 go test -v ./internal/engine/... # Verbose engine tests
 ```
 
+## Linting
+
+**Important:** Always lint before committing changes.
+
+```bash
+golangci-lint run               # Run all linters
+golangci-lint run --fix         # Auto-fix issues where possible
+```
+
+Install golangci-lint:
+```bash
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+```
+
+Linting runs automatically on PRs via GitHub Actions.
+
 ## Building
 
 ```bash

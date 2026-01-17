@@ -307,13 +307,13 @@ func isNewerVersion(a, b string) bool {
 		parts := strings.Split(v, ".")
 		var major, minor, patch int
 		if len(parts) >= 1 {
-			fmt.Sscanf(parts[0], "%d", &major)
+			_, _ = fmt.Sscanf(parts[0], "%d", &major)
 		}
 		if len(parts) >= 2 {
-			fmt.Sscanf(parts[1], "%d", &minor)
+			_, _ = fmt.Sscanf(parts[1], "%d", &minor)
 		}
 		if len(parts) >= 3 {
-			fmt.Sscanf(parts[2], "%d", &patch)
+			_, _ = fmt.Sscanf(parts[2], "%d", &patch)
 		}
 		return major, minor, patch
 	}

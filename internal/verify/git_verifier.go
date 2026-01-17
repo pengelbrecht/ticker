@@ -138,7 +138,7 @@ func (v *GitVerifier) Verify(ctx context.Context, taskID string, agentOutput str
 	// Empty output means clean working tree (or all changes pre-existing)
 	if outputStr == "" {
 		result.Passed = true
-		if v.baseline != nil && len(v.baseline) > 0 {
+		if len(v.baseline) > 0 {
 			result.Output = "no new uncommitted changes (pre-existing changes ignored)"
 		} else {
 			result.Output = "working tree clean"
