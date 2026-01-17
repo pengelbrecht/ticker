@@ -4193,3 +4193,176 @@ func TestUpdate_TasksUpdateMsg_AwaitingWithBlockedRendersHumanIcon(t *testing.T)
 		t.Errorf("task with both blocked and awaiting should NOT show 🔴, got %s", icon)
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Context Status Tests
+// -----------------------------------------------------------------------------
+
+func TestRenderContextStatus(t *testing.T) {
+	tests := []struct {
+		name          string
+		contextStatus ContextStatus
+		wantContains  string
+	}{
+		{
+			name:          "ready status shows checkmark",
+			contextStatus: ContextStatusReady,
+			wantContains:  "✓",
+		},
+		{
+			name:          "ready status shows Context",
+			contextStatus: ContextStatusReady,
+			wantContains:  "Context",
+		},
+		{
+			name:          "generating status shows Context",
+			contextStatus: ContextStatusGenerating,
+			wantContains:  "Context",
+		},
+		{
+			name:          "failed status shows X",
+			contextStatus: ContextStatusFailed,
+			wantContains:  "✗",
+		},
+		{
+			name:          "none status shows No ctx",
+			contextStatus: ContextStatusNone,
+			wantContains:  "No ctx",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := New(Config{EpicID: "test"})
+			m.contextStatus = tt.contextStatus
+			output := m.renderContextStatus()
+			if !strings.Contains(output, tt.wantContains) {
+				t.Errorf("renderContextStatus() = %q, want it to contain %q", output, tt.wantContains)
+			}
+		})
+	}
+}
+
+func TestRenderContextStatus_Empty(t *testing.T) {
+	m := New(Config{EpicID: "test"})
+	// Default/empty status should return empty string
+	m.contextStatus = ""
+	output := m.renderContextStatus()
+	if output != "" {
+		t.Errorf("renderContextStatus() with empty status = %q, want empty string", output)
+	}
+}
+
+func TestStatusBarWithContextStatus(t *testing.T) {
+	m := New(Config{
+		EpicID:    "xyz",
+		EpicTitle: "My Epic",
+	})
+	m.width = 120
+	m.height = 30
+	m.running = true
+	m.contextStatus = ContextStatusReady
+
+	output := m.renderStatusBar()
+
+	// Check that context status appears in status bar
+	if !strings.Contains(output, "✓") && !strings.Contains(output, "Context") {
+		t.Error("expected status bar to show context status when epic ID is set")
+	}
+}
+
+func TestContextGeneratingMsg(t *testing.T) {
+	m := New(Config{EpicID: "test-epic"})
+	m.width = 100
+	m.height = 30
+
+	msg := ContextGeneratingMsg{EpicID: "test-epic", TaskCount: 5}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.contextStatus != ContextStatusGenerating {
+		t.Errorf("contextStatus = %q, want %q", m.contextStatus, ContextStatusGenerating)
+	}
+	if !strings.Contains(m.output, "[Context]") {
+		t.Error("expected output to contain [Context] log entry")
+	}
+	if !strings.Contains(m.output, "5 tasks") {
+		t.Error("expected output to contain task count")
+	}
+}
+
+func TestContextGeneratedMsg(t *testing.T) {
+	m := New(Config{EpicID: "test-epic"})
+	m.width = 100
+	m.height = 30
+	m.contextStatus = ContextStatusGenerating
+
+	msg := ContextGeneratedMsg{EpicID: "test-epic", Tokens: 2500}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.contextStatus != ContextStatusReady {
+		t.Errorf("contextStatus = %q, want %q", m.contextStatus, ContextStatusReady)
+	}
+	if !strings.Contains(m.output, "2500 tokens") {
+		t.Error("expected output to contain token count")
+	}
+}
+
+func TestContextLoadedMsg(t *testing.T) {
+	m := New(Config{EpicID: "test-epic"})
+	m.width = 100
+	m.height = 30
+
+	msg := ContextLoadedMsg{EpicID: "test-epic"}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.contextStatus != ContextStatusReady {
+		t.Errorf("contextStatus = %q, want %q", m.contextStatus, ContextStatusReady)
+	}
+	if !strings.Contains(m.output, "loaded from cache") {
+		t.Error("expected output to contain 'loaded from cache'")
+	}
+}
+
+func TestContextSkippedMsg(t *testing.T) {
+	m := New(Config{EpicID: "test-epic"})
+	m.width = 100
+	m.height = 30
+
+	msg := ContextSkippedMsg{EpicID: "test-epic", Reason: "single-task epic"}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.contextStatus != ContextStatusNone {
+		t.Errorf("contextStatus = %q, want %q", m.contextStatus, ContextStatusNone)
+	}
+	if !strings.Contains(m.output, "Skipped") {
+		t.Error("expected output to contain 'Skipped'")
+	}
+	if !strings.Contains(m.output, "single-task epic") {
+		t.Error("expected output to contain skip reason")
+	}
+}
+
+func TestContextFailedMsg(t *testing.T) {
+	m := New(Config{EpicID: "test-epic"})
+	m.width = 100
+	m.height = 30
+	m.contextStatus = ContextStatusGenerating
+
+	msg := ContextFailedMsg{EpicID: "test-epic", Error: "timeout"}
+	newModel, _ := m.Update(msg)
+	m = newModel.(Model)
+
+	if m.contextStatus != ContextStatusFailed {
+		t.Errorf("contextStatus = %q, want %q", m.contextStatus, ContextStatusFailed)
+	}
+	if !strings.Contains(m.output, "failed") {
+		t.Error("expected output to contain 'failed'")
+	}
+	if !strings.Contains(m.output, "timeout") {
+		t.Error("expected output to contain error message")
+	}
+}

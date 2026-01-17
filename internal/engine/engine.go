@@ -65,6 +65,13 @@ type Engine struct {
 	OnVerificationStart func(taskID string)
 	OnVerificationEnd   func(taskID string, results *verify.Results)
 
+	// Context generation callbacks for TUI status display (optional)
+	OnContextGenerating func(epicID string, taskCount int)
+	OnContextGenerated  func(epicID string, tokenCount int)
+	OnContextLoaded     func(epicID string)
+	OnContextSkipped    func(epicID string, reason string)
+	OnContextFailed     func(epicID string, errMsg string)
+
 	// Watch mode callback - called when no tasks available and entering idle state.
 	OnIdle func()
 
@@ -290,11 +297,12 @@ func (e *Engine) ensureEpicContext(ctx context.Context, epic *ticks.Epic) {
 		return
 	}
 
-	// Skip if context already exists
+	// Skip if context already exists - will be loaded in loadEpicContext
 	if e.contextStore.Exists(epic.ID) {
 		if e.runLog != nil {
 			e.runLog.LogContextSkipped(epic.ID, "already exists", 0)
 		}
+		// Note: OnContextLoaded is called in loadEpicContext when the context is actually loaded
 		return
 	}
 
@@ -312,12 +320,18 @@ func (e *Engine) ensureEpicContext(ctx context.Context, epic *ticks.Epic) {
 		if e.runLog != nil {
 			e.runLog.LogContextSkipped(epic.ID, "too few tasks", len(tasks))
 		}
+		if e.OnContextSkipped != nil {
+			e.OnContextSkipped(epic.ID, "single-task epic")
+		}
 		return
 	}
 
 	// Log context generation start
 	if e.runLog != nil {
 		e.runLog.LogContextGenerationStarted(epic.ID, len(tasks))
+	}
+	if e.OnContextGenerating != nil {
+		e.OnContextGenerating(epic.ID, len(tasks))
 	}
 
 	// Generate context using the AI agent
@@ -327,6 +341,9 @@ func (e *Engine) ensureEpicContext(ctx context.Context, epic *ticks.Epic) {
 		if e.runLog != nil {
 			e.runLog.LogContextGenerationFailed(epic.ID, err.Error())
 		}
+		if e.OnContextFailed != nil {
+			e.OnContextFailed(epic.ID, err.Error())
+		}
 		return
 	}
 
@@ -335,11 +352,19 @@ func (e *Engine) ensureEpicContext(ctx context.Context, epic *ticks.Epic) {
 		if e.runLog != nil {
 			e.runLog.LogContextSaveFailed(epic.ID, err.Error())
 		}
+		if e.OnContextFailed != nil {
+			e.OnContextFailed(epic.ID, err.Error())
+		}
 		return
 	}
 
 	if e.runLog != nil {
 		e.runLog.LogContextGenerationCompleted(epic.ID, len(content))
+	}
+	if e.OnContextGenerated != nil {
+		// Approximate token count: content length / 4 (rough estimate)
+		tokenCount := len(content) / 4
+		e.OnContextGenerated(epic.ID, tokenCount)
 	}
 }
 
@@ -357,6 +382,11 @@ func (e *Engine) loadEpicContext(epicID string) string {
 			e.runLog.LogContextLoadFailed(epicID, err.Error())
 		}
 		return ""
+	}
+
+	// Notify TUI that context was loaded from cache (if content exists)
+	if content != "" && e.OnContextLoaded != nil {
+		e.OnContextLoaded(epicID)
 	}
 
 	return content

@@ -189,6 +189,78 @@ type VerifyResultMsg struct {
 type IdleMsg struct{}
 
 // -----------------------------------------------------------------------------
+// Context Generation Messages - Epic context generation status updates
+// -----------------------------------------------------------------------------
+
+// ContextStatus represents the current state of epic context.
+type ContextStatus string
+
+const (
+	ContextStatusNone       ContextStatus = "none"       // No context (single-task epic or not configured)
+	ContextStatusGenerating ContextStatus = "generating" // Context generation in progress
+	ContextStatusReady      ContextStatus = "ready"      // Context loaded and ready
+	ContextStatusFailed     ContextStatus = "failed"     // Context generation failed
+)
+
+// ContextGeneratingMsg signals that context generation has started.
+type ContextGeneratingMsg struct {
+	EpicID    string // The epic being processed
+	TaskCount int    // Number of tasks in the epic
+}
+
+// ContextGeneratedMsg signals that context was generated successfully.
+type ContextGeneratedMsg struct {
+	EpicID string // The epic ID
+	Tokens int    // Approximate token count of generated context
+}
+
+// ContextLoadedMsg signals that existing context was loaded from cache.
+type ContextLoadedMsg struct {
+	EpicID string // The epic ID
+}
+
+// ContextSkippedMsg signals that context generation was skipped.
+type ContextSkippedMsg struct {
+	EpicID string // The epic ID
+	Reason string // Why context was skipped (e.g., "single-task epic")
+}
+
+// ContextFailedMsg signals that context generation failed.
+type ContextFailedMsg struct {
+	EpicID string // The epic ID
+	Error  string // Error message
+}
+
+// EpicContextGeneratingMsg signals context generation started for a specific epic (multi-epic mode).
+type EpicContextGeneratingMsg struct {
+	EpicID    string // The epic being processed
+	TaskCount int    // Number of tasks in the epic
+}
+
+// EpicContextGeneratedMsg signals context was generated for a specific epic (multi-epic mode).
+type EpicContextGeneratedMsg struct {
+	EpicID string // The epic ID
+	Tokens int    // Approximate token count of generated context
+}
+
+// EpicContextLoadedMsg signals context was loaded for a specific epic (multi-epic mode).
+type EpicContextLoadedMsg struct {
+	EpicID string // The epic ID
+}
+
+// EpicContextSkippedMsg signals context was skipped for a specific epic (multi-epic mode).
+type EpicContextSkippedMsg struct {
+	EpicID string // The epic ID
+	Reason string // Why context was skipped
+}
+
+// EpicContextFailedMsg signals context failed for a specific epic (multi-epic mode).
+type EpicContextFailedMsg struct {
+	EpicID string // The epic ID
+	Error  string // Error message
+}
+
+// -----------------------------------------------------------------------------
 // Multi-Epic Tab Messages - Tab management for parallel epic execution
 // -----------------------------------------------------------------------------
 
@@ -251,6 +323,9 @@ type EpicTab struct {
 	VerifyTaskID  string
 	VerifyPassed  bool
 	VerifySummary string
+
+	// Per-tab context generation state
+	ContextStatus ContextStatus
 
 	// Per-tab conflict state
 	ConflictFiles   []string // Conflicting files
@@ -673,6 +748,9 @@ type Model struct {
 	verifyTaskID  string // task being verified (set during verification)
 	verifyPassed  bool   // last verification result
 	verifySummary string // human-readable summary of last verification
+
+	// Context generation state (updated via Context*Msg)
+	contextStatus ContextStatus // current context status
 
 	// Layout
 	width      int // clamped width for rendering (min: minWidth)
@@ -1461,6 +1539,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateOutputViewport()
 		}
 
+	// --- Context Generation Messages (single-epic mode) ---
+
+	case ContextGeneratingMsg:
+		// Context generation has started
+		m.contextStatus = ContextStatusGenerating
+		// Add log entry to output
+		contextLine := fmt.Sprintf("\n[Context] Generating context for %d tasks...\n", msg.TaskCount)
+		m.output += contextLine
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case ContextGeneratedMsg:
+		// Context was generated successfully
+		m.contextStatus = ContextStatusReady
+		// Add log entry with token count
+		contextLine := fmt.Sprintf("[Context] Context generated (%d tokens)\n", msg.Tokens)
+		m.output += contextLine
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case ContextLoadedMsg:
+		// Context was loaded from cache
+		m.contextStatus = ContextStatusReady
+		// Add log entry
+		contextLine := "[Context] Context loaded from cache\n"
+		m.output += contextLine
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case ContextSkippedMsg:
+		// Context generation was skipped
+		m.contextStatus = ContextStatusNone
+		// Add log entry
+		contextLine := fmt.Sprintf("[Context] Skipped (%s)\n", msg.Reason)
+		m.output += contextLine
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
+	case ContextFailedMsg:
+		// Context generation failed
+		m.contextStatus = ContextStatusFailed
+		// Add log entry with error
+		contextLine := fmt.Sprintf("[Context] Generation failed: %s\n", msg.Error)
+		m.output += contextLine
+		if m.viewingTask == "" {
+			m.updateOutputViewport()
+		}
+
 	case tea.KeyMsg:
 		// Priority 0: If conflict overlay is showing, only allow quit (no dismiss)
 		if m.showConflict {
@@ -1896,6 +2026,103 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.completeReason = "All epics finished"
 				m.running = false
 				m.endTime = time.Now()
+			}
+		}
+
+	// --- Context Generation Messages (multi-epic mode) ---
+
+	case EpicContextGeneratingMsg:
+		// Context generation started for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.ContextStatus = ContextStatusGenerating
+			// Add log entry
+			contextLine := fmt.Sprintf("\n[Context] Generating context for %d tasks...\n", msg.TaskCount)
+			tab.Output += contextLine
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.contextStatus = ContextStatusGenerating
+				m.output = tab.Output
+				if m.viewingTask == "" {
+					m.updateOutputViewport()
+				}
+			}
+		}
+
+	case EpicContextGeneratedMsg:
+		// Context was generated successfully for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.ContextStatus = ContextStatusReady
+			// Add log entry
+			contextLine := fmt.Sprintf("[Context] Context generated (%d tokens)\n", msg.Tokens)
+			tab.Output += contextLine
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.contextStatus = ContextStatusReady
+				m.output = tab.Output
+				if m.viewingTask == "" {
+					m.updateOutputViewport()
+				}
+			}
+		}
+
+	case EpicContextLoadedMsg:
+		// Context was loaded from cache for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.ContextStatus = ContextStatusReady
+			// Add log entry
+			contextLine := "[Context] Context loaded from cache\n"
+			tab.Output += contextLine
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.contextStatus = ContextStatusReady
+				m.output = tab.Output
+				if m.viewingTask == "" {
+					m.updateOutputViewport()
+				}
+			}
+		}
+
+	case EpicContextSkippedMsg:
+		// Context generation was skipped for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.ContextStatus = ContextStatusNone
+			// Add log entry
+			contextLine := fmt.Sprintf("[Context] Skipped (%s)\n", msg.Reason)
+			tab.Output += contextLine
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.contextStatus = ContextStatusNone
+				m.output = tab.Output
+				if m.viewingTask == "" {
+					m.updateOutputViewport()
+				}
+			}
+		}
+
+	case EpicContextFailedMsg:
+		// Context generation failed for a specific epic
+		idx := m.findTabByEpicID(msg.EpicID)
+		if idx >= 0 {
+			tab := &m.epicTabs[idx]
+			tab.ContextStatus = ContextStatusFailed
+			// Add log entry
+			contextLine := fmt.Sprintf("[Context] Generation failed: %s\n", msg.Error)
+			tab.Output += contextLine
+			// Sync to display if this is the active tab
+			if idx == m.activeTab {
+				m.contextStatus = ContextStatusFailed
+				m.output = tab.Output
+				if m.viewingTask == "" {
+					m.updateOutputViewport()
+				}
 			}
 		}
 	}
@@ -2368,6 +2595,26 @@ func (m Model) renderStatusIndicator() string {
 	}
 }
 
+// renderContextStatus returns a styled context status indicator for the header.
+// Displays: [✓ Context] when ready, [○ No ctx] when none/skipped, spinner when generating, [✗ Context] when failed.
+func (m Model) renderContextStatus() string {
+	switch m.contextStatus {
+	case ContextStatusReady:
+		return lipgloss.NewStyle().Foreground(colorGreen).Render("[✓ Context]")
+	case ContextStatusGenerating:
+		spinnerFrames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		spinner := spinnerFrames[m.animFrame%len(spinnerFrames)]
+		return lipgloss.NewStyle().Foreground(colorBlue).Render("[" + spinner + " Context]")
+	case ContextStatusFailed:
+		return lipgloss.NewStyle().Foreground(colorRed).Render("[✗ Context]")
+	case ContextStatusNone:
+		return lipgloss.NewStyle().Foreground(colorGray).Render("[○ No ctx]")
+	default:
+		// No status set yet - don't show anything
+		return ""
+	}
+}
+
 // renderThinkingArea renders the fixed thinking area showing only the most recent thought.
 // This is displayed above the scrollable viewport and is visually distinct.
 // Returns empty string if there's no current thinking, or the rendered thinking area.
@@ -2526,18 +2773,20 @@ func (m Model) View() string {
 }
 
 // renderStatusBar renders the top status bar with header, progress, and optional progress bar.
-// Line 1: '⚡ ticker: [epic-id] Epic Title  [global status]  ● STATUS'
+// Line 1: '⚡ ticker: [epic-id] Epic Title [✓ Context]  [global status]  ● STATUS'
 // Line 2: 'Iter: 5 │ Tasks: 3/8 │ Time: 2:34 │ Cost: $1.23/$20.00 │ Tokens: 1.2k in │ 450 out │ 12k cache │ Model: opus'
 // Line 3 (optional): Progress bar
 func (m Model) renderStatusBar() string {
 	// --- Line 1: Header ---
-	// Left side: branding + epic info
+	// Left side: branding + epic info + context status
 	leftContent := headerStyle.Render("⚡ ticker")
 	if m.epicID != "" {
 		leftContent += ": " + dimStyle.Render("["+m.epicID+"]")
 		if m.epicTitle != "" {
 			leftContent += " " + m.epicTitle
 		}
+		// Add context status indicator
+		leftContent += " " + m.renderContextStatus()
 	} else if m.epicTitle != "" {
 		leftContent += ": " + m.epicTitle
 	}

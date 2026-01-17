@@ -860,6 +860,23 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 			loadTasksForEpic(epicID)
 		}
 
+		// Context generation callbacks for multi-epic TUI
+		eng.OnContextGenerating = func(eid string, taskCount int) {
+			p.Send(tui.EpicContextGeneratingMsg{EpicID: eid, TaskCount: taskCount})
+		}
+		eng.OnContextGenerated = func(eid string, tokenCount int) {
+			p.Send(tui.EpicContextGeneratedMsg{EpicID: eid, Tokens: tokenCount})
+		}
+		eng.OnContextLoaded = func(eid string) {
+			p.Send(tui.EpicContextLoadedMsg{EpicID: eid})
+		}
+		eng.OnContextSkipped = func(eid string, reason string) {
+			p.Send(tui.EpicContextSkippedMsg{EpicID: eid, Reason: reason})
+		}
+		eng.OnContextFailed = func(eid string, errMsg string) {
+			p.Send(tui.EpicContextFailedMsg{EpicID: eid, Error: errMsg})
+		}
+
 		return eng
 	}
 
@@ -1484,6 +1501,23 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 		})
 		// Refresh task list after verification (task may have been reopened)
 		go refreshTasks()
+	}
+
+	// Context generation callbacks for TUI status display
+	eng.OnContextGenerating = func(epicID string, taskCount int) {
+		p.Send(tui.ContextGeneratingMsg{EpicID: epicID, TaskCount: taskCount})
+	}
+	eng.OnContextGenerated = func(epicID string, tokenCount int) {
+		p.Send(tui.ContextGeneratedMsg{EpicID: epicID, Tokens: tokenCount})
+	}
+	eng.OnContextLoaded = func(epicID string) {
+		p.Send(tui.ContextLoadedMsg{EpicID: epicID})
+	}
+	eng.OnContextSkipped = func(epicID string, reason string) {
+		p.Send(tui.ContextSkippedMsg{EpicID: epicID, Reason: reason})
+	}
+	eng.OnContextFailed = func(epicID string, errMsg string) {
+		p.Send(tui.ContextFailedMsg{EpicID: epicID, Error: errMsg})
 	}
 
 	// Set up OnIdle callback for watch mode TUI updates
