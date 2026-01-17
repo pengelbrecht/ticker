@@ -30,11 +30,17 @@ ticker/
 │   ├── agent/              # AI agent interface + Claude implementation
 │   ├── budget/             # Cost/token/iteration tracking
 │   ├── checkpoint/         # Save/resume state
+│   ├── context/            # Epic context generation and storage
 │   ├── engine/             # Core Ralph loop orchestration
 │   ├── ticks/              # Ticks CLI wrapper (tk commands)
 │   └── tui/                # Bubble Tea TUI (model.go is main file)
 ├── SPEC.md                 # Full specification document
-└── .tick/issues/           # Ticks issue storage
+├── .tick/issues/           # Ticks issue storage
+└── .ticker/
+    ├── config.json         # Ticker configuration
+    ├── checkpoints/        # Checkpoint files for resume
+    ├── context/            # Pre-generated epic context docs
+    └── runs/               # Run logs
 ```
 
 ## Working with Ticks (tk CLI)
@@ -190,3 +196,106 @@ go build -ldflags "-X main.Version=v1.0.0" -o ticker ./cmd/ticker
 - **Agent**: Wraps `claude` CLI with streaming output
 - **Budget**: Tracks iterations, tokens, cost against limits
 - **Checkpoints**: Saved to `.ticker/checkpoints/` for resume
+- **Context**: Pre-generated epic context stored in `.ticker/context/`
+
+## Epic Context
+
+Ticker can pre-generate context documents for epics to reduce redundant codebase exploration. Instead of each task spending tokens gathering similar context, a shared context document is generated once and injected into every task's prompt.
+
+### How It Works
+
+1. When an epic with 2+ tasks starts, ticker generates a context document
+2. The document is stored at `.ticker/context/<epic-id>.md`
+3. Context is injected into every task's prompt template
+4. Tasks start with relevant code locations, patterns, and architecture already known
+
+**Skipped for single-task epics** - Context generation is skipped for epics with ≤1 tasks since there's no amortization benefit.
+
+### CLI Commands
+
+```bash
+# Generate context (or show if exists)
+ticker context <epic-id>
+
+# Force regeneration
+ticker context <epic-id> --refresh
+
+# View existing context only (error if none exists)
+ticker context <epic-id> --show
+
+# Delete context file
+ticker context <epic-id> --delete
+```
+
+### Configuration
+
+Add to `.ticker/config.json`:
+
+```json
+{
+  "context": {
+    "enabled": true,
+    "max_tokens": 4000,
+    "auto_refresh_days": 0,
+    "generation_timeout": "5m",
+    "generation_model": ""
+  }
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `true` | Enable/disable context generation |
+| `max_tokens` | `4000` | Target size for context documents (100-100000) |
+| `auto_refresh_days` | `0` | Days until auto-refresh (0 = never, max 365) |
+| `generation_timeout` | `"5m"` | Max generation time (1s-1h) |
+| `generation_model` | `""` | Model override for generation (empty = default) |
+
+### Context Document Contents
+
+Generated context includes:
+- **Relevant Code** - Files, types, and functions related to the epic
+- **Architecture Notes** - How components interact
+- **External References** - Documentation links for frameworks/libraries
+- **Testing Patterns** - Test structure and mocking approaches
+- **Conventions** - Error handling, logging, naming patterns
+
+### Example Workflow
+
+```bash
+# Create an epic with multiple tasks
+tk create "Add user authentication" -t epic
+tk create "Create User model" -t task -parent abc
+tk create "Add login endpoint" -t task -parent abc
+tk create "Add session middleware" -t task -parent abc
+
+# Start ticker - context generates automatically
+ticker run abc
+
+# Or manually generate/view context
+ticker context abc
+```
+
+### Troubleshooting
+
+**Context not generating:**
+- Check epic has more than 1 task (`tk list -parent <epic-id>`)
+- Verify context is enabled in config (`"enabled": true`)
+- Context may already exist - use `--refresh` to regenerate
+
+**Context seems stale:**
+- Use `ticker context <epic-id> --refresh` to regenerate
+- Set `auto_refresh_days` in config for automatic refresh
+
+**Context too large/small:**
+- Adjust `max_tokens` in config (default 4000)
+- Regenerate with `--refresh`
+
+**Generation timing out:**
+- Increase `generation_timeout` in config
+- Default is 5 minutes, max is 1 hour
+
+**Generation fails:**
+- Ticker proceeds without context (non-fatal)
+- Check agent availability and API keys
+- Review logs for specific errors
