@@ -1,16 +1,341 @@
 {
-  "id": "tu2",
-  "title": "Add TUI indicator for context generation status",
-  "description": "Show context generation status in the TUI during epic runs.\n\n## Requirements\n- Show 'Generating context...' during generation\n- Show context status in header (✓ Context ready / ○ No context)\n- Log context generation events in log pane\n\n## Acceptance Criteria\n- [ ] Status message during context generation phase\n- [ ] Header shows context status icon\n- [ ] Log entry when context generated\n- [ ] Log entry when context loaded from cache\n- [ ] Log entry when generation skipped (single-task epic)\n\n## UI Elements\n- Header: `Epic: xyz [✓ Context]` or `Epic: xyz [○ No ctx]`\n- Log: `[10:30:15] Context generated (2847 tokens)`\n- Log: `[10:30:15] Context loaded from cache`",
-  "status": "open",
-  "priority": 3,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
     "1q7"
   ],
-  "parent": "uzr",
-  "created_by": "peter@engelbrecht.dk",
+  "closed_at": "2026-01-17T12:15:37.594667Z",
+  "closed_reason": "Added TUI context generation status indicator. Added ContextStatus type (none/generating/ready/failed) and context message types to TUI. Engine now calls OnContext* callbacks during context operations. Header displays [✓ Context]/[○ No ctx] icon. Log pane shows context events. Tests added for all context states and message handlers.",
   "created_at": "2026-01-17T11:25:36.062537Z",
-  "updated_at": "2026-01-17T11:25:36.062537Z"
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Show context generation status in the TUI during epic runs.\n\n## Requirements\n- Show 'Generating context...' during generation\n- Show context status in header (✓ Context ready / ○ No context)\n- Log context generation events in log pane\n\n## Acceptance Criteria\n- [ ] Status message during context generation phase\n- [ ] Header shows context status icon\n- [ ] Log entry when context generated\n- [ ] Log entry when context loaded from cache\n- [ ] Log entry when generation skipped (single-task epic)\n\n## UI Elements\n- Header: `Epic: xyz [✓ Context]` or `Epic: xyz [○ No ctx]`\n- Log: `[10:30:15] Context generated (2847 tokens)`\n- Log: `[10:30:15] Context loaded from cache`",
+  "id": "tu2",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "uzr",
+  "priority": 3,
+  "run": {
+    "session_id": "64c344af-61bc-4500-89e8-98d59035c2e6",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-17T13:09:19.38502+01:00",
+    "ended_at": "2026-01-17T13:16:00.046195+01:00",
+    "output": "I'll start by reviewing the current TUI implementation to understand how to add context generation status indicators.\n\nThe file is large. Let me read it in chunks and also look for specific patterns.\n\nLet me look at the renderStatusBar function (line 2528) and look for \"Epic\" display in the status bar, and also check the Model struct definition to understand the current state fields.\n\nNow I have a good understanding of the TUI structure. I can see:\n\n1. The `Model` struct at line 600 contains the state\n2. `renderStatusBar()` at line 2532 renders the top status bar including epic info\n3. The header line format is `⚡ ticker: [epic-id] Epic Title  [global status]  ● STATUS`\n\nI need to:\n1. Add context status fields to the Model struct and EpicTab struct\n2. Add new message types for context events\n3. Update `renderStatusBar()` to show context status icon after epic title\n4. Handle context messages to update state and add log entries\n\nLet me also check how the engine sends messages to the TUI and look at existing log functionality.\n\nLet me look at how the TUI handles output and status messages.\n\nNow I understand. The TUI uses `GlobalStatusMsg` for status messages in the status bar. The task wants:\n1. A status message during context generation (\"Generating context...\")\n2. A context status icon in the header (`[✓ Context]` or `[○ No ctx]`)\n3. Log entries for context events - but looking at the TUI, it seems there isn't a dedicated log pane; rather the output pane shows agent output.\n\nLet me look at how VerifyStartMsg/VerifyResultMsg work to understand the pattern for showing status.\n\nNow I understand the pattern. The TUI uses:\n1. Message types to receive events from the engine\n2. State fields in Model to track status\n3. Output appending for \"log\" style messages (like `[Verification]` lines)\n\nLet me check how the engine communicates context events. Let me look at the engine for context generation.\n\nNow I see the engine has callbacks (`OnIterationStart`, `OnOutput`, etc.) but no context-specific callbacks. I need to add callbacks for context events. Let me see more of the engine to understand the complete pattern.\n\nNow I have a clear picture. Let me implement this:\n\n1. **Add TUI message types** for context events\n2. **Add context state** to Model struct and EpicTab struct\n3. **Add engine callbacks** for context events\n4. **Update renderStatusBar()** to show context status icon\n5. **Handle context messages** in the Update function\n\nLet me start by adding message types and state to the TUI model.\n\nI'll add the context message types right after the verification messages, around line 189.\n\nNow I need to add context status to the Model struct. Let me find the verification state section.\n\nNow I need to add context status to the EpicTab struct for multi-epic mode. Let me find it.\n\nNow I need to add the engine callbacks for context events. Let me look at the engine's existing callbacks.\n\nNow I need to add the callback invocations in ensureEpicContext and loadEpicContext. Let me read those functions again.\n\nNow I need to modify ensureEpicContext and loadEpicContext to call the new callbacks. Let me update ensureEpicContext first.\n\nNow let me update loadEpicContext to call OnContextLoaded.\n\nNow let me update the renderStatusBar function to show the context status icon. The spec says:\n- Header: `Epic: xyz [✓ Context]` or `Epic: xyz [○ No ctx]`\n\nI see the layout. After the epic title, I need to add a context status indicator. Let me update it.\n\nNow I need to add the renderContextStatus method. Let me find a good place to add it, near other render helper methods.\n\nI'll add the renderContextStatus method near renderStatusIndicator (line 2410).\n\nNow I need to wire up the TUI message handlers. Let me find the Update function where messages are processed.\n\nI'll add the context message handlers right after VerifyResultMsg. Let me see more context to find the right place.\n\nI'll add the context message handlers right after the VerifyResultMsg handler (before the tea.KeyMsg case).\n\nNow I need to also add handlers for the multi-epic versions (Epic*Msg). Let me look for where other Epic*Msg types are handled.\n\nLet me continue reading to find where this section ends so I can add the Epic context handlers.\n\nI see the switch statement ends at line 2031. I need to add the Epic context message handlers right before that closing brace. Let me add them after EpicRunCompleteMsg handler.\n\nNow I need to update cmd/ticker to wire up the engine's context callbacks to send TUI messages. Let me look at how the existing callbacks are wired up.\n\nI can see the pattern. Let me look at the context around the first `OnVerificationStart` callback to understand the TUI mode setup better.\n\nThis is the multi-epic mode. I need to add context callbacks here. But first let me find the single-epic TUI mode (around line 1463 where I saw the other callbacks).\n\nI need to add the context callbacks right after the verification callbacks. Let me add them to the single-epic TUI mode first.\n\nNow let me add the context callbacks to the multi-epic mode (around line 844).\n\nNow let me also check for headless mode to make sure I handle it properly. Looking at the grep results, there were callbacks at lines 1076-1092 and 1685-1699. Let me check those.\n\nThis is the headless multi-epic mode. The context callbacks are not critical for headless mode since there's no TUI to show context status. The engine already logs to runlog. But for completeness I can add them for headless output too. Let me first check if the headless output interface supports context.\n\nFor headless mode, the context events would need an output interface method. Since that's not crucial for the TUI task I'm implementing, I'll skip adding headless context callbacks for now. The engine already logs to runlog which is sufficient for headless mode.\n\nNow let me run tests to make sure the code compiles and the tests pass.\n\nThe code compiles. Now let me run the tests.\n\nAll tests pass. Now let me add a test for the context status rendering to ensure it works correctly.\n\nI'll add tests for the context status indicator and context message handling. Let me find where the tests end in the file.\n\nNow let me run the tests to make sure they pass.\n\nAll tests pass. Let me also run all tests to make sure nothing is broken.\n\nAll tests pass. Now let me close the task and commit the changes.\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "Glob",
+        "duration_ms": 390
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 511
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3047
+      },
+      {
+        "name": "Read",
+        "duration_ms": 438
+      },
+      {
+        "name": "Read",
+        "duration_ms": 598
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 941
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 722
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3374
+      },
+      {
+        "name": "Read",
+        "duration_ms": 1158
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 940
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1359
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 952
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 697
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 769
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 707
+      },
+      {
+        "name": "Read",
+        "duration_ms": 903
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 951
+      },
+      {
+        "name": "Read",
+        "duration_ms": 777
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4459
+      },
+      {
+        "name": "Read",
+        "duration_ms": 616
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 8263
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 920
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2347
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 626
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 1596
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3040
+      },
+      {
+        "name": "Read",
+        "duration_ms": 662
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2860
+      },
+      {
+        "name": "Read",
+        "duration_ms": 620
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2129
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 6676
+      },
+      {
+        "name": "Read",
+        "duration_ms": 627
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3532
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2835
+      },
+      {
+        "name": "Read",
+        "duration_ms": 676
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4904
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 981
+      },
+      {
+        "name": "Read",
+        "duration_ms": 581
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5242
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4180
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 951
+      },
+      {
+        "name": "Read",
+        "duration_ms": 584
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 8712
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 837
+      },
+      {
+        "name": "Read",
+        "duration_ms": 675
+      },
+      {
+        "name": "Read",
+        "duration_ms": 694
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 11825
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 3837
+      },
+      {
+        "name": "Glob",
+        "duration_ms": 226
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 1140
+      },
+      {
+        "name": "Read",
+        "duration_ms": 706
+      },
+      {
+        "name": "Read",
+        "duration_ms": 644
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 5420
+      },
+      {
+        "name": "Read",
+        "duration_ms": 772
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 4299
+      },
+      {
+        "name": "Read",
+        "duration_ms": 600
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 991
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 947
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2828
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 735
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 672
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 478
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 455
+      },
+      {
+        "name": "Grep",
+        "duration_ms": 852
+      },
+      {
+        "name": "Read",
+        "duration_ms": 765
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 672
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 778
+      },
+      {
+        "name": "Read",
+        "duration_ms": 625
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 17939
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 906
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 577
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 4124
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3383
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 577
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 5837
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 4496
+      }
+    ],
+    "metrics": {
+      "input_tokens": 46,
+      "output_tokens": 20686,
+      "cache_read_tokens": 6184947,
+      "cache_creation_tokens": 82650,
+      "cost_usd": 4.146939000000001,
+      "duration_ms": 400088
+    },
+    "success": true,
+    "num_turns": 77
+  },
+  "status": "closed",
+  "title": "Add TUI indicator for context generation status",
+  "type": "task",
+  "updated_at": "2026-01-17T12:15:37.594667Z"
 }

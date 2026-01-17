@@ -84,7 +84,14 @@ Include:
 - Summarize, don't copy entire files
 - Be specific (file:line references) not vague
 
-Output the context document in markdown format.
+## Output Format
+
+CRITICAL: Your response must start IMMEDIATELY with the markdown heading. Example:
+
+# Epic Context: [epic-id] Epic Title
+
+Do NOT output any text before the heading. No "Let me...", no "I'll...", no "Here is...".
+The very first character of your response MUST be "#".
 `
 
 // DefaultMaxTokens is the default max token limit for context documents.
