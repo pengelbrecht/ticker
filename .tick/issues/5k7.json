@@ -1,16 +1,121 @@
 {
-  "id": "5k7",
-  "title": "Update prompt template to include epic context",
-  "description": "Modify the prompt template to inject epic context before task details.\n\n## Requirements\n- Add Epic Context section to prompt template\n- Only show section if EpicContext is non-empty\n- Position before Epic Notes section\n- Clear header explaining this is pre-computed context\n\n## Acceptance Criteria\n- [ ] New `{{if .EpicContext}}` section in prompt template\n- [ ] Section header: '## Epic Context'\n- [ ] Explains context was pre-generated for this epic\n- [ ] Context content rendered as-is (markdown passthrough)\n- [ ] No section shown when EpicContext is empty\n\n## Template Addition\n```\n{{if .EpicContext}}\n## Epic Context\n\nThe following context was generated for this epic. Use it to understand the codebase.\n\n{{.EpicContext}}\n{{end}}\n```",
-  "status": "open",
-  "priority": 1,
-  "type": "task",
-  "owner": "peter@engelbrecht.dk",
   "blocked_by": [
     "1gu"
   ],
-  "parent": "uzr",
-  "created_by": "peter@engelbrecht.dk",
+  "closed_at": "2026-01-17T11:51:04.021644Z",
+  "closed_reason": "Added EpicContext field to templateData struct, wired it from IterationContext in Build method, and added new conditional section to promptTemplate. Section appears before Epic Notes with header '## Epic Context' and explains context was pre-generated. Added 3 tests: with context, without context, and verifying section order.",
   "created_at": "2026-01-17T11:24:37.586287Z",
-  "updated_at": "2026-01-17T11:24:37.586287Z"
+  "created_by": "peter@engelbrecht.dk",
+  "description": "Modify the prompt template to inject epic context before task details.\n\n## Requirements\n- Add Epic Context section to prompt template\n- Only show section if EpicContext is non-empty\n- Position before Epic Notes section\n- Clear header explaining this is pre-computed context\n\n## Acceptance Criteria\n- [ ] New `{{if .EpicContext}}` section in prompt template\n- [ ] Section header: '## Epic Context'\n- [ ] Explains context was pre-generated for this epic\n- [ ] Context content rendered as-is (markdown passthrough)\n- [ ] No section shown when EpicContext is empty\n\n## Template Addition\n```\n{{if .EpicContext}}\n## Epic Context\n\nThe following context was generated for this epic. Use it to understand the codebase.\n\n{{.EpicContext}}\n{{end}}\n```",
+  "id": "5k7",
+  "owner": "peter@engelbrecht.dk",
+  "parent": "uzr",
+  "priority": 1,
+  "run": {
+    "session_id": "b014e0c3-56e9-4072-9a9a-ac2668f9082f",
+    "model": "claude-opus-4-5-20251101",
+    "started_at": "2026-01-17T12:49:23.821578+01:00",
+    "ended_at": "2026-01-17T12:51:31.317467+01:00",
+    "output": "I'll work on updating the prompt template to include epic context. Let me start by reading the current prompt template file.\n\nNow I understand the current template structure. I need to:\n\n1. Add `EpicContext` to the `templateData` struct \n2. Add the Epic Context section to the prompt template - it should be positioned before the Epic Notes section as specified in the task requirements\n\nLet me also check the existing tests to understand what I need to test:\n\nNow I have a clear understanding. I need to:\n\n1. Add `EpicContext` to the `templateData` struct\n2. Pass `EpicContext` from `IterationContext` to `templateData` in the `Build` method\n3. Add the Epic Context section to the template (positioned before Epic Notes section)\n4. Add tests for the new functionality\n\nNow I need to pass `EpicContext` from `IterationContext` to `templateData` in the `Build` method:\n\nNow I need to add the Epic Context section to the prompt template. According to the task requirements, it should be positioned before the Epic Notes section. Let me add it right after the iteration header:\n\nNow let me add tests for the new Epic Context functionality. I'll add tests for:\n1. When EpicContext is provided, it appears in the output\n2. When EpicContext is empty, no section appears\n3. When EpicContext is nil/empty string, no section appears\n\nNow let me run the tests to ensure everything works correctly:\n\nAll tests pass. Let me specifically check that the new Epic Context tests passed:\n\nAll three new tests pass. Let me also run all tests to make sure I haven't broken anything else:\n\nAll tests pass. Now let me close the task, commit the changes, and add an epic note.\n\nI have completed the task. Here's a summary of what was done:\n\n## Summary\n\nUpdated the prompt template in `internal/engine/prompt.go` to include an Epic Context section:\n\n1. **Added `EpicContext` field to `templateData` struct** - This field holds the pre-computed context string\n\n2. **Wired `EpicContext` in `Build` method** - Passes the value from `IterationContext` to `templateData`\n\n3. **Added conditional Epic Context section to template** - The section:\n   - Uses `{{if .EpicContext}}` conditional to only show when non-empty\n   - Has header \"## Epic Context\"\n   - Includes explanatory text: \"The following context was generated for this epic. Use it to understand the codebase.\"\n   - Renders content as-is (markdown passthrough)\n   - Positioned before the Epic Notes section\n\n4. **Added 3 new tests**:\n   - `TestPromptBuilder_Build_WithEpicContext` - Verifies section appears with correct header and content\n   - `TestPromptBuilder_Build_NoEpicContext` - Verifies section is hidden when empty\n   - `TestPromptBuilder_Build_EpicContextBeforeEpicNotes` - Verifies section order\n\nAll tests pass.\n\n\u003cpromise\u003eCOMPLETE\u003c/promise\u003e",
+    "tools": [
+      {
+        "name": "Read",
+        "duration_ms": 390
+      },
+      {
+        "name": "Read",
+        "duration_ms": 436
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2000
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 3536
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1344
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 1561
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1471
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 2912
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1517
+      },
+      {
+        "name": "Edit",
+        "duration_ms": 12307
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 1393
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 799
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 612
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 740
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 683
+      },
+      {
+        "name": "TodoWrite",
+        "duration_ms": 2631
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3059
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 642
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 818
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 3979
+      },
+      {
+        "name": "Bash",
+        "duration_ms": 2895
+      }
+    ],
+    "metrics": {
+      "input_tokens": 2,
+      "output_tokens": 5694,
+      "cache_read_tokens": 1278103,
+      "cache_creation_tokens": 31954,
+      "cost_usd": 1.0190489999999999,
+      "duration_ms": 127011
+    },
+    "success": true,
+    "num_turns": 22
+  },
+  "status": "closed",
+  "title": "Update prompt template to include epic context",
+  "type": "task",
+  "updated_at": "2026-01-17T11:51:04.021644Z"
 }

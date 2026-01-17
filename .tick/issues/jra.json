@@ -2,7 +2,7 @@
   "id": "jra",
   "title": "Integration tests for engine context generation",
   "description": "End-to-end tests for context generation in the engine.\n\n## Test Scenarios\n- [ ] Epic with 3 tasks: context generated before first task\n- [ ] Epic with 1 task: context generation skipped\n- [ ] Context already exists: generation skipped\n- [ ] Generation fails: run proceeds without context\n- [ ] Context injected into prompt correctly\n\n## Acceptance Criteria\n- [ ] Tests use mock agent (no real API calls)\n- [ ] Tests create temp .ticker directory\n- [ ] Verify context file created at correct path\n- [ ] Verify prompt contains context section\n- [ ] Verify prompt omits context section when empty\n\n## Technical Notes\n- May need to refactor Engine for better testability\n- Consider adding context generation event to callbacks",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,7 @@
   "parent": "uzr",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-17T11:24:58.152803Z",
-  "updated_at": "2026-01-17T11:24:58.152803Z"
+  "updated_at": "2026-01-17T11:58:32.973743Z",
+  "closed_at": "2026-01-17T11:58:32.973743Z",
+  "closed_reason": "Created comprehensive integration tests in internal/engine/context_integration_test.go. Tests cover: (1) Epic with 3+ tasks generates context before first iteration, (2) Single-task epic skips context generation, (3) Existing context not regenerated, (4) Failed generation doesn't abort run, (5) Context properly injected into prompt, (6) Context section omitted when empty, (7) Engine works without context components, (8) Context file created at correct path. All tests use mock agents with no real API calls and temp directories."
 }

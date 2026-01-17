@@ -1,0 +1,10 @@
+{
+  "id": "uzr-5",
+  "timestamp": "2026-01-17T12:48:18.866849+01:00",
+  "epic_id": "uzr",
+  "iteration": 5,
+  "total_tokens": 37142,
+  "total_cost": 4.89889875,
+  "completed_tasks": [],
+  "git_commit": "8465086102d3e7505bc8bdfc18c05997c606c9ab"
+}
