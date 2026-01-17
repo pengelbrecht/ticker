@@ -616,15 +616,15 @@ func TestLoadContextConfig(t *testing.T) {
 
 func TestLoadTickerConfig(t *testing.T) {
 	tests := []struct {
-		name                   string
-		configJSON             string
-		createFile             bool
-		wantNil                bool
-		wantVerificationNil    bool
-		wantContextNil         bool
+		name                    string
+		configJSON              string
+		createFile              bool
+		wantNil                 bool
+		wantVerificationNil     bool
+		wantContextNil          bool
 		wantVerificationEnabled bool
-		wantContextEnabled     bool
-		wantErr                bool
+		wantContextEnabled      bool
+		wantErr                 bool
 	}{
 		{
 			name:       "missing file returns nil config",
@@ -654,14 +654,14 @@ func TestLoadTickerConfig(t *testing.T) {
 			wantErr:                 false,
 		},
 		{
-			name:               "context only",
-			configJSON:         `{"context": {"enabled": true}}`,
-			createFile:         true,
-			wantNil:            false,
+			name:                "context only",
+			configJSON:          `{"context": {"enabled": true}}`,
+			createFile:          true,
+			wantNil:             false,
 			wantVerificationNil: true,
-			wantContextNil:     false,
-			wantContextEnabled: true,
-			wantErr:            false,
+			wantContextNil:      false,
+			wantContextEnabled:  true,
+			wantErr:             false,
 		},
 	}
 

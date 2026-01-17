@@ -256,10 +256,10 @@ func TestBackwardsCompat_MigrationNotRequired(t *testing.T) {
 	// Test various JSON formats that might exist in production
 
 	testCases := []struct {
-		name        string
-		json        string
+		name         string
+		json         string
 		wantAwaiting bool
-		wantType    string
+		wantType     string
 	}{
 		{
 			name:         "old format with manual=true",
@@ -328,9 +328,9 @@ func TestBackwardsCompat_ListAwaitingIncludesManual(t *testing.T) {
 	awaitingApproval := "approval"
 
 	tasks := []Task{
-		{ID: "t1", Status: "open", Manual: true},                       // manual=true → awaiting=work
-		{ID: "t2", Status: "open", Awaiting: &awaitingApproval},       // awaiting=approval
-		{ID: "t3", Status: "open"},                                     // not awaiting
+		{ID: "t1", Status: "open", Manual: true},                // manual=true → awaiting=work
+		{ID: "t2", Status: "open", Awaiting: &awaitingApproval}, // awaiting=approval
+		{ID: "t3", Status: "open"},                              // not awaiting
 	}
 
 	// Simulate filtering for "work" awaiting type
@@ -370,11 +370,11 @@ func TestBackwardsCompat_ListAwaitingAllTypes(t *testing.T) {
 	awaitingInput := "input"
 
 	tasks := []Task{
-		{ID: "t1", Status: "open", Manual: true},                  // old format
-		{ID: "t2", Status: "open", Awaiting: &awaitingApproval},  // new format
-		{ID: "t3", Status: "open", Awaiting: &awaitingInput},     // new format
-		{ID: "t4", Status: "open"},                                // not awaiting
-		{ID: "t5", Status: "closed"},                              // closed
+		{ID: "t1", Status: "open", Manual: true},                // old format
+		{ID: "t2", Status: "open", Awaiting: &awaitingApproval}, // new format
+		{ID: "t3", Status: "open", Awaiting: &awaitingInput},    // new format
+		{ID: "t4", Status: "open"},                              // not awaiting
+		{ID: "t5", Status: "closed"},                            // closed
 	}
 
 	// List all awaiting tasks (no type filter)

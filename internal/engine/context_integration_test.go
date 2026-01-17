@@ -16,13 +16,13 @@ import (
 
 // mockAgentForContext is a mock agent that tracks calls for context generation testing.
 type mockAgentForContext struct {
-	name           string
-	available      bool
-	runCallCount   int
-	lastPrompt     string
-	contextOutput  string // Output for context generation call
-	taskOutputs    []string // Outputs for task iteration calls
-	err            error
+	name          string
+	available     bool
+	runCallCount  int
+	lastPrompt    string
+	contextOutput string   // Output for context generation call
+	taskOutputs   []string // Outputs for task iteration calls
+	err           error
 }
 
 func (m *mockAgentForContext) Name() string    { return m.name }
@@ -334,9 +334,9 @@ func TestEngine_ContextGeneration_AlreadyExists(t *testing.T) {
 
 	mockTicks := newMockTicksClientForContext()
 	mockTicks.epic = &ticks.Epic{
-		ID:          "epic-exists",
-		Title:       "Epic With Existing Context",
-		Type:        "epic",
+		ID:    "epic-exists",
+		Title: "Epic With Existing Context",
+		Type:  "epic",
 	}
 	mockTicks.tasks = []*ticks.Task{
 		{ID: "task-1", Title: "Task 1", Description: "Do thing 1", Status: "open"},
@@ -403,9 +403,9 @@ func TestEngine_ContextGeneration_GeneratorFails(t *testing.T) {
 
 	mockTicks := newMockTicksClientForContext()
 	mockTicks.epic = &ticks.Epic{
-		ID:          "epic-fail",
-		Title:       "Epic Where Context Fails",
-		Type:        "epic",
+		ID:    "epic-fail",
+		Title: "Epic Where Context Fails",
+		Type:  "epic",
 	}
 	mockTicks.tasks = []*ticks.Task{
 		{ID: "task-1", Title: "Task 1", Description: "Do thing 1", Status: "open"},

@@ -849,7 +849,7 @@ func TestIntegration_RunCompleteMsgMetricsHandling(t *testing.T) {
 	m = updateModel(m, RunCompleteMsg{
 		Signal:     "COMPLETE",
 		Reason:     "Done",
-		Iterations: 10, // Override iteration count
+		Iterations: 10,  // Override iteration count
 		Cost:       5.0, // This should be ignored - cost is accumulated via IterationEndMsg
 	})
 

@@ -3,7 +3,7 @@ package budget
 // ModelPricing contains the pricing information for a Claude model.
 // Prices are in USD per 1 million tokens.
 type ModelPricing struct {
-	Name      string  // Model name/identifier
+	Name        string  // Model name/identifier
 	InputPer1M  float64 // Cost per 1M input tokens in USD
 	OutputPer1M float64 // Cost per 1M output tokens in USD
 }

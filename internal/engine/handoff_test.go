@@ -15,11 +15,11 @@ import (
 
 // handoffMockAgent extends mockAgent with better support for multi-response scenarios.
 type handoffMockAgent struct {
-	name         string
-	available    bool
-	responses    []mockResponse
-	callCount    int
-	lastPrompts  []string // Track all prompts received
+	name        string
+	available   bool
+	responses   []mockResponse
+	callCount   int
+	lastPrompts []string // Track all prompts received
 }
 
 func newHandoffMockAgent() *handoffMockAgent {
@@ -78,8 +78,8 @@ type handoffMockTicksClient struct {
 	structuredNotes map[string][]ticks.Note
 
 	// Notes tracking
-	epicNotes  []string
-	taskNotes  map[string][]string // taskID -> notes
+	epicNotes []string
+	taskNotes map[string][]string // taskID -> notes
 
 	// Call tracking for assertions
 	setAwaitingCalls []setAwaitingCall

@@ -31,9 +31,9 @@ func TestClaudeAgent_Available_CustomCommand(t *testing.T) {
 
 func TestClaudeAgent_command(t *testing.T) {
 	tests := []struct {
-		name    string
-		agent   *ClaudeAgent
-		want    string
+		name  string
+		agent *ClaudeAgent
+		want  string
 	}{
 		{
 			name:  "default command",

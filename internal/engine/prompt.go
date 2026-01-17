@@ -222,7 +222,6 @@ When you need human involvement, emit a signal and the system will hand off the 
 
 | Signal | When to Use |
 |--------|-------------|
-| ` + "`<promise>COMPLETE</promise>`" + ` | Task fully done |
 | ` + "`<promise>APPROVAL_NEEDED: reason</promise>`" + ` | Work complete, needs human sign-off |
 | ` + "`<promise>INPUT_NEEDED: question</promise>`" + ` | Need human to answer a question |
 | ` + "`<promise>REVIEW_REQUESTED: pr_url</promise>`" + ` | PR created, needs code review |

@@ -24,28 +24,28 @@ type AgentState struct {
 	Thinking strings.Builder // Thinking/reasoning blocks
 
 	// Current tool activity
-	ActiveTool *ToolActivity
+	ActiveTool  *ToolActivity
 	ToolHistory []ToolActivity
 
 	// Accumulated metrics
 	Metrics Metrics
 
 	// Status
-	Status    RunStatus
-	NumTurns  int
-	ErrorMsg  string
+	Status   RunStatus
+	NumTurns int
+	ErrorMsg string
 }
 
 // RunStatus represents the current state of the agent run.
 type RunStatus string
 
 const (
-	StatusStarting  RunStatus = "starting"
-	StatusThinking  RunStatus = "thinking"
-	StatusWriting   RunStatus = "writing"
-	StatusToolUse   RunStatus = "tool_use"
-	StatusComplete  RunStatus = "complete"
-	StatusError     RunStatus = "error"
+	StatusStarting RunStatus = "starting"
+	StatusThinking RunStatus = "thinking"
+	StatusWriting  RunStatus = "writing"
+	StatusToolUse  RunStatus = "tool_use"
+	StatusComplete RunStatus = "complete"
+	StatusError    RunStatus = "error"
 )
 
 // ToolActivity represents a tool invocation.

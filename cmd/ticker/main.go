@@ -426,9 +426,9 @@ func runRun(cmd *cobra.Command, args []string) {
 
 				if jsonl {
 					if watcher.UsingFsnotify() {
-						fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks (fsnotify)"}`+"\n")
+						fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks (fsnotify)"}` + "\n")
 					} else {
-						fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks (polling)"}`+"\n")
+						fmt.Printf(`{"type":"watch_idle","message":"No tasks found, watching for new tasks (polling)"}` + "\n")
 					}
 				} else {
 					if watcher.UsingFsnotify() {
@@ -487,7 +487,7 @@ func runRun(cmd *cobra.Command, args []string) {
 					// Check timeout
 					if !watchDeadline.IsZero() && time.Now().After(watchDeadline) {
 						if jsonl {
-							fmt.Printf(`{"type":"watch_timeout","message":"Watch timeout reached"}`+"\n")
+							fmt.Printf(`{"type":"watch_timeout","message":"Watch timeout reached"}` + "\n")
 						} else {
 							fmt.Fprintln(os.Stderr, "[WATCH] Timeout reached, exiting")
 						}
@@ -608,7 +608,7 @@ func runRun(cmd *cobra.Command, args []string) {
 		nextWork := findNextWork(ticksClientLoop, includeStandalone, includeOrphans)
 		if nextWork == nil {
 			if jsonl {
-				fmt.Printf(`{"type":"auto_complete","message":"No more epics or tasks found"}`+"\n")
+				fmt.Printf(`{"type":"auto_complete","message":"No more epics or tasks found"}` + "\n")
 			} else {
 				fmt.Println("[AUTO] No more epics or tasks found")
 			}
@@ -724,7 +724,7 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 	// Create shared budget tracker
 	sharedBudget := budget.NewTracker(budget.Limits{
 		MaxIterations: maxIterations * len(epicIDs), // Total across all epics
-		MaxCost:       maxCost,                       // Shared cost limit
+		MaxCost:       maxCost,                      // Shared cost limit
 	})
 
 	// Create TUI model with first epic as initial
@@ -867,7 +867,7 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 		eng.OnContextGenerated = func(eid string, tokenCount int) {
 			p.Send(tui.EpicContextGeneratedMsg{EpicID: eid, Tokens: tokenCount})
 		}
-		eng.OnContextLoaded = func(eid string) {
+		eng.OnContextLoaded = func(eid string, _ string) {
 			p.Send(tui.EpicContextLoadedMsg{EpicID: eid})
 		}
 		eng.OnContextSkipped = func(eid string, reason string) {
@@ -1125,9 +1125,9 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 				out.ContextGenerated(eid, tokenCount)
 			}
 		}
-		eng.OnContextLoaded = func(eid string) {
+		eng.OnContextLoaded = func(eid string, content string) {
 			if out != nil {
-				out.ContextLoaded(eid)
+				out.ContextLoaded(eid, content)
 			}
 		}
 		eng.OnContextSkipped = func(eid string, reason string) {
@@ -1138,6 +1138,11 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 		eng.OnContextFailed = func(eid string, errMsg string) {
 			if out != nil {
 				out.ContextFailed(eid, errMsg)
+			}
+		}
+		eng.OnContextActive = func(eid string) {
+			if out != nil {
+				out.ContextActive(eid)
 			}
 		}
 
@@ -1540,7 +1545,7 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 	eng.OnContextGenerated = func(epicID string, tokenCount int) {
 		p.Send(tui.ContextGeneratedMsg{EpicID: epicID, Tokens: tokenCount})
 	}
-	eng.OnContextLoaded = func(epicID string) {
+	eng.OnContextLoaded = func(epicID string, _ string) {
 		p.Send(tui.ContextLoadedMsg{EpicID: epicID})
 	}
 	eng.OnContextSkipped = func(epicID string, reason string) {
@@ -1783,14 +1788,17 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	eng.OnContextGenerated = func(epicID string, tokenCount int) {
 		out.ContextGenerated(epicID, tokenCount)
 	}
-	eng.OnContextLoaded = func(epicID string) {
-		out.ContextLoaded(epicID)
+	eng.OnContextLoaded = func(epicID string, content string) {
+		out.ContextLoaded(epicID, content)
 	}
 	eng.OnContextSkipped = func(epicID string, reason string) {
 		out.ContextSkipped(epicID, reason)
 	}
 	eng.OnContextFailed = func(epicID string, errMsg string) {
 		out.ContextFailed(epicID, errMsg)
+	}
+	eng.OnContextActive = func(epicID string) {
+		out.ContextActive(epicID)
 	}
 
 	// Output start

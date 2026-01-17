@@ -121,13 +121,14 @@ func TestPromptBuilder_Build_FullContext(t *testing.T) {
 	if !strings.Contains(prompt, "Always leave notes") {
 		t.Error("prompt missing always leave notes rule")
 	}
-	// Check handoff signals section (all 8 signal types documented)
+	// Check handoff signals section (all 7 signal types documented)
 	if !strings.Contains(prompt, "## Handoff Signals") {
 		t.Error("prompt missing handoff signals section")
 	}
-	// Verify all 8 signals are documented
+	// Verify all 7 signals are documented
+	// Note: COMPLETE is intentionally not documented - it's parsed for backwards
+	// compatibility but agents should not emit it (the engine ignores it with a warning)
 	handoffSignals := []string{
-		"<promise>COMPLETE</promise>",
 		"<promise>APPROVAL_NEEDED:",
 		"<promise>INPUT_NEEDED:",
 		"<promise>REVIEW_REQUESTED:",

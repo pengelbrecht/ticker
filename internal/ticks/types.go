@@ -8,16 +8,16 @@ import (
 
 // Task represents a single task in the Ticks issue tracker.
 type Task struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	Priority    int       `json:"priority"`
-	Type        string    `json:"type"`
-	Owner       string    `json:"owner"`
-	BlockedBy   []string  `json:"blocked_by,omitempty"`
-	Parent      string    `json:"parent,omitempty"`
-	Manual      bool      `json:"manual,omitempty"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Status      string   `json:"status"`
+	Priority    int      `json:"priority"`
+	Type        string   `json:"type"`
+	Owner       string   `json:"owner"`
+	BlockedBy   []string `json:"blocked_by,omitempty"`
+	Parent      string   `json:"parent,omitempty"`
+	Manual      bool     `json:"manual,omitempty"`
 
 	// Requires declares a gate that must be passed before closing.
 	// Set at creation time, persists through the tick lifecycle.
@@ -34,10 +34,10 @@ type Task struct {
 	// Valid values: approved, rejected
 	Verdict *string `json:"verdict,omitempty"`
 
-	CreatedBy   string    `json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	ClosedAt    time.Time `json:"closed_at,omitempty"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	ClosedAt  time.Time `json:"closed_at,omitempty"`
 
 	// Run contains the agent run result for completed tasks.
 	Run *agent.RunRecord `json:"run,omitempty"`

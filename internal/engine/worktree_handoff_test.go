@@ -20,12 +20,12 @@ import (
 
 // worktreeMockAgent supports multi-response scenarios with work directory tracking.
 type worktreeMockAgent struct {
-	name          string
-	available     bool
-	responses     []mockResponse
-	callCount     int
-	lastPrompts   []string
-	lastWorkDirs  []string // Track the WorkDir used in each call
+	name         string
+	available    bool
+	responses    []mockResponse
+	callCount    int
+	lastPrompts  []string
+	lastWorkDirs []string // Track the WorkDir used in each call
 }
 
 func newWorktreeMockAgent() *worktreeMockAgent {

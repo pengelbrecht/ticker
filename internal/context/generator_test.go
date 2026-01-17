@@ -399,13 +399,13 @@ This is the content.`,
 			expected: "# Just markdown\n\nContent here",
 		},
 		{
-			name: "handles empty tags",
-			input: "<epic_context></epic_context>",
+			name:     "handles empty tags",
+			input:    "<epic_context></epic_context>",
 			expected: "",
 		},
 		{
-			name: "handles whitespace in tags",
-			input: "<epic_context>  \n# Title\n  </epic_context>",
+			name:     "handles whitespace in tags",
+			input:    "<epic_context>  \n# Title\n  </epic_context>",
 			expected: "# Title",
 		},
 	}

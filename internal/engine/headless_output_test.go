@@ -198,7 +198,7 @@ func TestHeadlessOutput_Output(t *testing.T) {
 		out := NewHeadlessOutput(true, "")
 		out.SetWriter(&buf)
 
-		out.Output("Some output") // No newline
+		out.Output("Some output")        // No newline
 		out.Error(testError{"an error"}) // Should trigger flush
 
 		lines := strings.Split(strings.TrimSpace(buf.String()), "\n")

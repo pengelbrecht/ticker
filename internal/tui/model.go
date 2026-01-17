@@ -277,42 +277,42 @@ const (
 // EpicTab holds state for a single epic tab in multi-epic mode.
 // Each tab maintains isolated state for its epic's tasks, output, and status.
 type EpicTab struct {
-	EpicID    string        // The epic ID
-	Title     string        // Epic title for display
-	Status    EpicTabStatus // Current status (running, completed, failed, conflict)
+	EpicID string        // The epic ID
+	Title  string        // Epic title for display
+	Status EpicTabStatus // Current status (running, completed, failed, conflict)
 
 	// Per-tab state (mirrors single-epic Model fields)
-	Tasks          []TaskInfo
-	SelectedTask   int
-	TaskExecOrder  map[string]int
-	NextExecOrder  int
-	Output         string
-	Thinking       string
-	LastThought    string
-	TaskOutputs    map[string]string
-	TaskRunRecords map[string]*agent.RunRecord
-	ViewingTask    string
+	Tasks            []TaskInfo
+	SelectedTask     int
+	TaskExecOrder    map[string]int
+	NextExecOrder    int
+	Output           string
+	Thinking         string
+	LastThought      string
+	TaskOutputs      map[string]string
+	TaskRunRecords   map[string]*agent.RunRecord
+	ViewingTask      string
 	ViewingRunRecord bool
 
 	// Per-tab metrics
-	Iteration      int
-	TaskID         string   // Current task ID
-	TaskTitle      string   // Current task title
-	Cost           float64
-	Tokens         int
+	Iteration int
+	TaskID    string // Current task ID
+	TaskTitle string // Current task title
+	Cost      float64
+	Tokens    int
 
 	// Per-tab token tracking
-	LiveInputTokens         int
-	LiveOutputTokens        int
-	LiveCacheReadTokens     int
-	LiveCacheCreationTokens int
-	TotalInputTokens        int
-	TotalOutputTokens       int
-	TotalCacheReadTokens    int
+	LiveInputTokens          int
+	LiveOutputTokens         int
+	LiveCacheReadTokens      int
+	LiveCacheCreationTokens  int
+	TotalInputTokens         int
+	TotalOutputTokens        int
+	TotalCacheReadTokens     int
 	TotalCacheCreationTokens int
-	LiveModel               string
-	LiveStatus              agent.RunStatus
-	LiveActiveToolName      string
+	LiveModel                string
+	LiveStatus               agent.RunStatus
+	LiveActiveToolName       string
 
 	// Per-tab tool tracking
 	ActiveTool  *ToolActivityInfo
@@ -328,10 +328,10 @@ type EpicTab struct {
 	ContextStatus ContextStatus
 
 	// Per-tab conflict state
-	ConflictFiles   []string // Conflicting files
-	ConflictBranch  string   // Branch that failed to merge
-	ConflictPath    string   // Worktree path for inspection
-	ShowConflict    bool     // Show conflict overlay
+	ConflictFiles  []string // Conflicting files
+	ConflictBranch string   // Branch that failed to merge
+	ConflictPath   string   // Worktree path for inspection
+	ShowConflict   bool     // Show conflict overlay
 }
 
 // NewEpicTab creates a new EpicTab with initialized maps.
@@ -700,11 +700,11 @@ type Model struct {
 	completeSignal string
 
 	// Conflict overlay state (multi-epic)
-	showConflict    bool
-	conflictEpicID  string
-	conflictFiles   []string
-	conflictBranch  string
-	conflictPath    string
+	showConflict   bool
+	conflictEpicID string
+	conflictFiles  []string
+	conflictBranch string
+	conflictPath   string
 
 	// Components
 	viewport         viewport.Model
@@ -771,9 +771,9 @@ type Model struct {
 	mdRenderer *glamour.TermRenderer
 
 	// Multi-epic mode state
-	multiEpic bool       // True when running multiple epics
-	epicTabs  []EpicTab  // Tab state for each epic (empty in single-epic mode)
-	activeTab int        // Currently selected tab index
+	multiEpic bool      // True when running multiple epics
+	epicTabs  []EpicTab // Tab state for each epic (empty in single-epic mode)
+	activeTab int       // Currently selected tab index
 }
 
 // -----------------------------------------------------------------------------

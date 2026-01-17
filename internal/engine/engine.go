@@ -71,9 +71,10 @@ type Engine struct {
 	// Context generation callbacks for TUI status display (optional)
 	OnContextGenerating func(epicID string, taskCount int)
 	OnContextGenerated  func(epicID string, tokenCount int)
-	OnContextLoaded     func(epicID string)
+	OnContextLoaded     func(epicID string, content string) // content passed for preview/token display
 	OnContextSkipped    func(epicID string, reason string)
 	OnContextFailed     func(epicID string, errMsg string)
+	OnContextActive     func(epicID string) // called at start of each iteration when context is in use
 
 	// Watch mode callback - called when no tasks available and entering idle state.
 	OnIdle func()
@@ -389,7 +390,7 @@ func (e *Engine) loadEpicContext(epicID string) string {
 
 	// Notify TUI that context was loaded from cache (if content exists)
 	if content != "" && e.OnContextLoaded != nil {
-		e.OnContextLoaded(epicID)
+		e.OnContextLoaded(epicID, content)
 	}
 
 	return content
@@ -981,6 +982,11 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 	// Log iteration start
 	if e.runLog != nil {
 		e.runLog.LogIterationStart(state.iteration, task.ID, task.Title)
+	}
+
+	// Notify that context is active for this iteration (if context exists)
+	if state.epicContext != "" && e.OnContextActive != nil {
+		e.OnContextActive(state.epicID)
 	}
 
 	prompt := e.prompt.Build(iterCtx)

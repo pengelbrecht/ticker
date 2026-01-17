@@ -296,14 +296,40 @@ func (h *HeadlessOutput) ContextGenerated(epicID string, tokens int) {
 }
 
 // ContextLoaded outputs when existing context is loaded.
-func (h *HeadlessOutput) ContextLoaded(epicID string) {
+// Includes token count estimate and content preview.
+func (h *HeadlessOutput) ContextLoaded(epicID string, content string) {
+	tokens := len(content) / 4 // Rough estimate: ~4 chars per token
+	preview := contextPreviewForLoaded(content, 150)
 	if h.jsonl {
 		h.writeJSON(map[string]interface{}{
 			"type":    "context_loaded",
 			"epic_id": epicID,
+			"tokens":  tokens,
+			"preview": preview,
 		})
 	} else {
-		fmt.Fprintf(h.writer, "%s[CONTEXT] Loaded existing context\n", h.prefix())
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Loaded context for epic %s (~%d tokens)\n", h.prefix(), epicID, tokens)
+		if preview != "" {
+			// Truncate preview for text mode display
+			displayPreview := preview
+			if len(displayPreview) > 80 {
+				displayPreview = displayPreview[:77] + "..."
+			}
+			fmt.Fprintf(h.writer, "%s[CONTEXT] Preview: %s\n", h.prefix(), displayPreview)
+		}
+	}
+}
+
+// ContextActive outputs at the start of each iteration when context is being used.
+func (h *HeadlessOutput) ContextActive(epicID string) {
+	h.flushOutput()
+	if h.jsonl {
+		h.writeJSON(map[string]interface{}{
+			"type":    "context_active",
+			"epic_id": epicID,
+		})
+	} else {
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Using epic context\n", h.prefix())
 	}
 }
 
@@ -366,6 +392,36 @@ func contextPreview(text string, n int) string {
 		}
 	}
 	return strings.Join(result, "\n")
+}
+
+// contextPreviewForLoaded returns the first 2-3 non-empty lines of text,
+// truncated to maxChars. Used for context_loaded preview display.
+func contextPreviewForLoaded(text string, maxChars int) string {
+	lines := strings.Split(text, "\n")
+	var result []string
+	totalLen := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Add line (check if we have room)
+		if totalLen > 0 {
+			totalLen++ // for newline separator
+		}
+		totalLen += len(trimmed)
+		result = append(result, trimmed)
+		// Stop after 3 non-empty lines or if we've reached maxChars
+		if len(result) >= 3 || totalLen >= maxChars {
+			break
+		}
+	}
+	preview := strings.Join(result, "\n")
+	// Truncate if still over maxChars
+	if len(preview) > maxChars {
+		preview = preview[:maxChars-3] + "..."
+	}
+	return preview
 }
 
 // writeJSON writes a JSON object as a single line.

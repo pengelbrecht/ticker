@@ -54,10 +54,10 @@ type EpicStatus struct {
 
 // ConflictState holds information about a merge conflict.
 type ConflictState struct {
-	Branch    string   // Branch that failed to merge
-	Files     []string // Conflicting files
-	Message   string   // Error message
-	Worktree  string   // Path to worktree (for manual resolution)
+	Branch   string   // Branch that failed to merge
+	Files    []string // Conflicting files
+	Message  string   // Error message
+	Worktree string   // Path to worktree (for manual resolution)
 }
 
 // ParallelResult is the aggregate result of all epics.

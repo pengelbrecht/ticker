@@ -7,9 +7,9 @@ import (
 
 func TestGetPricing_KnownModels(t *testing.T) {
 	tests := []struct {
-		model       string
-		wantInput   float64
-		wantOutput  float64
+		model      string
+		wantInput  float64
+		wantOutput float64
 	}{
 		// Claude 4.5 Opus
 		{"claude-opus-4-5-20251101", 15.00, 75.00},

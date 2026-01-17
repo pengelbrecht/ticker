@@ -12,13 +12,13 @@ import (
 // It provides a channel that signals when tick files are modified,
 // allowing the engine to wake from idle state more responsively than polling.
 type TicksWatcher struct {
-	watcher        *fsnotify.Watcher
-	changes        chan struct{}
-	done           chan struct{}
-	closeOnce      sync.Once
-	debounceDelay  time.Duration
-	watchDir       string
-	usingFsnotify  bool // true if using fsnotify, false if falling back to noop
+	watcher       *fsnotify.Watcher
+	changes       chan struct{}
+	done          chan struct{}
+	closeOnce     sync.Once
+	debounceDelay time.Duration
+	watchDir      string
+	usingFsnotify bool // true if using fsnotify, false if falling back to noop
 }
 
 // WatcherOption configures a TicksWatcher.

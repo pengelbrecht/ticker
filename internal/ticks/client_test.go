@@ -543,15 +543,15 @@ func TestGetRunRecordNonexistent(t *testing.T) {
 // Test cases for ProcessVerdict method on Task struct
 func TestTaskProcessVerdict(t *testing.T) {
 	testCases := []struct {
-		name           string
-		awaiting       *string
-		verdict        *string
-		requires       *string
-		initialStatus  string
-		wantClose      bool
-		wantCleared    bool
-		wantStatus     string
-		wantRequires   bool // should requires still be set?
+		name          string
+		awaiting      *string
+		verdict       *string
+		requires      *string
+		initialStatus string
+		wantClose     bool
+		wantCleared   bool
+		wantStatus    string
+		wantRequires  bool // should requires still be set?
 	}{
 		// No verdict or awaiting - nothing to process
 		{
@@ -735,15 +735,15 @@ func TestTaskProcessVerdict(t *testing.T) {
 
 		// Requires field should persist
 		{
-			name:           "requires persists after approval",
-			awaiting:       strPtr("approval"),
-			verdict:        strPtr("approved"),
-			requires:       strPtr("approval"),
-			initialStatus:  "open",
-			wantClose:      true,
-			wantCleared:    true,
-			wantStatus:     "closed",
-			wantRequires:   true,
+			name:          "requires persists after approval",
+			awaiting:      strPtr("approval"),
+			verdict:       strPtr("approved"),
+			requires:      strPtr("approval"),
+			initialStatus: "open",
+			wantClose:     true,
+			wantCleared:   true,
+			wantStatus:    "closed",
+			wantRequires:  true,
 		},
 	}
 
@@ -1738,7 +1738,7 @@ func TestNoteIsFromAgent(t *testing.T) {
 		expected bool
 	}{
 		{"agent", true},
-		{"", true},       // Empty author defaults to agent
+		{"", true}, // Empty author defaults to agent
 		{"human", false},
 		{"other", false},
 	}
@@ -2419,10 +2419,10 @@ func TestOrphanedTasksFilterLogic(t *testing.T) {
 	// Orphaned = has parent but parent is closed
 
 	tasks := []Task{
-		{ID: "standalone", Status: "open", Priority: 1, Parent: ""},           // No parent - not orphaned
-		{ID: "orphan-1", Status: "open", Priority: 2, Parent: "closed-epic"},  // Has closed parent - orphaned
-		{ID: "orphan-2", Status: "open", Priority: 3, Parent: "closed-epic"},  // Has closed parent - orphaned
-		{ID: "normal", Status: "open", Priority: 4, Parent: "open-epic"},      // Has open parent - not orphaned
+		{ID: "standalone", Status: "open", Priority: 1, Parent: ""},          // No parent - not orphaned
+		{ID: "orphan-1", Status: "open", Priority: 2, Parent: "closed-epic"}, // Has closed parent - orphaned
+		{ID: "orphan-2", Status: "open", Priority: 3, Parent: "closed-epic"}, // Has closed parent - orphaned
+		{ID: "normal", Status: "open", Priority: 4, Parent: "open-epic"},     // Has open parent - not orphaned
 	}
 
 	// Mock epic statuses
@@ -2527,28 +2527,28 @@ func TestOrphanedVsStandaloneDistinction(t *testing.T) {
 	// Standalone: has no parent at all
 
 	tests := []struct {
-		name        string
-		task        Task
+		name         string
+		task         Task
 		isStandalone bool
-		isOrphaned  bool
+		isOrphaned   bool
 	}{
 		{
-			name:        "standalone (no parent)",
-			task:        Task{ID: "standalone", Parent: ""},
+			name:         "standalone (no parent)",
+			task:         Task{ID: "standalone", Parent: ""},
 			isStandalone: true,
-			isOrphaned:  false,
+			isOrphaned:   false,
 		},
 		{
-			name:        "orphaned (closed parent)",
-			task:        Task{ID: "orphan", Parent: "closed-epic"},
+			name:         "orphaned (closed parent)",
+			task:         Task{ID: "orphan", Parent: "closed-epic"},
 			isStandalone: false,
-			isOrphaned:  true, // Assuming parent is closed
+			isOrphaned:   true, // Assuming parent is closed
 		},
 		{
-			name:        "normal (open parent)",
-			task:        Task{ID: "normal", Parent: "open-epic"},
+			name:         "normal (open parent)",
+			task:         Task{ID: "normal", Parent: "open-epic"},
 			isStandalone: false,
-			isOrphaned:  false, // Parent is open
+			isOrphaned:   false, // Parent is open
 		},
 	}
 
@@ -2606,10 +2606,10 @@ func TestAutoModePriorityOrdering(t *testing.T) {
 	// The actual implementation uses multiple calls in priority order
 
 	priorityLevels := []string{
-		"active-epic-tasks",    // Priority 1
-		"new-epic-tasks",       // Priority 2
-		"standalone-tasks",     // Priority 3
-		"orphaned-tasks",       // Priority 4
+		"active-epic-tasks", // Priority 1
+		"new-epic-tasks",    // Priority 2
+		"standalone-tasks",  // Priority 3
+		"orphaned-tasks",    // Priority 4
 	}
 
 	// Verify the expected ordering

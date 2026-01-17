@@ -30,8 +30,8 @@ type mockResponse struct {
 	err       error
 }
 
-func (m *mockAgent) Name() string     { return m.name }
-func (m *mockAgent) Available() bool  { return m.available }
+func (m *mockAgent) Name() string    { return m.name }
+func (m *mockAgent) Available() bool { return m.available }
 
 func (m *mockAgent) Run(ctx context.Context, prompt string, opts agent.RunOpts) (*agent.Result, error) {
 	if m.callCount >= len(m.responses) {
@@ -64,8 +64,8 @@ type mockTicksClient struct {
 	addedNotes  []string
 
 	// Awaiting/verdict workflow support
-	awaitingState map[string]string      // taskID -> awaiting value
-	verdictState  map[string]string      // taskID -> verdict value
+	awaitingState   map[string]string       // taskID -> awaiting value
+	verdictState    map[string]string       // taskID -> verdict value
 	structuredNotes map[string][]ticks.Note // taskID -> structured notes
 
 	// State change tracking for assertions
@@ -1380,10 +1380,10 @@ func TestMockTicksClient_GetHumanNotes(t *testing.T) {
 
 func TestMockTicksClient_SimulateVerdictProcessing(t *testing.T) {
 	tests := []struct {
-		name        string
-		awaiting    string
-		verdict     string
-		wantClosed  bool
+		name       string
+		awaiting   string
+		verdict    string
+		wantClosed bool
 	}{
 		{
 			name:       "approval approved - closes",
@@ -1954,10 +1954,10 @@ func TestShouldCleanupWorktree_WatchTimeout(t *testing.T) {
 // It can be configured to return tasks dynamically based on call count.
 type mockTicksClientForWatch struct {
 	*mockTicksClient
-	nextTaskCalls   int
-	tasksAvailable  []bool // true at index i means task available on i-th NextTask call
-	hasOpenReturns  []bool // return values for HasOpenTasks calls
-	hasOpenCalls    int
+	nextTaskCalls  int
+	tasksAvailable []bool // true at index i means task available on i-th NextTask call
+	hasOpenReturns []bool // return values for HasOpenTasks calls
+	hasOpenCalls   int
 }
 
 func newMockTicksClientForWatch() *mockTicksClientForWatch {
@@ -2197,7 +2197,7 @@ func TestRunConfig_DebounceInterval(t *testing.T) {
 // mockTicksClientForDebounce tracks GetTask calls for debounce testing.
 type mockTicksClientForDebounce struct {
 	*mockTicksClient
-	getTaskCalls []string // track taskIDs passed to GetTask
+	getTaskCalls []string               // track taskIDs passed to GetTask
 	taskUpdates  map[string]*ticks.Task // taskID -> updated task (simulates edits during debounce)
 }
 
