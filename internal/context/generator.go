@@ -1,0 +1,107 @@
+package context
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/pengelbrecht/ticker/internal/agent"
+	"github.com/pengelbrecht/ticker/internal/ticks"
+)
+
+// DefaultTimeout is the default timeout for context generation.
+const DefaultTimeout = 5 * time.Minute
+
+// Generator generates epic context documents using an AI agent.
+type Generator struct {
+	agent         agent.Agent
+	promptBuilder *PromptBuilder
+	timeout       time.Duration
+	logger        *slog.Logger
+}
+
+// GeneratorOption configures a Generator.
+type GeneratorOption func(*Generator)
+
+// WithTimeout sets the timeout for context generation.
+func WithTimeout(d time.Duration) GeneratorOption {
+	return func(g *Generator) {
+		g.timeout = d
+	}
+}
+
+// WithLogger sets the logger for the generator.
+func WithLogger(logger *slog.Logger) GeneratorOption {
+	return func(g *Generator) {
+		g.logger = logger
+	}
+}
+
+// NewGenerator creates a new context generator with the given agent.
+func NewGenerator(a agent.Agent, opts ...GeneratorOption) (*Generator, error) {
+	pb, err := NewPromptBuilder()
+	if err != nil {
+		return nil, fmt.Errorf("creating prompt builder: %w", err)
+	}
+
+	g := &Generator{
+		agent:         a,
+		promptBuilder: pb,
+		timeout:       DefaultTimeout,
+		logger:        slog.Default(),
+	}
+
+	for _, opt := range opts {
+		opt(g)
+	}
+
+	return g, nil
+}
+
+// Generate runs the AI agent to generate context for an epic.
+// It builds a prompt from the epic and tasks, runs the agent, and returns
+// the generated context document as markdown.
+func (g *Generator) Generate(ctx context.Context, epic *ticks.Epic, tasks []ticks.Task) (string, error) {
+	if epic == nil {
+		return "", fmt.Errorf("epic is required")
+	}
+
+	g.logger.Info("context generation started",
+		"epic_id", epic.ID,
+		"epic_title", epic.Title,
+		"task_count", len(tasks),
+	)
+
+	startTime := time.Now()
+
+	// Build the prompt
+	prompt, err := g.promptBuilder.Build(epic, tasks)
+	if err != nil {
+		return "", fmt.Errorf("building prompt: %w", err)
+	}
+
+	// Run the agent with timeout
+	result, err := g.agent.Run(ctx, prompt, agent.RunOpts{
+		Timeout: g.timeout,
+	})
+	if err != nil {
+		// Log the failure
+		g.logger.Error("context generation failed",
+			"epic_id", epic.ID,
+			"error", err,
+			"duration", time.Since(startTime),
+		)
+		return "", fmt.Errorf("running agent: %w", err)
+	}
+
+	g.logger.Info("context generation completed",
+		"epic_id", epic.ID,
+		"duration", time.Since(startTime),
+		"tokens_in", result.TokensIn,
+		"tokens_out", result.TokensOut,
+		"cost_usd", result.Cost,
+	)
+
+	return result.Output, nil
+}
