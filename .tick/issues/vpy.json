@@ -1,0 +1,16 @@
+{
+  "id": "vpy",
+  "title": "Add context configuration to .ticker/config.json",
+  "description": "Add configuration options for context generation.\n\n## Config Schema\n```json\n{\n  \"context\": {\n    \"enabled\": true,\n    \"max_tokens\": 4000,\n    \"auto_refresh_days\": 7,\n    \"generation_timeout\": \"5m\",\n    \"generation_model\": \"sonnet\"\n  }\n}\n```\n\n## Acceptance Criteria\n- [ ] Config struct extended with ContextConfig\n- [ ] Default values applied if section missing\n- [ ] enabled=false skips all context generation\n- [ ] max_tokens passed to prompt builder\n- [ ] generation_timeout parsed as duration\n- [ ] generation_model selects agent model\n- [ ] Config validated on load (sensible ranges)\n\n## Options\n| Option | Default | Description |\n|--------|---------|-------------|\n| enabled | true | Enable context generation |\n| max_tokens | 4000 | Target context doc size |\n| auto_refresh_days | 0 | Days until auto-refresh (0=never) |\n| generation_timeout | 5m | Max generation time |\n| generation_model | \"\" | Model override for generation |",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "vts"
+  ],
+  "parent": "uzr",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-17T11:25:26.618733Z",
+  "updated_at": "2026-01-17T11:25:26.618733Z"
+}

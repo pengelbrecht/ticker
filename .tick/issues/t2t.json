@@ -1,0 +1,16 @@
+{
+  "id": "t2t",
+  "title": "Update CLAUDE.md with context feature documentation",
+  "description": "Add documentation for the epic context feature to CLAUDE.md.\n\n## Documentation Sections\n- New CLI commands (`ticker context`)\n- Configuration options\n- How context generation works\n- When context is skipped\n- Troubleshooting context issues\n\n## Acceptance Criteria\n- [ ] CLI command reference added\n- [ ] Config options documented with defaults\n- [ ] Example workflow documented\n- [ ] Troubleshooting section for common issues\n- [ ] Architecture notes updated if relevant\n\n## Content to Add\n```markdown\n## Epic Context\n\nTicker can pre-generate context documents for epics to reduce redundant exploration.\n\n### Commands\n- `ticker context \u003cepic-id\u003e` - Generate/show context\n- `ticker context \u003cepic-id\u003e --refresh` - Regenerate\n- `ticker context \u003cepic-id\u003e --delete` - Remove\n\n### Configuration\nAdd to `.ticker/config.json`:\n...\n```",
+  "status": "open",
+  "priority": 2,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "y3e"
+  ],
+  "parent": "uzr",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-17T11:26:18.574402Z",
+  "updated_at": "2026-01-17T11:26:18.574402Z"
+}

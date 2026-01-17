@@ -1,0 +1,18 @@
+{
+  "id": "811",
+  "title": "Implement context generation prompt builder",
+  "description": "Create the prompt template that instructs the agent to generate epic context.\n\n## Requirements\n- Template takes epic + all child tasks as input\n- Produces a prompt that asks agent to analyze codebase\n- Constrains output to \u003c4000 tokens\n- Focuses on files, types, patterns, conventions\n\n## Acceptance Criteria\n- [ ] `context.PromptBuilder` struct with `Build(epic, tasks) string`\n- [ ] Template includes epic title and description\n- [ ] Template includes all task titles and descriptions\n- [ ] Clear instructions for what to include (files, types, patterns)\n- [ ] Clear constraints (token limit, specificity)\n- [ ] Uses Go text/template for flexibility\n\n## Template Sections (from spec)\n1. Relevant Code - files, types, functions\n2. Architecture Notes - data flow, abstractions\n3. External References - library docs\n4. Testing Patterns - test structure, mocks\n5. Conventions - error handling, logging",
+  "status": "closed",
+  "priority": 1,
+  "type": "task",
+  "owner": "peter@engelbrecht.dk",
+  "blocked_by": [
+    "vts"
+  ],
+  "parent": "uzr",
+  "created_by": "peter@engelbrecht.dk",
+  "created_at": "2026-01-17T11:23:39.118753Z",
+  "updated_at": "2026-01-17T11:44:07.385547Z",
+  "closed_at": "2026-01-17T11:44:07.385547Z",
+  "closed_reason": "Created context.PromptBuilder with Build(epic, tasks) method. Uses Go text/template to generate prompts that instruct the agent to analyze the codebase. Template includes all 5 sections from spec: Relevant Code, Architecture Notes, External References, Testing Patterns, Conventions. Includes 4000 token constraint. Added comprehensive tests covering empty tasks, empty descriptions, special characters (markdown, unicode, whitespace), and many tasks."
+}
