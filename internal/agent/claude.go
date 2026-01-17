@@ -49,6 +49,7 @@ func (a *ClaudeAgent) Run(ctx context.Context, prompt string, opts RunOpts) (*Re
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
+		"--no-session-persistence",
 		prompt,
 	}
 
