@@ -25,6 +25,11 @@ type IterationContext struct {
 	// HumanFeedback contains notes from humans on this task.
 	// These are feedback/responses from human reviewers after handoff.
 	HumanFeedback []ticks.Note
+
+	// EpicContext contains pre-computed context for the epic.
+	// This is the contents of .ticker/context/<epic-id>.md if it exists,
+	// or an empty string if no context has been generated.
+	EpicContext string
 }
 
 // PromptBuilder constructs prompts for autonomous agent iterations.
