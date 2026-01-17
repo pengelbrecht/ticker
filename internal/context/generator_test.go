@@ -60,8 +60,9 @@ func TestNewGenerator_WithOptions(t *testing.T) {
 	mock := &mockAgent{name: "test"}
 	customTimeout := 10 * time.Minute
 	customLogger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	customMaxTokens := 8000
 
-	g, err := NewGenerator(mock, WithTimeout(customTimeout), WithLogger(customLogger))
+	g, err := NewGenerator(mock, WithTimeout(customTimeout), WithLogger(customLogger), WithMaxTokens(customMaxTokens))
 	if err != nil {
 		t.Fatalf("NewGenerator() error = %v", err)
 	}
@@ -72,6 +73,35 @@ func TestNewGenerator_WithOptions(t *testing.T) {
 
 	if g.logger != customLogger {
 		t.Error("logger not set correctly")
+	}
+
+	if g.maxTokens != customMaxTokens {
+		t.Errorf("maxTokens = %v, want %v", g.maxTokens, customMaxTokens)
+	}
+}
+
+func TestNewGenerator_WithMaxTokens_InPrompt(t *testing.T) {
+	customMaxTokens := 8000
+	mock := &mockAgent{
+		name: "test",
+		runFunc: func(ctx context.Context, prompt string, opts agent.RunOpts) (*agent.Result, error) {
+			// Verify the custom max tokens is in the prompt
+			if !strings.Contains(prompt, "under 8000 tokens") {
+				return nil, errors.New("prompt should contain custom max tokens")
+			}
+			return &agent.Result{Output: "ok"}, nil
+		},
+	}
+
+	g, err := NewGenerator(mock, WithMaxTokens(customMaxTokens))
+	if err != nil {
+		t.Fatalf("NewGenerator() error = %v", err)
+	}
+
+	epic := &ticks.Epic{ID: "test", Title: "Test", Description: "Test"}
+	_, err = g.Generate(context.Background(), epic, nil)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
 	}
 }
 

@@ -19,6 +19,7 @@ type Generator struct {
 	promptBuilder *PromptBuilder
 	timeout       time.Duration
 	logger        *slog.Logger
+	maxTokens     int // stored for creating prompt builder with correct value
 }
 
 // GeneratorOption configures a Generator.
@@ -31,6 +32,13 @@ func WithTimeout(d time.Duration) GeneratorOption {
 	}
 }
 
+// WithMaxTokens sets the max tokens constraint for generated context.
+func WithMaxTokens(tokens int) GeneratorOption {
+	return func(g *Generator) {
+		g.maxTokens = tokens
+	}
+}
+
 // WithLogger sets the logger for the generator.
 func WithLogger(logger *slog.Logger) GeneratorOption {
 	return func(g *Generator) {
@@ -40,21 +48,24 @@ func WithLogger(logger *slog.Logger) GeneratorOption {
 
 // NewGenerator creates a new context generator with the given agent.
 func NewGenerator(a agent.Agent, opts ...GeneratorOption) (*Generator, error) {
-	pb, err := NewPromptBuilder()
-	if err != nil {
-		return nil, fmt.Errorf("creating prompt builder: %w", err)
-	}
-
 	g := &Generator{
-		agent:         a,
-		promptBuilder: pb,
-		timeout:       DefaultTimeout,
-		logger:        slog.Default(),
+		agent:     a,
+		timeout:   DefaultTimeout,
+		logger:    slog.Default(),
+		maxTokens: DefaultMaxTokens,
 	}
 
+	// Apply options first to get maxTokens value
 	for _, opt := range opts {
 		opt(g)
 	}
+
+	// Create prompt builder with the configured maxTokens
+	pb, err := NewPromptBuilder(PromptWithMaxTokens(g.maxTokens))
+	if err != nil {
+		return nil, fmt.Errorf("creating prompt builder: %w", err)
+	}
+	g.promptBuilder = pb
 
 	return g, nil
 }

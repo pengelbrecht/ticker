@@ -18,6 +18,34 @@ func TestNewPromptBuilder(t *testing.T) {
 	if pb.tmpl == nil {
 		t.Fatal("NewPromptBuilder() template is nil")
 	}
+	if pb.maxTokens != DefaultMaxTokens {
+		t.Errorf("NewPromptBuilder() maxTokens = %d, want %d", pb.maxTokens, DefaultMaxTokens)
+	}
+}
+
+func TestNewPromptBuilder_WithMaxTokens(t *testing.T) {
+	customTokens := 8000
+	pb, err := NewPromptBuilder(PromptWithMaxTokens(customTokens))
+	if err != nil {
+		t.Fatalf("NewPromptBuilder() error = %v", err)
+	}
+	if pb.maxTokens != customTokens {
+		t.Errorf("NewPromptBuilder() maxTokens = %d, want %d", pb.maxTokens, customTokens)
+	}
+
+	// Verify the custom token count appears in the built prompt
+	epic := &ticks.Epic{
+		ID:          "test",
+		Title:       "Test Epic",
+		Description: "Description",
+	}
+	result, err := pb.Build(epic, nil)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !strings.Contains(result, "under 8000 tokens") {
+		t.Error("Build() result should contain custom token limit")
+	}
 }
 
 func TestPromptBuilder_Build(t *testing.T) {
@@ -90,7 +118,7 @@ func TestPromptBuilder_Build(t *testing.T) {
 		"4. **Testing Patterns**",
 		"5. **Conventions**",
 		"## Constraints",
-		"4000 tokens",
+		"under 4000 tokens", // default max tokens
 	}
 
 	for _, section := range sections {

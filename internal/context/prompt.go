@@ -9,7 +9,8 @@ import (
 
 // PromptBuilder builds prompts for generating epic context documents.
 type PromptBuilder struct {
-	tmpl *template.Template
+	tmpl      *template.Template
+	maxTokens int
 }
 
 // promptData holds the data passed to the prompt template.
@@ -18,6 +19,7 @@ type promptData struct {
 	EpicTitle       string
 	EpicDescription string
 	Tasks           []taskData
+	MaxTokens       int
 }
 
 // taskData holds task information for the template.
@@ -77,7 +79,7 @@ Include:
 
 ## Constraints
 
-- Keep the document under 4000 tokens
+- Keep the document under {{.MaxTokens}} tokens
 - Focus on what's RELEVANT to the epic's tasks
 - Summarize, don't copy entire files
 - Be specific (file:line references) not vague
@@ -85,13 +87,33 @@ Include:
 Output the context document in markdown format.
 `
 
+// DefaultMaxTokens is the default max token limit for context documents.
+const DefaultMaxTokens = 4000
+
+// PromptBuilderOption configures a PromptBuilder.
+type PromptBuilderOption func(*PromptBuilder)
+
+// PromptWithMaxTokens sets the max tokens constraint for generated context.
+func PromptWithMaxTokens(tokens int) PromptBuilderOption {
+	return func(pb *PromptBuilder) {
+		pb.maxTokens = tokens
+	}
+}
+
 // NewPromptBuilder creates a new PromptBuilder with the default template.
-func NewPromptBuilder() (*PromptBuilder, error) {
+func NewPromptBuilder(opts ...PromptBuilderOption) (*PromptBuilder, error) {
 	tmpl, err := template.New("context-generation").Parse(contextGenerationTemplate)
 	if err != nil {
 		return nil, err
 	}
-	return &PromptBuilder{tmpl: tmpl}, nil
+	pb := &PromptBuilder{
+		tmpl:      tmpl,
+		maxTokens: DefaultMaxTokens,
+	}
+	for _, opt := range opts {
+		opt(pb)
+	}
+	return pb, nil
 }
 
 // Build generates the context generation prompt from an epic and its tasks.
@@ -101,6 +123,7 @@ func (p *PromptBuilder) Build(epic *ticks.Epic, tasks []ticks.Task) (string, err
 		EpicTitle:       epic.Title,
 		EpicDescription: epic.Description,
 		Tasks:           make([]taskData, len(tasks)),
+		MaxTokens:       p.maxTokens,
 	}
 
 	for i, t := range tasks {
