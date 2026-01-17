@@ -51,6 +51,7 @@ func (pb *PromptBuilder) Build(ctx IterationContext) string {
 		Iteration:     ctx.Iteration,
 		EpicNotes:     ctx.EpicNotes,
 		HumanFeedback: ctx.HumanFeedback,
+		EpicContext:   ctx.EpicContext,
 	}
 
 	if ctx.Epic != nil {
@@ -90,6 +91,7 @@ type templateData struct {
 	Requires           string // Pre-declared gate: approval, review, content
 	EpicNotes          []string
 	HumanFeedback      []ticks.Note
+	EpicContext        string
 }
 
 // extractAcceptanceCriteria parses acceptance criteria from a task description.
@@ -117,6 +119,13 @@ func extractAcceptanceCriteria(description string) string {
 
 // promptTemplate is the Go template for generating iteration prompts.
 const promptTemplate = `# Iteration {{.Iteration}}
+{{if .EpicContext}}
+## Epic Context
+
+The following context was generated for this epic. Use it to understand the codebase.
+
+{{.EpicContext}}
+{{end}}
 {{if .EpicNotes}}
 ## IMPORTANT: Review Epic Notes First
 

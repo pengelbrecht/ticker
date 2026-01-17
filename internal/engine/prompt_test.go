@@ -538,3 +538,103 @@ func TestPromptBuilder_Build_NoRequires(t *testing.T) {
 		t.Error("prompt should not have approval section when requires is nil")
 	}
 }
+
+func TestPromptBuilder_Build_WithEpicContext(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Test task",
+			Description: "Do something.",
+		},
+		EpicContext: "## Architecture\n\nThis codebase uses MVC pattern.\n\n## Key Files\n\n- main.go: Entry point",
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should have epic context section
+	if !strings.Contains(prompt, "## Epic Context") {
+		t.Error("prompt missing epic context section header")
+	}
+	if !strings.Contains(prompt, "The following context was generated for this epic") {
+		t.Error("prompt missing epic context intro text")
+	}
+	// Should contain the actual context content
+	if !strings.Contains(prompt, "This codebase uses MVC pattern") {
+		t.Error("prompt missing epic context content")
+	}
+	if !strings.Contains(prompt, "main.go: Entry point") {
+		t.Error("prompt missing epic context key files")
+	}
+}
+
+func TestPromptBuilder_Build_NoEpicContext(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Test task",
+			Description: "Do something.",
+		},
+		EpicContext: "",
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Should NOT have epic context section when empty
+	if strings.Contains(prompt, "## Epic Context") {
+		t.Error("prompt should not have epic context section when EpicContext is empty")
+	}
+	if strings.Contains(prompt, "The following context was generated for this epic") {
+		t.Error("prompt should not have epic context intro when EpicContext is empty")
+	}
+}
+
+func TestPromptBuilder_Build_EpicContextBeforeEpicNotes(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	ctx := IterationContext{
+		Iteration: 1,
+		Epic: &ticks.Epic{
+			ID:    "epic1",
+			Title: "Test Epic",
+		},
+		Task: &ticks.Task{
+			ID:          "task1",
+			Title:       "Test task",
+			Description: "Do something.",
+		},
+		EpicContext: "Some pre-computed context here",
+		EpicNotes:   []string{"Note from previous iteration"},
+	}
+
+	prompt := pb.Build(ctx)
+
+	// Both sections should exist
+	contextIdx := strings.Index(prompt, "## Epic Context")
+	notesIdx := strings.Index(prompt, "## IMPORTANT: Review Epic Notes First")
+
+	if contextIdx == -1 {
+		t.Fatal("prompt missing epic context section")
+	}
+	if notesIdx == -1 {
+		t.Fatal("prompt missing epic notes section")
+	}
+
+	// Epic Context should appear before Epic Notes
+	if contextIdx >= notesIdx {
+		t.Error("epic context section should appear before epic notes section")
+	}
+}
