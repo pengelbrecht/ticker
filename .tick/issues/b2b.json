@@ -2,12 +2,13 @@
   "id": "b2b",
   "title": "Add goodbye function",
   "description": "Create a goodbye() function in the same file",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "8n8",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-17T14:20:28.408914Z",
-  "updated_at": "2026-01-17T14:20:28.408914Z"
+  "updated_at": "2026-01-17T14:34:20.292514Z",
+  "closed_at": "2026-01-17T14:34:20.292514Z"
 }

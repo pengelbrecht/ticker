@@ -1293,7 +1293,24 @@ func (e *Engine) handleWatchIdle(ctx context.Context, config RunConfig, state *r
 			if e.runLog != nil {
 				e.runLog.LogIdleTaskCheck(false, "")
 			}
-			// Check if epic is now complete
+			// File change detected but no task available yet.
+			// Wait a bit and retry - the change might have been a task
+			// becoming ready (e.g., after rejection) but files still settling.
+			select {
+			case <-ctx.Done():
+				e.writeInterruptionNotes(state, config.EpicID)
+				return state.toResult("context cancelled while idle", e.budget.Usage())
+			case <-time.After(200 * time.Millisecond):
+			}
+			// Retry NextTask after delay
+			task, err = e.ticks.NextTask(config.EpicID)
+			if err == nil && task != nil {
+				if e.runLog != nil {
+					e.runLog.LogIdleTaskCheck(true, task.ID)
+				}
+				return nil
+			}
+			// Still no task - now check if epic is complete
 			result := e.checkForEpicCompletion(config, state)
 			if result != nil {
 				return result

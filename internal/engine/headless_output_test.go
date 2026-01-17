@@ -459,6 +459,99 @@ func TestHeadlessOutput_Interrupted(t *testing.T) {
 	})
 }
 
+func TestHeadlessOutput_ContextInjected(t *testing.T) {
+	context := "# Epic Context: [abc] Test Epic\n\n## Relevant Code\n\n- file1.go\n- file2.go"
+
+	t.Run("human readable format with preview", func(t *testing.T) {
+		var buf bytes.Buffer
+		out := NewHeadlessOutput(false, "")
+		out.SetWriter(&buf)
+
+		out.ContextInjected("task1", context)
+
+		output := buf.String()
+		if !strings.Contains(output, "[CONTEXT]") {
+			t.Error("expected [CONTEXT] prefix")
+		}
+		if !strings.Contains(output, "Injected into prompt") {
+			t.Error("expected 'Injected into prompt' message")
+		}
+		// Should show first 3 non-empty lines
+		if !strings.Contains(output, "Epic Context") {
+			t.Error("expected preview to contain 'Epic Context'")
+		}
+		if !strings.Contains(output, "Relevant Code") {
+			t.Error("expected preview to contain 'Relevant Code'")
+		}
+	})
+
+	t.Run("jsonl format with preview", func(t *testing.T) {
+		var buf bytes.Buffer
+		out := NewHeadlessOutput(true, "")
+		out.SetWriter(&buf)
+
+		out.ContextInjected("task1", context)
+
+		var data map[string]interface{}
+		if err := json.Unmarshal(buf.Bytes(), &data); err != nil {
+			t.Fatalf("invalid JSON: %v", err)
+		}
+		if data["type"] != "context_injected" {
+			t.Errorf("expected type=context_injected, got %v", data["type"])
+		}
+		if data["task_id"] != "task1" {
+			t.Errorf("expected task_id=task1, got %v", data["task_id"])
+		}
+		if data["context_length"].(float64) != float64(len(context)) {
+			t.Errorf("expected context_length=%d, got %v", len(context), data["context_length"])
+		}
+		preview, ok := data["preview"].(string)
+		if !ok {
+			t.Error("expected preview field")
+		}
+		if !strings.Contains(preview, "Epic Context") {
+			t.Error("expected preview to contain 'Epic Context'")
+		}
+	})
+}
+
+func TestContextPreview(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		n        int
+		expected string
+	}{
+		{
+			name:     "extracts first n non-empty lines",
+			text:     "# Title\n\nSecond line\n\nThird line\nFourth line",
+			n:        3,
+			expected: "# Title\nSecond line\nThird line",
+		},
+		{
+			name:     "handles fewer lines than requested",
+			text:     "Only one line",
+			n:        5,
+			expected: "Only one line",
+		},
+		{
+			name:     "skips empty lines",
+			text:     "\n\n# Header\n\n\nContent\n",
+			n:        2,
+			expected: "# Header\nContent",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := contextPreview(tt.text, tt.n)
+			if result != tt.expected {
+				t.Errorf("contextPreview() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
 // testError is a simple error implementation for testing
 type testError struct {
 	msg string

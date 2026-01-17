@@ -2,12 +2,13 @@
   "id": "2j0",
   "title": "Add hello world function",
   "description": "Create a simple hello() function in a new file",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
   "parent": "8n8",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-17T14:20:28.289942Z",
-  "updated_at": "2026-01-17T14:20:28.289942Z"
+  "updated_at": "2026-01-17T14:34:20.237043Z",
+  "closed_at": "2026-01-17T14:34:20.237043Z"
 }

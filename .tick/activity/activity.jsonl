@@ -49,3 +49,16 @@
 {"ts":"2026-01-17T14:23:42.195021Z","tick":"esq","action":"close","actor":"peter@engelbrecht.dk","epic":"uzr","data":{"title":"End-to-end smoke test of context feature"}}
 {"ts":"2026-01-17T14:23:42.223038Z","tick":"20e","action":"close","actor":"peter@engelbrecht.dk","epic":"uzr","data":{"title":"Validate token savings with real epic runs"}}
 {"ts":"2026-01-17T14:23:54.099343Z","tick":"uzr","action":"close","actor":"peter@engelbrecht.dk","data":{"title":"Epic Context: Pre-computed context documents per epic"}}
+{"ts":"2026-01-17T14:34:20.154916Z","tick":"0qb","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Simple calculation task"}}
+{"ts":"2026-01-17T14:34:20.181418Z","tick":"nfr","action":"awaiting","actor":"peter@engelbrecht.dk","epic":"gso","data":{"awaiting":"review","title":"API endpoint implementation"}}
+{"ts":"2026-01-17T14:34:20.209431Z","tick":"yq8","action":"awaiting","actor":"peter@engelbrecht.dk","epic":"gso","data":{"awaiting":"content","title":"Update error messages"}}
+{"ts":"2026-01-17T14:34:20.237381Z","tick":"2j0","action":"close","actor":"peter@engelbrecht.dk","epic":"8n8","data":{"title":"Add hello world function"}}
+{"ts":"2026-01-17T14:34:20.264394Z","tick":"bhb","action":"close","actor":"peter@engelbrecht.dk","epic":"8n8","data":{"title":"Add unit test for hello"}}
+{"ts":"2026-01-17T14:34:20.292843Z","tick":"b2b","action":"close","actor":"peter@engelbrecht.dk","epic":"8n8","data":{"title":"Add goodbye function"}}
+{"ts":"2026-01-17T14:34:20.320523Z","tick":"say","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Write documentation"}}
+{"ts":"2026-01-17T14:34:41.927049Z","tick":"nfr","action":"note","actor":"peter@engelbrecht.dk","epic":"gso","data":{"note":"\n2026-01-17 14:34 - Work complete, awaiting review","title":"API endpoint implementation"}}
+{"ts":"2026-01-17T14:34:47.354161Z","tick":"nfr","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"API endpoint implementation"}}
+{"ts":"2026-01-17T14:34:47.38171Z","tick":"yq8","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Update error messages"}}
+{"ts":"2026-01-17T14:35:06.001471Z","tick":"jcw","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Security-sensitive change"}}
+{"ts":"2026-01-17T14:35:06.028092Z","tick":"cra","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Configure production credentials"}}
+{"ts":"2026-01-17T14:35:06.054069Z","tick":"wtd","action":"close","actor":"peter@engelbrecht.dk","epic":"gso","data":{"title":"Deploy to production"}}

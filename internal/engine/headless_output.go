@@ -333,6 +333,41 @@ func (h *HeadlessOutput) ContextFailed(epicID string, errMsg string) {
 	}
 }
 
+// ContextInjected outputs when context is injected into a task prompt.
+// Shows a preview of the context for validation.
+func (h *HeadlessOutput) ContextInjected(taskID string, context string) {
+	preview := contextPreview(context, 3) // First 3 lines
+	if h.jsonl {
+		h.writeJSON(map[string]interface{}{
+			"type":           "context_injected",
+			"task_id":        taskID,
+			"context_length": len(context),
+			"preview":        preview,
+		})
+	} else {
+		fmt.Fprintf(h.writer, "%s[CONTEXT] Injected into prompt (%d chars):\n", h.prefix(), len(context))
+		// Indent preview lines for readability
+		for _, line := range strings.Split(preview, "\n") {
+			fmt.Fprintf(h.writer, "%s  %s\n", h.prefix(), line)
+		}
+	}
+}
+
+// contextPreview returns the first n non-empty lines of text.
+func contextPreview(text string, n int) string {
+	lines := strings.Split(text, "\n")
+	var result []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			result = append(result, line)
+			if len(result) >= n {
+				break
+			}
+		}
+	}
+	return strings.Join(result, "\n")
+}
+
 // writeJSON writes a JSON object as a single line.
 func (h *HeadlessOutput) writeJSON(data map[string]interface{}) {
 	if h.epicID != "" {

@@ -1086,6 +1086,9 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 			verifyPassed = true // Reset for new task
 			if out != nil {
 				out.Task(iterCtx.Task, iterCtx.Iteration)
+				if iterCtx.EpicContext != "" {
+					out.ContextInjected(iterCtx.Task.ID, iterCtx.EpicContext)
+				}
 			}
 		}
 
@@ -1737,6 +1740,9 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	eng.OnIterationStart = func(iterCtx engine.IterationContext) {
 		verifyPassed = true // Reset for new task
 		out.Task(iterCtx.Task, iterCtx.Iteration)
+		if iterCtx.EpicContext != "" {
+			out.ContextInjected(iterCtx.Task.ID, iterCtx.EpicContext)
+		}
 	}
 
 	eng.OnIterationEnd = func(result *engine.IterationResult) {

@@ -2,7 +2,7 @@
   "id": "bhb",
   "title": "Add unit test for hello",
   "description": "Write a test for the hello() function",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "type": "task",
   "owner": "peter@engelbrecht.dk",
@@ -12,5 +12,6 @@
   "parent": "8n8",
   "created_by": "peter@engelbrecht.dk",
   "created_at": "2026-01-17T14:20:28.381113Z",
-  "updated_at": "2026-01-17T14:20:28.381113Z"
+  "updated_at": "2026-01-17T14:34:20.264033Z",
+  "closed_at": "2026-01-17T14:34:20.264033Z"
 }
