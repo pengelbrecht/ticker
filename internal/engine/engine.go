@@ -52,6 +52,9 @@ type Engine struct {
 	// Verification enabled flag (set via EnableVerification)
 	verifyEnabled bool
 
+	// Baseline of uncommitted files at engine start (for git verification)
+	gitBaseline map[string]bool
+
 	// Run logger for control flow events (optional)
 	runLog *runlog.Logger
 
@@ -533,6 +536,20 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 			e.runLog.LogCheckpointLoaded(config.ResumeFrom, cp.Iteration)
 		}
 		// Note: budget tracker starts fresh, but we could restore from checkpoint
+	}
+
+	// Capture git baseline if verification is enabled
+	// This allows users to have pre-existing uncommitted changes without failing verification
+	if e.verifyEnabled {
+		dir := state.workDir
+		if dir == "" {
+			dir, _ = os.Getwd()
+		}
+		if gitVerifier := verify.NewGitVerifier(dir); gitVerifier != nil {
+			if err := gitVerifier.CaptureBaseline(); err == nil {
+				e.gitBaseline = gitVerifier.GetBaseline()
+			}
+		}
 	}
 
 	// Get epic info
@@ -1120,6 +1137,11 @@ func (e *Engine) runVerification(ctx context.Context, taskID string, agentOutput
 	gitVerifier := verify.NewGitVerifier(dir)
 	if gitVerifier == nil {
 		return nil
+	}
+
+	// Set baseline so only NEW uncommitted changes are flagged
+	if e.gitBaseline != nil {
+		gitVerifier.SetBaseline(e.gitBaseline)
 	}
 
 	if e.OnVerificationStart != nil {

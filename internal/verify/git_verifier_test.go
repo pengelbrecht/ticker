@@ -215,10 +215,11 @@ func createTempGitRepo(t *testing.T) string {
 	return dir
 }
 
-func TestFilterExcludedPaths(t *testing.T) {
+func TestFilterChanges(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
+		baseline map[string]bool
 		expected string
 	}{
 		{
@@ -246,16 +247,135 @@ func TestFilterExcludedPaths(t *testing.T) {
 			input:    " M src/.tick/foo.txt",
 			expected: " M src/.tick/foo.txt",
 		},
+		{
+			name:     "baseline files are excluded",
+			input:    " M src/main.go\n?? readme.txt\n M existing.go",
+			baseline: map[string]bool{"existing.go": true},
+			expected: " M src/main.go\n?? readme.txt",
+		},
+		{
+			name:     "all changes in baseline",
+			input:    " M existing.go\n?? another.txt",
+			baseline: map[string]bool{"existing.go": true, "another.txt": true},
+			expected: "",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := filterExcludedPaths(tt.input)
+			v := &GitVerifier{dir: "/tmp"}
+			if tt.baseline != nil {
+				v.SetBaseline(tt.baseline)
+			}
+			result := v.filterChanges(tt.input)
 			if result != tt.expected {
-				t.Errorf("filterExcludedPaths(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("filterChanges(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
+}
+
+func TestGitVerifier_Baseline(t *testing.T) {
+	t.Run("CaptureBaseline captures uncommitted files", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		v := NewGitVerifier(dir)
+		if v == nil {
+			t.Fatal("NewGitVerifier returned nil")
+		}
+
+		// Create an uncommitted file
+		if err := os.WriteFile(filepath.Join(dir, "uncommitted.txt"), []byte("content"), 0644); err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+
+		// Capture baseline
+		if err := v.CaptureBaseline(); err != nil {
+			t.Fatalf("CaptureBaseline failed: %v", err)
+		}
+
+		baseline := v.GetBaseline()
+		if baseline == nil {
+			t.Fatal("GetBaseline returned nil")
+		}
+		if !baseline["uncommitted.txt"] {
+			t.Errorf("baseline should contain 'uncommitted.txt', got %v", baseline)
+		}
+	})
+
+	t.Run("Verify passes when only baseline files are uncommitted", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		v := NewGitVerifier(dir)
+		if v == nil {
+			t.Fatal("NewGitVerifier returned nil")
+		}
+
+		// Create an uncommitted file
+		if err := os.WriteFile(filepath.Join(dir, "preexisting.txt"), []byte("content"), 0644); err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+
+		// Capture baseline (preexisting.txt is now in baseline)
+		if err := v.CaptureBaseline(); err != nil {
+			t.Fatalf("CaptureBaseline failed: %v", err)
+		}
+
+		// Verify should pass because the only change is in the baseline
+		result := v.Verify(context.Background(), "test-task", "")
+		if !result.Passed {
+			t.Errorf("Verify() should pass when only baseline files are uncommitted, got output: %s", result.Output)
+		}
+		if !strings.Contains(result.Output, "pre-existing") {
+			t.Errorf("Verify() output should mention pre-existing changes, got: %s", result.Output)
+		}
+	})
+
+	t.Run("Verify fails when new files are uncommitted after baseline", func(t *testing.T) {
+		dir := createTempGitRepo(t)
+		v := NewGitVerifier(dir)
+		if v == nil {
+			t.Fatal("NewGitVerifier returned nil")
+		}
+
+		// Create an uncommitted file before baseline
+		if err := os.WriteFile(filepath.Join(dir, "preexisting.txt"), []byte("content"), 0644); err != nil {
+			t.Fatalf("failed to create file: %v", err)
+		}
+
+		// Capture baseline
+		if err := v.CaptureBaseline(); err != nil {
+			t.Fatalf("CaptureBaseline failed: %v", err)
+		}
+
+		// Create a NEW uncommitted file after baseline
+		if err := os.WriteFile(filepath.Join(dir, "new_file.txt"), []byte("new content"), 0644); err != nil {
+			t.Fatalf("failed to create new file: %v", err)
+		}
+
+		// Verify should fail because there's a new uncommitted file
+		result := v.Verify(context.Background(), "test-task", "")
+		if result.Passed {
+			t.Error("Verify() should fail when new files are uncommitted after baseline")
+		}
+		if !strings.Contains(result.Output, "new_file.txt") {
+			t.Errorf("Verify() output should contain new_file.txt, got: %s", result.Output)
+		}
+		// Should NOT contain the baseline file
+		if strings.Contains(result.Output, "preexisting.txt") {
+			t.Errorf("Verify() output should NOT contain baseline file preexisting.txt, got: %s", result.Output)
+		}
+	})
+
+	t.Run("SetBaseline works", func(t *testing.T) {
+		v := &GitVerifier{dir: "/tmp"}
+
+		baseline := map[string]bool{"file1.txt": true, "file2.txt": true}
+		v.SetBaseline(baseline)
+
+		got := v.GetBaseline()
+		if got == nil || !got["file1.txt"] || !got["file2.txt"] {
+			t.Errorf("SetBaseline/GetBaseline mismatch, got %v", got)
+		}
+	})
 }
 
 func TestGitVerifier_IgnoresTickerMetadata(t *testing.T) {
