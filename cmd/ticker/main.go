@@ -791,12 +791,21 @@ func runParallelWithTUI(epicIDs, epicTitles []string, maxIterations int, maxCost
 	}
 
 	engineFactory := func(epicID string) *engine.Engine {
+		claudeAgent := agent.NewClaudeAgent()
 		eng := engine.NewEngine(
-			agent.NewClaudeAgent(),
+			claudeAgent,
 			ticksClient,
 			sharedBudget,
 			checkpointMgr,
 		)
+
+		// Set up context generation
+		contextStore := epiccontext.NewStore()
+		contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+		if err == nil {
+			eng.SetContextComponents(contextStore, contextGenerator)
+		}
+
 		if !skipVerify {
 			if isVerificationEnabled() {
 				eng.EnableVerification()
@@ -1056,12 +1065,21 @@ func runParallelHeadless(epicIDs []string, maxIterations int, maxCost float64, c
 	checkpointMgr := checkpoint.NewManager()
 
 	engineFactory := func(epicID string) *engine.Engine {
+		claudeAgent := agent.NewClaudeAgent()
 		eng := engine.NewEngine(
-			agent.NewClaudeAgent(),
+			claudeAgent,
 			ticksClient,
 			sharedBudget,
 			checkpointMgr,
 		)
+
+		// Set up context generation
+		contextStore := epiccontext.NewStore()
+		contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+		if err == nil {
+			eng.SetContextComponents(contextStore, contextGenerator)
+		}
+
 		if !skipVerify {
 			if isVerificationEnabled() {
 				eng.EnableVerification()
@@ -1347,6 +1365,15 @@ func runWithTUI(epicID, epicTitle string, maxIterations int, maxCost float64, ch
 
 	// Create engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
+
+	// Set up context generation
+	contextStore := epiccontext.NewStore()
+	contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not create context generator: %v\n", err)
+	} else {
+		eng.SetContextComponents(contextStore, contextGenerator)
+	}
 
 	// Set up verification runner (unless --skip-verify)
 	if !skipVerify {
@@ -1716,6 +1743,15 @@ func runHeadless(epicID string, maxIterations int, maxCost float64, checkpointIn
 	// Create and configure engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
 
+	// Set up context generation
+	contextStore := epiccontext.NewStore()
+	contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not create context generator: %v\n", err)
+	} else {
+		eng.SetContextComponents(contextStore, contextGenerator)
+	}
+
 	// Set up verification runner (unless --skip-verify)
 	if !skipVerify {
 		if isVerificationEnabled() {
@@ -1929,6 +1965,13 @@ func runResume(cmd *cobra.Command, args []string) {
 
 	// Create and configure engine
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
+
+	// Set up context generation
+	contextStore := epiccontext.NewStore()
+	contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+	if err == nil {
+		eng.SetContextComponents(contextStore, contextGenerator)
+	}
 
 	eng.OnOutput = func(chunk string) {
 		fmt.Print(chunk)
@@ -2428,6 +2471,13 @@ func runStandaloneTask(initialTask *ticks.Task, maxIterations int, maxCost float
 
 	// Create engine for running iterations
 	eng := engine.NewEngine(claudeAgent, ticksClient, budgetTracker, checkpointMgr)
+
+	// Set up context generation
+	contextStore := epiccontext.NewStore()
+	contextGenerator, err := epiccontext.NewGenerator(claudeAgent)
+	if err == nil {
+		eng.SetContextComponents(contextStore, contextGenerator)
+	}
 
 	// Set up verification runner (unless --skip-verify)
 	if !skipVerify {
