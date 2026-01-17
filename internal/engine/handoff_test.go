@@ -180,6 +180,18 @@ func (m *handoffMockTicksClient) NextTask(epicID string) (*ticks.Task, error) {
 	return nil, nil
 }
 
+func (m *handoffMockTicksClient) ListTasks(epicID string) ([]ticks.Task, error) {
+	result := make([]ticks.Task, 0, len(m.tasks))
+	for _, task := range m.tasks {
+		taskCopy := *task
+		if status, ok := m.taskStatus[task.ID]; ok {
+			taskCopy.Status = status
+		}
+		result = append(result, taskCopy)
+	}
+	return result, nil
+}
+
 func (m *handoffMockTicksClient) HasOpenTasks(epicID string) (bool, error) {
 	for _, task := range m.tasks {
 		status := m.taskStatus[task.ID]

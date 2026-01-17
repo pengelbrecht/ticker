@@ -749,3 +749,118 @@ func (l *Logger) LogEpicCompleted(reason string, completedTasks []string) {
 		CompletedTasks: completedTasks,
 	})
 }
+
+// --- Context Generation Events ---
+
+// EventType constants for context generation.
+const (
+	EventContextSkipped             EventType = "context_skipped"
+	EventContextError               EventType = "context_error"
+	EventContextGenerationStarted   EventType = "context_generation_started"
+	EventContextGenerationFailed    EventType = "context_generation_failed"
+	EventContextSaveFailed          EventType = "context_save_failed"
+	EventContextGenerationCompleted EventType = "context_generation_completed"
+	EventContextLoadFailed          EventType = "context_load_failed"
+)
+
+// ContextSkippedData contains context skipped event data.
+type ContextSkippedData struct {
+	EpicID    string `json:"epic_id"`
+	Reason    string `json:"reason"`
+	TaskCount int    `json:"task_count,omitempty"`
+}
+
+// LogContextSkipped logs when context generation is skipped.
+func (l *Logger) LogContextSkipped(epicID, reason string, taskCount int) {
+	l.log(EventContextSkipped, fmt.Sprintf("Context generation skipped for epic %s: %s", epicID, reason), ContextSkippedData{
+		EpicID:    epicID,
+		Reason:    reason,
+		TaskCount: taskCount,
+	})
+}
+
+// ContextErrorData contains context error event data.
+type ContextErrorData struct {
+	EpicID string `json:"epic_id"`
+	Error  string `json:"error"`
+	Phase  string `json:"phase"`
+}
+
+// LogContextError logs a context generation error.
+func (l *Logger) LogContextError(epicID, errMsg, phase string) {
+	l.log(EventContextError, fmt.Sprintf("Context error for epic %s during %s: %s", epicID, phase, errMsg), ContextErrorData{
+		EpicID: epicID,
+		Error:  errMsg,
+		Phase:  phase,
+	})
+}
+
+// ContextGenerationStartedData contains context generation start event data.
+type ContextGenerationStartedData struct {
+	EpicID    string `json:"epic_id"`
+	TaskCount int    `json:"task_count"`
+}
+
+// LogContextGenerationStarted logs context generation start.
+func (l *Logger) LogContextGenerationStarted(epicID string, taskCount int) {
+	l.log(EventContextGenerationStarted, fmt.Sprintf("Starting context generation for epic %s with %d tasks", epicID, taskCount), ContextGenerationStartedData{
+		EpicID:    epicID,
+		TaskCount: taskCount,
+	})
+}
+
+// ContextGenerationFailedData contains context generation failure event data.
+type ContextGenerationFailedData struct {
+	EpicID string `json:"epic_id"`
+	Error  string `json:"error"`
+}
+
+// LogContextGenerationFailed logs context generation failure.
+func (l *Logger) LogContextGenerationFailed(epicID, errMsg string) {
+	l.log(EventContextGenerationFailed, fmt.Sprintf("Context generation failed for epic %s: %s", epicID, errMsg), ContextGenerationFailedData{
+		EpicID: epicID,
+		Error:  errMsg,
+	})
+}
+
+// ContextSaveFailedData contains context save failure event data.
+type ContextSaveFailedData struct {
+	EpicID string `json:"epic_id"`
+	Error  string `json:"error"`
+}
+
+// LogContextSaveFailed logs context save failure.
+func (l *Logger) LogContextSaveFailed(epicID, errMsg string) {
+	l.log(EventContextSaveFailed, fmt.Sprintf("Context save failed for epic %s: %s", epicID, errMsg), ContextSaveFailedData{
+		EpicID: epicID,
+		Error:  errMsg,
+	})
+}
+
+// ContextGenerationCompletedData contains context generation completion event data.
+type ContextGenerationCompletedData struct {
+	EpicID        string `json:"epic_id"`
+	ContentLength int    `json:"content_length"`
+}
+
+// LogContextGenerationCompleted logs context generation completion.
+func (l *Logger) LogContextGenerationCompleted(epicID string, contentLength int) {
+	l.log(EventContextGenerationCompleted, fmt.Sprintf("Context generation completed for epic %s (%d bytes)", epicID, contentLength), ContextGenerationCompletedData{
+		EpicID:        epicID,
+		ContentLength: contentLength,
+	})
+}
+
+// ContextLoadFailedData contains context load failure event data.
+type ContextLoadFailedData struct {
+	EpicID string `json:"epic_id"`
+	Error  string `json:"error"`
+}
+
+// LogContextLoadFailed logs context load failure.
+func (l *Logger) LogContextLoadFailed(epicID, errMsg string) {
+	l.log(EventContextLoadFailed, fmt.Sprintf("Context load failed for epic %s: %s", epicID, errMsg), ContextLoadFailedData{
+		EpicID: epicID,
+		Error:  errMsg,
+	})
+}

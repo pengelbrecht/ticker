@@ -11,6 +11,7 @@ import (
 	"github.com/pengelbrecht/ticker/internal/agent"
 	"github.com/pengelbrecht/ticker/internal/budget"
 	"github.com/pengelbrecht/ticker/internal/checkpoint"
+	epiccontext "github.com/pengelbrecht/ticker/internal/context"
 	"github.com/pengelbrecht/ticker/internal/runlog"
 	"github.com/pengelbrecht/ticker/internal/ticks"
 	"github.com/pengelbrecht/ticker/internal/verify"
@@ -23,6 +24,7 @@ type TicksClient interface {
 	GetEpic(epicID string) (*ticks.Epic, error)
 	GetTask(taskID string) (*ticks.Task, error)
 	NextTask(epicID string) (*ticks.Task, error)
+	ListTasks(epicID string) ([]ticks.Task, error)
 	HasOpenTasks(epicID string) (bool, error)
 	CloseTask(taskID, reason string) error
 	CloseEpic(epicID, reason string) error
@@ -42,6 +44,10 @@ type Engine struct {
 	budget     *budget.Tracker
 	checkpoint *checkpoint.Manager
 	prompt     *PromptBuilder
+
+	// Context generation components (optional)
+	contextStore     *epiccontext.Store
+	contextGenerator *epiccontext.Generator
 
 	// Verification enabled flag (set via EnableVerification)
 	verifyEnabled bool
@@ -263,6 +269,99 @@ func (e *Engine) EnableVerification() {
 	e.verifyEnabled = true
 }
 
+// SetContextComponents sets the context store and generator for epic context.
+// When both are set, the engine will generate context before the first iteration
+// of an epic (if the epic has >1 children and context doesn't already exist).
+func (e *Engine) SetContextComponents(store *epiccontext.Store, generator *epiccontext.Generator) {
+	e.contextStore = store
+	e.contextGenerator = generator
+}
+
+// ensureEpicContext generates epic context if needed.
+// Context is generated when:
+//   - Context store and generator are configured
+//   - Context doesn't already exist for this epic
+//   - Epic has >1 children (no benefit for single-task epics)
+//
+// Errors are logged but do not abort the run (context is optional).
+func (e *Engine) ensureEpicContext(ctx context.Context, epic *ticks.Epic) {
+	// Skip if context components are not configured
+	if e.contextStore == nil || e.contextGenerator == nil {
+		return
+	}
+
+	// Skip if context already exists
+	if e.contextStore.Exists(epic.ID) {
+		if e.runLog != nil {
+			e.runLog.LogContextSkipped(epic.ID, "already exists", 0)
+		}
+		return
+	}
+
+	// Get epic tasks to check count and for generation
+	tasks, err := e.ticks.ListTasks(epic.ID)
+	if err != nil {
+		if e.runLog != nil {
+			e.runLog.LogContextError(epic.ID, err.Error(), "list_tasks")
+		}
+		return
+	}
+
+	// Skip for epics with ≤1 children (no amortization benefit)
+	if len(tasks) <= 1 {
+		if e.runLog != nil {
+			e.runLog.LogContextSkipped(epic.ID, "too few tasks", len(tasks))
+		}
+		return
+	}
+
+	// Log context generation start
+	if e.runLog != nil {
+		e.runLog.LogContextGenerationStarted(epic.ID, len(tasks))
+	}
+
+	// Generate context using the AI agent
+	content, err := e.contextGenerator.Generate(ctx, epic, tasks)
+	if err != nil {
+		// Log warning but don't abort - context is optional
+		if e.runLog != nil {
+			e.runLog.LogContextGenerationFailed(epic.ID, err.Error())
+		}
+		return
+	}
+
+	// Save the generated context
+	if err := e.contextStore.Save(epic.ID, content); err != nil {
+		if e.runLog != nil {
+			e.runLog.LogContextSaveFailed(epic.ID, err.Error())
+		}
+		return
+	}
+
+	if e.runLog != nil {
+		e.runLog.LogContextGenerationCompleted(epic.ID, len(content))
+	}
+}
+
+// loadEpicContext loads the epic context from storage.
+// Returns empty string if context doesn't exist or components aren't configured.
+// Errors are logged but do not abort the run (returns empty string).
+func (e *Engine) loadEpicContext(epicID string) string {
+	if e.contextStore == nil {
+		return ""
+	}
+
+	content, err := e.contextStore.Load(epicID)
+	if err != nil {
+		if e.runLog != nil {
+			e.runLog.LogContextLoadFailed(epicID, err.Error())
+		}
+		return ""
+	}
+
+	return content
+}
+
 // SetRunLog sets the run logger for control flow events.
 // When set, all control flow decisions are logged to .ticker/runs/<run-id>.jsonl.
 func (e *Engine) SetRunLog(l *runlog.Logger) {
@@ -428,6 +527,13 @@ func (e *Engine) Run(ctx context.Context, config RunConfig) (result *RunResult, 
 	}
 
 	state.epic = epic
+
+	// Ensure epic context is generated before first iteration
+	// This runs once at the start of the epic run
+	e.ensureEpicContext(ctx, epic)
+
+	// Load epic context for use in iteration prompts
+	state.epicContext = e.loadEpicContext(epic.ID)
 
 	// Main loop
 	for {
@@ -763,6 +869,9 @@ type runState struct {
 
 	// Worktree support
 	workDir string // Working directory for agent (worktree path or empty for current dir)
+
+	// Epic context (pre-computed context for the epic, loaded once at start)
+	epicContext string
 }
 
 // toResult converts run state to a RunResult.
@@ -815,6 +924,7 @@ func (e *Engine) runIteration(ctx context.Context, state *runState, task *ticks.
 		Task:          task,
 		EpicNotes:     notes,
 		HumanFeedback: humanNotes,
+		EpicContext:   state.epicContext,
 	}
 
 	if e.OnIterationStart != nil {

@@ -291,6 +291,14 @@ func (m *mockTicksClient) GetTask(taskID string) (*ticks.Task, error) {
 	return nil, errors.New("task not found")
 }
 
+func (m *mockTicksClient) ListTasks(epicID string) ([]ticks.Task, error) {
+	result := make([]ticks.Task, 0, len(m.tasks))
+	for _, t := range m.tasks {
+		result = append(result, *t)
+	}
+	return result, nil
+}
+
 func (m *mockTicksClient) CloseEpic(epicID, reason string) error {
 	return nil
 }
